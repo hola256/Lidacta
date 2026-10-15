@@ -1,0 +1,8 @@
+{
+  "name": "Remix Lidacta - Desarrollo de Liderazgo en Acción",
+  "description": "Plataforma de mentoría y acompañamiento al liderazgo basada en situaciones reales con 7 etapas operativas, práctica guiada, confidencialidad y paneles para líderes, RRHH y administración.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

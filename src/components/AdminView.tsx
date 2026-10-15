@@ -1,0 +1,845 @@
+import React, { useState } from 'react';
+import { useLidacta } from '../context/LidactaContext';
+import { CompanyContext, MentorshipSession } from '../types/lidacta';
+import {
+  Building2,
+  Sliders,
+  TrendingUp,
+  Clock,
+  Layers,
+  FileText,
+  Download,
+  Printer,
+  Search,
+  Plus,
+  Upload,
+  Link as LinkIcon,
+  CheckCircle2,
+  AlertTriangle,
+  Eye,
+  BarChart2,
+  Users,
+  ShieldAlert,
+} from 'lucide-react';
+
+export const AdminView: React.FC = () => {
+  const { companies, updateCompanyContext, addCompany, mentorships, allUsers } = useLidacta();
+
+  const [activeTab, setActiveTab] = useState<'onboarding' | 'stages_monitoring' | 'analytics' | 'users'>('onboarding');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(companies[0]?.id || 'comp_nexus');
+  const [selectedMentorshipForAudit, setSelectedMentorshipForAudit] = useState<MentorshipSession | null>(null);
+
+  // Filters for segmentation
+  const [segmentCompany, setSegmentCompany] = useState<string>('all');
+  const [segmentArea, setSegmentArea] = useState<string>('all');
+  const [segmentTheme, setSegmentTheme] = useState<string>('all');
+  const [searchLeader, setSearchLeader] = useState<string>('');
+
+  const currentCompany = companies.find((c) => c.id === selectedCompanyId) || companies[0];
+
+  // Stage 0 Onboarding Form State
+  const [onboardingValues, setOnboardingValues] = useState(currentCompany?.values || '');
+  const [onboardingPhilosophy, setOnboardingPhilosophy] = useState(currentCompany?.philosophy || '');
+  const [onboardingCulture, setOnboardingCulture] = useState(currentCompany?.culture || '');
+  const [onboardingIndustry, setOnboardingIndustry] = useState(currentCompany?.industry || '');
+  const [onboardingRhythm, setOnboardingRhythm] = useState(currentCompany?.workRhythm || '');
+  const [onboardingCompetencies, setOnboardingCompetencies] = useState(
+    currentCompany?.expectedCompetencies?.join(', ') || ''
+  );
+  const [newLinkTitle, setNewLinkTitle] = useState('');
+  const [newLinkUrl, setNewLinkUrl] = useState('');
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
+
+  // Switch company in onboarding
+  const handleSelectCompanyInOnboarding = (compId: string) => {
+    setSelectedCompanyId(compId);
+    const comp = companies.find((c) => c.id === compId);
+    if (comp) {
+      setOnboardingValues(comp.values || '');
+      setOnboardingPhilosophy(comp.philosophy || '');
+      setOnboardingCulture(comp.culture || '');
+      setOnboardingIndustry(comp.industry || '');
+      setOnboardingRhythm(comp.workRhythm || '');
+      setOnboardingCompetencies(comp.expectedCompetencies?.join(', ') || '');
+      setSaveSuccessMsg('');
+    }
+  };
+
+  const handleSaveOnboarding = () => {
+    const competenciesList = onboardingCompetencies
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    updateCompanyContext(selectedCompanyId, {
+      values: onboardingValues,
+      philosophy: onboardingPhilosophy,
+      culture: onboardingCulture,
+      industry: onboardingIndustry,
+      workRhythm: onboardingRhythm,
+      expectedCompetencies: competenciesList,
+    });
+
+    setSaveSuccessMsg('¡Contexto de la empresa guardado exitosamente para la Etapa Cero!');
+    setTimeout(() => setSaveSuccessMsg(''), 4000);
+  };
+
+  const handleAddLink = () => {
+    if (!newLinkTitle || !newLinkUrl) return;
+    const currentLinks = currentCompany.webLinks || [];
+    updateCompanyContext(selectedCompanyId, {
+      webLinks: [...currentLinks, { title: newLinkTitle, url: newLinkUrl }],
+    });
+    setNewLinkTitle('');
+    setNewLinkUrl('');
+  };
+
+  const handleAddAttachmentMock = () => {
+    const filename = prompt('Nombre del documento / manual adjunto:', 'Guia_Liderazgo_Operativo_2026.pdf');
+    if (!filename) return;
+    const currentAttach = currentCompany.attachments || [];
+    updateCompanyContext(selectedCompanyId, {
+      attachments: [
+        ...currentAttach,
+        {
+          name: filename,
+          size: '1.9 MB',
+          type: 'application/pdf',
+          date: new Date().toISOString().split('T')[0],
+        },
+      ],
+    });
+  };
+
+  // Filtered mentorships for segmentation
+  const filteredMentorships = mentorships.filter((m) => {
+    const matchCompany = segmentCompany === 'all' || m.companyId === segmentCompany;
+    const matchArea = segmentArea === 'all' || m.leaderArea === segmentArea;
+    const matchTheme = segmentTheme === 'all' || m.theme === segmentTheme;
+    const matchSearch =
+      !searchLeader ||
+      m.leaderName.toLowerCase().includes(searchLeader.toLowerCase()) ||
+      m.title.toLowerCase().includes(searchLeader.toLowerCase());
+    return matchCompany && matchArea && matchTheme && matchSearch;
+  });
+
+  // Extract unique areas and themes for filters
+  const uniqueAreas = Array.from(new Set(mentorships.map((m) => m.leaderArea).filter(Boolean)));
+  const uniqueThemes = Array.from(new Set(mentorships.map((m) => m.theme).filter(Boolean)));
+
+  // Analytics by company calculations
+  const companyForStats = companies.find((c) => c.id === selectedCompanyId) || companies[0];
+  const companyLeaders = allUsers.filter((u) => u.companyId === companyForStats.id && u.role === 'leader');
+  const companyCases = mentorships.filter((m) => m.companyId === companyForStats.id);
+  const uniqueUsersWhoUsed = Array.from(new Set(companyCases.map((m) => m.leaderId)));
+
+  // Themes frequency
+  const themeFrequency: Record<string, number> = {};
+  companyCases.forEach((c) => {
+    themeFrequency[c.theme] = (themeFrequency[c.theme] || 0) + 1;
+  });
+
+  // Export CSV
+  const handleExportCSV = () => {
+    const headers = [
+      'ID Caso',
+      'Empresa',
+      'Líder',
+      'Área',
+      'Etapa Actual',
+      'Tema',
+      'Habilidades Requeridas',
+      'Acción Realizada',
+      'Aprendizajes',
+      'Fecha Inicio',
+    ];
+
+    const rows = filteredMentorships.map((m) => [
+      m.id,
+      `"${m.companyName}"`,
+      `"${m.leaderName}"`,
+      `"${m.leaderArea || 'N/A'}"`,
+      m.currentStage,
+      `"${m.theme}"`,
+      `"${(m.identifiedSkills || []).join('; ')}"`,
+      `"${(m.actionPlan?.what || '').replace(/"/g, '""')}"`,
+      `"${(m.learnings?.insights || '').replace(/"/g, '""')}"`,
+      m.startedAt,
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `lidacta_reporte_${selectedCompanyId}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  return (
+    <div className="flex-1 bg-[#FFF7EF] overflow-y-auto p-4 sm:p-8 space-y-6">
+      {/* Admin Header with Tab Navigation */}
+      <div className="bg-white border border-[#493447]/15 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4 no-print">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#F7B538] bg-[#2D1B4E] px-2 py-0.5 rounded">
+              Panel de Administradora · Creadora de Lidacta
+            </span>
+          </div>
+          <h1 className="font-heading font-extrabold text-2xl text-[#2D1B4E] mt-1">
+            Gestión de Empresas, Etapa Cero y Auditoría de Flujo
+          </h1>
+          <p className="text-xs text-[#4A3F55]">
+            Configura el contexto empresarial y analiza la agilidad del líder en las 7 etapas operativas.
+          </p>
+        </div>
+
+        {/* Tab Switcher */}
+        <div className="flex items-center gap-1 p-1 bg-[#FFF7EF] border border-[#493447]/10 rounded-xl overflow-x-auto max-w-full">
+          <button
+            onClick={() => setActiveTab('onboarding')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'onboarding'
+                ? 'bg-[#BF3A1B] text-white shadow-xs'
+                : 'text-[#4A3F55] hover:text-[#2D1B4E]'
+            }`}
+          >
+            🏢 Etapa Cero (Onboarding)
+          </button>
+          <button
+            onClick={() => setActiveTab('stages_monitoring')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'stages_monitoring'
+                ? 'bg-[#BF3A1B] text-white shadow-xs'
+                : 'text-[#4A3F55] hover:text-[#2D1B4E]'
+            }`}
+          >
+            ⏱️ Monitoreo & Tiempos
+          </button>
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'analytics'
+                ? 'bg-[#BF3A1B] text-white shadow-xs'
+                : 'text-[#4A3F55] hover:text-[#2D1B4E]'
+            }`}
+          >
+            📊 Analítica & Gráficos
+          </button>
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'users'
+                ? 'bg-[#BF3A1B] text-white shadow-xs'
+                : 'text-[#4A3F55] hover:text-[#2D1B4E]'
+            }`}
+          >
+            👥 Directorio de Usuarios
+          </button>
+        </div>
+      </div>
+
+      {/* TAB 1: ETAPA CERO - ONBOARDING Y PERSONALIZACIÓN DE EMPRESA */}
+      {activeTab === 'onboarding' && (
+        <div className="space-y-6 animate-in fade-in">
+          {/* Company Selector */}
+          <div className="bg-white border border-[#493447]/10 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <Building2 className="w-5 h-5 text-[#BF3A1B]" />
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-[#2D1B4E]">Empresa a configurar:</span>
+                <span className="text-xs text-[#4A3F55]/70">Selecciona para alimentar la IA de Lidacta</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <select
+                value={selectedCompanyId}
+                onChange={(e) => handleSelectCompanyInOnboarding(e.target.value)}
+                className="px-3 py-2 bg-[#FFF7EF] border border-[#493447]/15 rounded-xl text-xs font-bold text-[#2D1B4E] focus:outline-none focus:ring-1 focus:ring-[#BF3A1B] cursor-pointer"
+              >
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.industry})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Context Editor Card */}
+          <div className="bg-white border border-[#493447]/10 rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
+            <div className="border-b border-[#493447]/10 pb-3 flex items-center justify-between">
+              <div>
+                <h2 className="font-heading font-bold text-lg text-[#2D1B4E]">
+                  Información Contextual para {currentCompany.name}
+                </h2>
+                <p className="text-xs text-[#4A3F55]/80">
+                  Lidacta adaptará automáticamente su vocabulario, enfoque e intervenciones a estos parámetros.
+                </p>
+              </div>
+              {saveSuccessMsg && (
+                <span className="text-xs font-bold text-[#246B2A] bg-[#E2F7E1] px-3 py-1 rounded-lg animate-in fade-in">
+                  {saveSuccessMsg}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-bold text-[#2D1B4E] block">Giro / Industria de la empresa:</label>
+                <input
+                  type="text"
+                  value={onboardingIndustry}
+                  onChange={(e) => setOnboardingIndustry(e.target.value)}
+                  placeholder="Ej. Manufactura automotriz, Retail comercial..."
+                  className="w-full p-3 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-bold text-[#2D1B4E] block">Ritmo y estilo de trabajo:</label>
+                <input
+                  type="text"
+                  value={onboardingRhythm}
+                  onChange={(e) => setOnboardingRhythm(e.target.value)}
+                  placeholder="Ej. Rápido, turnos rotativos, juntas operativas de 15 min..."
+                  className="w-full p-3 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
+                />
+              </div>
+
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="font-bold text-[#2D1B4E] block">Valores y Filosofía:</label>
+                <textarea
+                  value={onboardingValues}
+                  onChange={(e) => setOnboardingValues(e.target.value)}
+                  rows={3}
+                  placeholder="Valores centrales que rigen la toma de decisiones..."
+                  className="w-full p-3 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E] leading-relaxed"
+                />
+              </div>
+
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="font-bold text-[#2D1B4E] block">
+                  Habilidades o competencias esperadas en los líderes (separadas por comas):
+                </label>
+                <input
+                  type="text"
+                  value={onboardingCompetencies}
+                  onChange={(e) => setOnboardingCompetencies(e.target.value)}
+                  placeholder="Comunicación asertiva, retroalimentación en piso, delegación efectiva, resolución de conflictos..."
+                  className="w-full p-3 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
+                />
+              </div>
+
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="font-bold text-[#2D1B4E] block">Cultura organizacional:</label>
+                <textarea
+                  value={onboardingCulture}
+                  onChange={(e) => setOnboardingCulture(e.target.value)}
+                  rows={2}
+                  placeholder="Ambiente, expectativas de liderazgo, cómo se vive el día a día..."
+                  className="w-full p-3 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E] leading-relaxed"
+                />
+              </div>
+            </div>
+
+            {/* Links & Attachments section as requested in PDF */}
+            <div className="border-t border-[#493447]/10 pt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Web Links */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-[#2D1B4E] flex items-center gap-1.5">
+                    <LinkIcon className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                    Enlaces Web de Consulta
+                  </span>
+                </div>
+
+                <div className="flex gap-2 text-xs">
+                  <input
+                    type="text"
+                    value={newLinkTitle}
+                    onChange={(e) => setNewLinkTitle(e.target.value)}
+                    placeholder="Título del enlace"
+                    className="flex-1 p-2 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-lg text-xs"
+                  />
+                  <input
+                    type="url"
+                    value={newLinkUrl}
+                    onChange={(e) => setNewLinkUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="flex-1 p-2 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-lg text-xs"
+                  />
+                  <button
+                    onClick={handleAddLink}
+                    className="px-3 py-1.5 bg-[#2D1B4E] text-white rounded-lg text-xs font-bold cursor-pointer"
+                  >
+                    Agregar
+                  </button>
+                </div>
+
+                <div className="space-y-1.5">
+                  {(currentCompany.webLinks || []).map((lnk, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2 bg-[#FFF7EF] rounded-lg border border-[#493447]/10 flex items-center justify-between text-xs"
+                    >
+                      <span className="font-medium text-[#2D1B4E]">{lnk.title}</span>
+                      <span className="text-[#BF3A1B] text-[11px] truncate max-w-[150px]">{lnk.url}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Attachments */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-[#2D1B4E] flex items-center gap-1.5">
+                    <Upload className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                    Archivos y Manuales Adjuntos
+                  </span>
+                  <button
+                    onClick={handleAddAttachmentMock}
+                    className="text-xs font-semibold text-[#BF3A1B] hover:underline cursor-pointer"
+                  >
+                    + Adjuntar archivo
+                  </button>
+                </div>
+
+                <div className="space-y-1.5">
+                  {(currentCompany.attachments || []).map((att, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2 bg-[#FFF7EF] rounded-lg border border-[#493447]/10 flex items-center justify-between text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-3.5 h-3.5 text-[#4A3F55]" />
+                        <span className="font-medium text-[#2D1B4E]">{att.name}</span>
+                      </div>
+                      <span className="text-[10px] text-[#4A3F55]/60 tabular-nums">{att.size}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-[#493447]/10 flex justify-end">
+              <button
+                onClick={handleSaveOnboarding}
+                className="px-6 py-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                Guardar Contexto de Etapa Cero
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: MONITOREO DE ETAPAS, TIEMPOS Y AUDITORÍA DE CONVERSACIONES */}
+      {activeTab === 'stages_monitoring' && (
+        <div className="space-y-6 animate-in fade-in">
+          {/* Segmentation & Filters */}
+          <div className="bg-white border border-[#493447]/10 rounded-2xl p-5 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="font-heading font-bold text-sm text-[#2D1B4E] flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-[#BF3A1B]" />
+                Segmentación y Filtros de Búsqueda
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleExportCSV}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FFF7EF] border border-[#493447]/15 rounded-lg text-xs font-semibold text-[#2D1B4E] hover:bg-[#FFD3BF]/20 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                  <span>Descargar CSV</span>
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FFF7EF] border border-[#493447]/15 rounded-lg text-xs font-semibold text-[#2D1B4E] hover:bg-[#FFD3BF]/20 cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                  <span>Imprimir Reporte</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+              <div>
+                <label className="text-[11px] font-semibold text-[#4A3F55]/80 block mb-1">Empresa:</label>
+                <select
+                  value={segmentCompany}
+                  onChange={(e) => setSegmentCompany(e.target.value)}
+                  className="w-full p-2 bg-[#FFF7EF] border border-[#493447]/15 rounded-lg text-xs text-[#2D1B4E]"
+                >
+                  <option value="all">Todas las empresas</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-[#4A3F55]/80 block mb-1">Área:</label>
+                <select
+                  value={segmentArea}
+                  onChange={(e) => setSegmentArea(e.target.value)}
+                  className="w-full p-2 bg-[#FFF7EF] border border-[#493447]/15 rounded-lg text-xs text-[#2D1B4E]"
+                >
+                  <option value="all">Todas las áreas</option>
+                  {uniqueAreas.map((a, i) => (
+                    <option key={i} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-[#4A3F55]/80 block mb-1">Tema abordado:</label>
+                <select
+                  value={segmentTheme}
+                  onChange={(e) => setSegmentTheme(e.target.value)}
+                  className="w-full p-2 bg-[#FFF7EF] border border-[#493447]/15 rounded-lg text-xs text-[#2D1B4E]"
+                >
+                  <option value="all">Todos los temas</option>
+                  {uniqueThemes.map((t, i) => (
+                    <option key={i} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-[#4A3F55]/80 block mb-1">Líder / Caso:</label>
+                <input
+                  type="text"
+                  value={searchLeader}
+                  onChange={(e) => setSearchLeader(e.target.value)}
+                  placeholder="Buscar..."
+                  className="w-full p-2 bg-[#FFF7EF] border border-[#493447]/15 rounded-lg text-xs text-[#2D1B4E]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Table of Leaders, Stages, and Time Spent */}
+          <div className="bg-white border border-[#493447]/10 rounded-2xl p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-[#493447]/10 pb-3">
+              <div>
+                <h3 className="font-heading font-bold text-base text-[#2D1B4E]">
+                  Monitoreo de Etapas y Agilidad de Flujo
+                </h3>
+                <p className="text-xs text-[#4A3F55]/70">
+                  Detecta qué tan ágil avanza cada líder o si está detenido en alguna etapa.
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-[#BF3A1B] tabular-nums">
+                {filteredMentorships.length} casos activos
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-[#FFF7EF] text-[#2D1B4E] uppercase text-[10px] tracking-wider font-bold">
+                  <tr>
+                    <th className="p-3">Líder & Empresa</th>
+                    <th className="p-3">Caso Planteado</th>
+                    <th className="p-3 text-center">Etapa Actual</th>
+                    <th className="p-3">Fechas de Entrada</th>
+                    <th className="p-3 text-right">Tiempo por Etapa</th>
+                    <th className="p-3 text-center">Auditoría</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#493447]/5">
+                  {filteredMentorships.map((m) => {
+                    const currentHistoryItem = m.stageHistory.find((h) => h.stage === m.currentStage);
+                    const enteredDate = currentHistoryItem
+                      ? new Date(currentHistoryItem.enteredAt).toLocaleDateString([], {
+                          month: 'short',
+                          day: 'numeric',
+                        })
+                      : 'N/A';
+
+                    // Check if leader is stuck (> 48h in same stage)
+                    const isStuck =
+                      m.status !== 'completed' &&
+                      currentHistoryItem &&
+                      Date.now() - new Date(currentHistoryItem.enteredAt).getTime() > 1000 * 60 * 60 * 48;
+
+                    return (
+                      <tr key={m.id} className="hover:bg-[#FFF7EF]/40 transition-colors">
+                        <td className="p-3">
+                          <span className="font-bold text-[#2D1B4E] block">{m.leaderName}</span>
+                          <span className="text-[10px] text-[#4A3F55]/70 block">{m.companyName}</span>
+                        </td>
+                        <td className="p-3 max-w-xs">
+                          <span className="font-medium text-[#2D1B4E] line-clamp-1">{m.title}</span>
+                          <span className="text-[10px] text-[#BF3A1B]">{m.theme}</span>
+                        </td>
+                        <td className="p-3 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              m.status === 'completed'
+                                ? 'bg-[#E2F7E1] text-[#246B2A]'
+                                : isStuck
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-[#FFD3BF] text-[#BF3A1B]'
+                            }`}
+                          >
+                            {m.status === 'completed' ? 'Concluido' : `Etapa ${m.currentStage}`}
+                          </span>
+                          {isStuck && (
+                            <span className="block text-[9px] text-red-600 font-semibold mt-0.5">
+                              ⚠️ Detenido
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-[#4A3F55] text-[11px] tabular-nums">
+                          Entró a Etapa {m.currentStage}: {enteredDate}
+                        </td>
+                        <td className="p-3 text-right tabular-nums">
+                          {m.stageHistory.map((h) => (
+                            <div key={h.stage} className="text-[10px] text-[#4A3F55]">
+                              E{h.stage}: {h.durationMinutes ? `${h.durationMinutes} min` : 'En curso'}
+                            </div>
+                          ))}
+                        </td>
+                        <td className="p-3 text-center">
+                          <button
+                            onClick={() => setSelectedMentorshipForAudit(m)}
+                            className="flex items-center gap-1 mx-auto px-2.5 py-1 bg-white border border-[#493447]/20 rounded-lg text-xs font-semibold text-[#2D1B4E] hover:border-[#BF3A1B] transition-colors cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3 text-[#BF3A1B]" />
+                            <span>Ver Chat</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Full Conversation Audit Modal for Platform Creator */}
+          {selectedMentorshipForAudit && (
+            <div className="fixed inset-0 bg-[#2D1B4E]/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div className="bg-white border border-[#493447]/20 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl animate-in fade-in">
+                <div className="p-5 border-b border-[#493447]/10 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#BF3A1B]">
+                      Auditoría de Conversación Completa (Solo Administradora)
+                    </span>
+                    <h3 className="font-heading font-bold text-base text-[#2D1B4E]">
+                      {selectedMentorshipForAudit.leaderName} · {selectedMentorshipForAudit.companyName}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setSelectedMentorshipForAudit(null)}
+                    className="p-1.5 text-[#4A3F55] hover:text-[#2D1B4E] rounded-lg cursor-pointer font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                  {selectedMentorshipForAudit.messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`p-3 rounded-xl text-xs space-y-1 ${
+                        msg.sender === 'lidacta'
+                          ? 'bg-[#FFF7EF] border border-[#493447]/10 mr-8'
+                          : 'bg-[#FFD3BF]/30 border border-[#FFD3BF] ml-8'
+                      }`}
+                    >
+                      <div className="flex justify-between font-bold text-[10px] text-[#2D1B4E]">
+                        <span>{msg.sender === 'lidacta' ? 'LIDACTA (Mentor)' : 'LÍDER'}</span>
+                        <span className="text-[#4A3F55]/60">Etapa {msg.stage}</span>
+                      </div>
+                      <p className="text-[#4A3F55] leading-relaxed whitespace-pre-line">{msg.text}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-4 border-t border-[#493447]/10 bg-[#FFF7EF] rounded-b-2xl flex justify-end">
+                  <button
+                    onClick={() => setSelectedMentorshipForAudit(null)}
+                    className="px-4 py-2 bg-[#2D1B4E] text-white font-bold text-xs rounded-xl cursor-pointer"
+                  >
+                    Cerrar Auditoría
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: ANALÍTICA Y GRÁFICOS POR EMPRESA */}
+      {activeTab === 'analytics' && (
+        <div className="space-y-6 animate-in fade-in">
+          {/* Company selector */}
+          <div className="bg-white border border-[#493447]/10 rounded-2xl p-5 shadow-xs flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BarChart2 className="w-5 h-5 text-[#BF3A1B]" />
+              <h2 className="font-heading font-bold text-base text-[#2D1B4E]">
+                Métricas de Impacto para {companyForStats.name}
+              </h2>
+            </div>
+            <select
+              value={selectedCompanyId}
+              onChange={(e) => setSelectedCompanyId(e.target.value)}
+              className="px-3 py-1.5 bg-[#FFF7EF] border border-[#493447]/15 rounded-lg text-xs font-bold text-[#2D1B4E]"
+            >
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Chart 1: Líderes Registrados vs. Usaron Lidacta (PDF Example) */}
+            <div className="bg-white border border-[#493447]/10 rounded-2xl p-6 shadow-xs space-y-4">
+              <h3 className="font-heading font-bold text-sm text-[#2D1B4E]">
+                1. Adopción: Registrados vs. Usaron Lidacta
+              </h3>
+              <p className="text-xs text-[#4A3F55]/70">
+                Ejemplo del PDF: "La empresa tuvo 20 líderes registrados, 18 usaron Lidacta"
+              </p>
+
+              <div className="space-y-3 pt-2">
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="font-semibold text-[#2D1B4E]">Líderes Registrados</span>
+                    <span className="font-bold tabular-nums text-[#2D1B4E]">{companyLeaders.length} líderes</span>
+                  </div>
+                  <div className="w-full bg-[#FFF7EF] h-4 rounded-full overflow-hidden border border-[#493447]/10">
+                    <div className="bg-[#2D1B4E] h-full rounded-full w-full" />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="font-semibold text-[#BF3A1B]">Usaron Lidacta</span>
+                    <span className="font-bold tabular-nums text-[#BF3A1B]">
+                      {uniqueUsersWhoUsed.length} líderes (
+                      {companyLeaders.length > 0
+                        ? Math.round((uniqueUsersWhoUsed.length / companyLeaders.length) * 100)
+                        : 0}
+                      %)
+                    </span>
+                  </div>
+                  <div className="w-full bg-[#FFF7EF] h-4 rounded-full overflow-hidden border border-[#493447]/10">
+                    <div
+                      className="bg-[#BF3A1B] h-full rounded-full transition-all"
+                      style={{
+                        width: `${
+                          companyLeaders.length > 0
+                            ? (uniqueUsersWhoUsed.length / companyLeaders.length) * 100
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Chart 2: Temas más abordados por frecuencia */}
+            <div className="bg-white border border-[#493447]/10 rounded-2xl p-6 shadow-xs space-y-4">
+              <h3 className="font-heading font-bold text-sm text-[#2D1B4E]">
+                2. Frecuencia de Temas Abordados
+              </h3>
+              <p className="text-xs text-[#4A3F55]/70">
+                Distribución de problemáticas reales planteadas por los líderes
+              </p>
+
+              <div className="space-y-2.5 pt-2">
+                {Object.entries(themeFrequency).map(([thm, cnt], i) => (
+                  <div key={i} className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-medium text-[#2D1B4E] truncate max-w-[200px]">{thm}</span>
+                      <span className="font-bold text-[#BF3A1B] tabular-nums">{cnt} casos</span>
+                    </div>
+                    <div className="w-full bg-[#FFF7EF] h-2.5 rounded-full overflow-hidden border border-[#493447]/5">
+                      <div
+                        className="bg-[#E8512F] h-full rounded-full"
+                        style={{ width: `${Math.min(100, (cnt / companyCases.length) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: DIRECTORIO DE USUARIOS */}
+      {activeTab === 'users' && (
+        <div className="bg-white border border-[#493447]/10 rounded-2xl p-6 shadow-xs space-y-4 animate-in fade-in">
+          <div className="flex items-center justify-between border-b border-[#493447]/10 pb-3">
+            <div>
+              <h3 className="font-heading font-bold text-base text-[#2D1B4E]">
+                Directorio Global de Usuarios
+              </h3>
+              <p className="text-xs text-[#4A3F55]/70">
+                Líderes, Recursos Humanos y Creadores en todas las empresas
+              </p>
+            </div>
+            <span className="text-xs font-bold text-[#2D1B4E] tabular-nums">{allUsers.length} cuentas</span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-[#FFF7EF] text-[#2D1B4E] uppercase text-[10px] tracking-wider font-bold">
+                <tr>
+                  <th className="p-3">Nombre</th>
+                  <th className="p-3">Correo</th>
+                  <th className="p-3">Empresa</th>
+                  <th className="p-3">Rol</th>
+                  <th className="p-3">Puesto & Área</th>
+                  <th className="p-3 text-right">Tel / WhatsApp</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#493447]/5">
+                {allUsers.map((u) => (
+                  <tr key={u.id} className="hover:bg-[#FFF7EF]/40 transition-colors">
+                    <td className="p-3 font-semibold text-[#2D1B4E]">{u.name}</td>
+                    <td className="p-3 text-[#4A3F55]">{u.email}</td>
+                    <td className="p-3 text-[#4A3F55]">{u.companyName}</td>
+                    <td className="p-3">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          u.role === 'admin'
+                            ? 'bg-[#F7B538] text-[#2D1B4E]'
+                            : u.role === 'hr'
+                            ? 'bg-[#C9BDF2] text-[#2D1B4E]'
+                            : 'bg-[#FFD3BF] text-[#BF3A1B]'
+                        }`}
+                      >
+                        {u.role}
+                      </span>
+                    </td>
+                    <td className="p-3 text-[#4A3F55]">
+                      {u.position} {u.area ? `(${u.area})` : ''}
+                    </td>
+                    <td className="p-3 text-right text-[#4A3F55]/80 tabular-nums">
+                      {u.whatsapp || 'N/A'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
