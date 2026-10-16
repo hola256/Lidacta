@@ -178,67 +178,68 @@ export const AdminView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 bg-[#FFF7EF] overflow-y-auto p-4 sm:p-8 space-y-6">
-      {/* Admin Header with Tab Navigation */}
-      <div className="bg-white border border-[#493447]/15 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4 no-print">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#F7B538] bg-[#2D1B4E] px-2 py-0.5 rounded">
-              Panel de Administradora · Creadora de Lidacta
-            </span>
+    <div className="flex-1 bg-[#FFF7EF] overflow-y-auto min-w-0">
+      <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6 sm:space-y-8">
+        {/* Admin Header with Tab Navigation */}
+        <div className="bg-white border border-[#493447]/15 rounded-2xl p-4 sm:p-6 shadow-xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 no-print">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[#F7B538] bg-[#2D1B4E] px-2 py-0.5 rounded">
+                Panel de Administradora · Creadora de Lidacta
+              </span>
+            </div>
+            <h1 className="font-heading font-extrabold text-xl sm:text-2xl text-[#2D1B4E] mt-1">
+              Gestión de Empresas, Etapa Cero y Auditoría de Flujo
+            </h1>
+            <p className="text-xs sm:text-sm text-[#4A3F55]">
+              Configura el contexto empresarial y analiza la agilidad del líder en las 7 etapas operativas.
+            </p>
           </div>
-          <h1 className="font-heading font-extrabold text-2xl text-[#2D1B4E] mt-1">
-            Gestión de Empresas, Etapa Cero y Auditoría de Flujo
-          </h1>
-          <p className="text-xs text-[#4A3F55]">
-            Configura el contexto empresarial y analiza la agilidad del líder en las 7 etapas operativas.
-          </p>
-        </div>
 
-        {/* Tab Switcher */}
-        <div className="flex items-center gap-1 p-1 bg-[#FFF7EF] border border-[#493447]/10 rounded-xl overflow-x-auto max-w-full">
-          <button
-            onClick={() => setActiveTab('onboarding')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'onboarding'
-                ? 'bg-[#BF3A1B] text-white shadow-xs'
-                : 'text-[#4A3F55] hover:text-[#2D1B4E]'
-            }`}
-          >
-            🏢 Etapa Cero (Onboarding)
-          </button>
-          <button
-            onClick={() => setActiveTab('stages_monitoring')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'stages_monitoring'
-                ? 'bg-[#BF3A1B] text-white shadow-xs'
-                : 'text-[#4A3F55] hover:text-[#2D1B4E]'
-            }`}
-          >
-            ⏱️ Monitoreo & Tiempos
-          </button>
-          <button
-            onClick={() => setActiveTab('analytics')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'analytics'
-                ? 'bg-[#BF3A1B] text-white shadow-xs'
-                : 'text-[#4A3F55] hover:text-[#2D1B4E]'
-            }`}
-          >
-            📊 Analítica & Gráficos
-          </button>
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'users'
-                ? 'bg-[#BF3A1B] text-white shadow-xs'
-                : 'text-[#4A3F55] hover:text-[#2D1B4E]'
-            }`}
-          >
-            👥 Directorio de Usuarios
-          </button>
+          {/* Tab Switcher */}
+          <div className="flex items-center gap-1.5 p-1 bg-[#FFF7EF] border border-[#493447]/10 rounded-xl overflow-x-auto max-w-full w-full lg:w-auto pb-1">
+            <button
+              onClick={() => setActiveTab('onboarding')}
+              className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center justify-center ${
+                activeTab === 'onboarding'
+                  ? 'bg-[#BF3A1B] text-white shadow-xs'
+                  : 'text-[#4A3F55] hover:text-[#2D1B4E]'
+              }`}
+            >
+              🏢 Etapa Cero (Onboarding)
+            </button>
+            <button
+              onClick={() => setActiveTab('stages_monitoring')}
+              className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center justify-center ${
+                activeTab === 'stages_monitoring'
+                  ? 'bg-[#BF3A1B] text-white shadow-xs'
+                  : 'text-[#4A3F55] hover:text-[#2D1B4E]'
+              }`}
+            >
+              ⏱️ Monitoreo & Tiempos
+            </button>
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center justify-center ${
+                activeTab === 'analytics'
+                  ? 'bg-[#BF3A1B] text-white shadow-xs'
+                  : 'text-[#4A3F55] hover:text-[#2D1B4E]'
+              }`}
+            >
+              📊 Analítica & Gráficos
+            </button>
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center justify-center ${
+                activeTab === 'users'
+                  ? 'bg-[#BF3A1B] text-white shadow-xs'
+                  : 'text-[#4A3F55] hover:text-[#2D1B4E]'
+              }`}
+            >
+              👥 Directorio de Usuarios
+            </button>
+          </div>
         </div>
-      </div>
 
       {/* TAB 1: ETAPA CERO - ONBOARDING Y PERSONALIZACIÓN DE EMPRESA */}
       {activeTab === 'onboarding' && (
@@ -356,24 +357,24 @@ export const AdminView: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="flex gap-2 text-xs">
+                <div className="flex flex-col sm:flex-row gap-2 text-xs">
                   <input
                     type="text"
                     value={newLinkTitle}
                     onChange={(e) => setNewLinkTitle(e.target.value)}
                     placeholder="Título del enlace"
-                    className="flex-1 p-2 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-lg text-xs"
+                    className="flex-1 p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs"
                   />
                   <input
                     type="url"
                     value={newLinkUrl}
                     onChange={(e) => setNewLinkUrl(e.target.value)}
                     placeholder="https://..."
-                    className="flex-1 p-2 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-lg text-xs"
+                    className="flex-1 p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs"
                   />
                   <button
                     onClick={handleAddLink}
-                    className="px-3 py-1.5 bg-[#2D1B4E] text-white rounded-lg text-xs font-bold cursor-pointer"
+                    className="min-h-[44px] px-4 py-2 bg-[#2D1B4E] text-white rounded-xl text-xs font-bold cursor-pointer shrink-0 active:scale-95"
                   >
                     Agregar
                   </button>
@@ -441,24 +442,24 @@ export const AdminView: React.FC = () => {
         <div className="space-y-6 animate-in fade-in">
           {/* Segmentation & Filters */}
           <div className="bg-white border border-[#493447]/10 rounded-2xl p-5 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <span className="font-heading font-bold text-sm text-[#2D1B4E] flex items-center gap-2">
                 <Sliders className="w-4 h-4 text-[#BF3A1B]" />
                 Segmentación y Filtros de Búsqueda
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
                 <button
                   onClick={handleExportCSV}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FFF7EF] border border-[#493447]/15 rounded-lg text-xs font-semibold text-[#2D1B4E] hover:bg-[#FFD3BF]/20 cursor-pointer"
+                  className="flex-1 sm:flex-none min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 bg-[#FFF7EF] border border-[#493447]/15 rounded-xl text-xs font-semibold text-[#2D1B4E] hover:bg-[#FFD3BF]/20 cursor-pointer shadow-xs active:scale-95"
                 >
-                  <Download className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                  <Download className="w-4 h-4 text-[#BF3A1B]" />
                   <span>Descargar CSV</span>
                 </button>
                 <button
                   onClick={() => window.print()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FFF7EF] border border-[#493447]/15 rounded-lg text-xs font-semibold text-[#2D1B4E] hover:bg-[#FFD3BF]/20 cursor-pointer"
+                  className="flex-1 sm:flex-none min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 bg-[#FFF7EF] border border-[#493447]/15 rounded-xl text-xs font-semibold text-[#2D1B4E] hover:bg-[#FFD3BF]/20 cursor-pointer shadow-xs active:scale-95"
                 >
-                  <Printer className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                  <Printer className="w-4 h-4 text-[#BF3A1B]" />
                   <span>Imprimir Reporte</span>
                 </button>
               </div>
@@ -542,7 +543,63 @@ export const AdminView: React.FC = () => {
               </span>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile Cards for Mentorship Cases */}
+            <div className="grid grid-cols-1 gap-3 md:hidden">
+              {filteredMentorships.map((m) => {
+                const currentHistoryItem = m.stageHistory.find((h) => h.stage === m.currentStage);
+                const enteredDate = currentHistoryItem
+                  ? new Date(currentHistoryItem.enteredAt).toLocaleDateString([], {
+                      month: 'short',
+                      day: 'numeric',
+                    })
+                  : 'N/A';
+                const isStuck =
+                  m.status !== 'completed' &&
+                  currentHistoryItem &&
+                  Date.now() - new Date(currentHistoryItem.enteredAt).getTime() > 1000 * 60 * 60 * 48;
+
+                return (
+                  <div key={m.id} className="p-4 bg-[#FFF7EF]/50 border border-[#493447]/10 rounded-2xl space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="font-bold text-xs text-[#2D1B4E] block">{m.leaderName}</span>
+                        <span className="text-[10px] text-[#4A3F55]/70 block">{m.companyName}</span>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                          m.status === 'completed'
+                            ? 'bg-[#E2F7E1] text-[#246B2A]'
+                            : isStuck
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-[#FFD3BF] text-[#BF3A1B]'
+                        }`}
+                      >
+                        {m.status === 'completed' ? 'Concluido' : `Etapa ${m.currentStage}`}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h4 className="text-xs font-semibold text-[#2D1B4E]">{m.title}</h4>
+                      <span className="text-[10px] text-[#BF3A1B]">{m.theme}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-[#4A3F55]/70 pt-2 border-t border-[#493447]/5">
+                      <span>Entró: {enteredDate}</span>
+                      <button
+                        onClick={() => setSelectedMentorshipForAudit(m)}
+                        className="min-h-[40px] px-3 py-1.5 bg-white border border-[#493447]/20 rounded-xl text-xs font-semibold text-[#2D1B4E] hover:border-[#BF3A1B] flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                        <span>Ver Chat</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead className="bg-[#FFF7EF] text-[#2D1B4E] uppercase text-[10px] tracking-wider font-bold">
                   <tr>
@@ -585,7 +642,7 @@ export const AdminView: React.FC = () => {
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                               m.status === 'completed'
                                 ? 'bg-[#E2F7E1] text-[#246B2A]'
-                                : isStuck
+                               : isStuck
                                 ? 'bg-red-100 text-red-700'
                                 : 'bg-[#FFD3BF] text-[#BF3A1B]'
                             }`}
@@ -796,7 +853,37 @@ export const AdminView: React.FC = () => {
             <span className="text-xs font-bold text-[#2D1B4E] tabular-nums">{allUsers.length} cuentas</span>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Mobile Cards for Users Directory */}
+          <div className="grid grid-cols-1 gap-2.5 md:hidden">
+            {allUsers.map((u) => (
+              <div key={u.id} className="p-3.5 bg-[#FFF7EF]/50 border border-[#493447]/10 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-xs text-[#2D1B4E] block">{u.name}</span>
+                    <span className="text-[10px] text-[#4A3F55]/70 block">{u.email}</span>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${
+                      u.role === 'admin'
+                        ? 'bg-[#F7B538] text-[#2D1B4E]'
+                        : u.role === 'hr'
+                        ? 'bg-[#C9BDF2] text-[#2D1B4E]'
+                        : 'bg-[#FFD3BF] text-[#BF3A1B]'
+                    }`}
+                  >
+                    {u.role}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-[#4A3F55]/80 pt-1 border-t border-[#493447]/5">
+                  <span className="truncate pr-2">{u.companyName} · {u.position}</span>
+                  <span className="text-[10px] tabular-nums text-[#4A3F55]/70 shrink-0">{u.whatsapp || 'Sin WhatsApp'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-xs text-left">
               <thead className="bg-[#FFF7EF] text-[#2D1B4E] uppercase text-[10px] tracking-wider font-bold">
                 <tr>
@@ -841,5 +928,6 @@ export const AdminView: React.FC = () => {
         </div>
       )}
     </div>
+  </div>
   );
 };

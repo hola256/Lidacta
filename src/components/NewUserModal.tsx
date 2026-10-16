@@ -38,18 +38,19 @@ export const NewUserModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#2D1B4E]/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
-      <div className="bg-white border border-[#493447]/20 rounded-2xl max-w-lg w-full shadow-2xl p-6 sm:p-8 space-y-6">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#2D1B4E]/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+      <div className="bg-white border border-[#493447]/20 rounded-2xl max-w-lg w-full shadow-2xl p-4 sm:p-8 space-y-4 sm:space-y-6 max-h-[90vh] overflow-y-auto my-auto">
         <div className="flex items-center justify-between border-b border-[#493447]/10 pb-3">
           <div className="flex items-center gap-2">
-            <UserPlus className="w-5 h-5 text-[#BF3A1B]" />
-            <h2 className="font-heading font-bold text-lg text-[#2D1B4E]">
+            <UserPlus className="w-5 h-5 text-[#BF3A1B] shrink-0" />
+            <h2 className="font-heading font-bold text-base sm:text-lg text-[#2D1B4E]">
               Registro de Nuevo Perfil en Lidacta
             </h2>
           </div>
           <button
             onClick={() => setShowNewUserModal(false)}
-            className="p-1 text-[#4A3F55] hover:text-[#2D1B4E] rounded-lg cursor-pointer"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-[#4A3F55] hover:text-[#2D1B4E] rounded-xl cursor-pointer active:scale-95"
+            title="Cerrar"
           >
             <X className="w-5 h-5" />
           </button>
@@ -59,7 +60,7 @@ export const NewUserModal: React.FC = () => {
           {/* Role selector */}
           <div className="space-y-1.5">
             <label className="font-bold text-[#2D1B4E] block">Tipo de Perfil:</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {[
                 { id: 'leader', label: 'Líder (Principal)' },
                 { id: 'hr', label: 'Recursos Humanos' },
@@ -69,7 +70,7 @@ export const NewUserModal: React.FC = () => {
                   type="button"
                   key={r.id}
                   onClick={() => setRole(r.id as UserRole)}
-                  className={`p-2 rounded-xl border text-center font-bold transition-all cursor-pointer ${
+                  className={`min-h-[44px] p-2 rounded-xl border text-center font-bold transition-all cursor-pointer flex items-center justify-center active:scale-98 ${
                     role === r.id
                       ? 'bg-[#BF3A1B] text-white border-[#BF3A1B] shadow-xs'
                       : 'bg-[#FFF7EF] text-[#4A3F55] border-[#493447]/10 hover:border-[#BF3A1B]'
@@ -91,7 +92,7 @@ export const NewUserModal: React.FC = () => {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ej. Roberto Gómez"
-                className="w-full p-2.5 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-lg text-xs text-[#2D1B4E]"
+                className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
               />
             </div>
 
@@ -100,7 +101,7 @@ export const NewUserModal: React.FC = () => {
               <select
                 value={companyId}
                 onChange={(e) => setCompanyId(e.target.value)}
-                className="w-full p-2.5 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-lg text-xs text-[#2D1B4E]"
+                className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
               >
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -118,7 +119,7 @@ export const NewUserModal: React.FC = () => {
                 value={position}
                 onChange={(e) => setPosition(e.target.value)}
                 placeholder="Ej. Líder de Producción"
-                className="w-full p-2.5 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-lg text-xs text-[#2D1B4E]"
+                className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
               />
             </div>
 
@@ -130,7 +131,7 @@ export const NewUserModal: React.FC = () => {
                   value={area}
                   onChange={(e) => setArea(e.target.value)}
                   placeholder="Ej. Manufactura"
-                  className="w-full p-2.5 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-lg text-xs text-[#2D1B4E]"
+                  className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
                 />
               </div>
             )}
@@ -141,7 +142,7 @@ export const NewUserModal: React.FC = () => {
                 type="date"
                 value={birthDate}
                 onChange={(e) => setBirthDate(e.target.value)}
-                className="w-full p-2.5 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-lg text-xs text-[#2D1B4E]"
+                className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
               />
             </div>
 
@@ -152,7 +153,7 @@ export const NewUserModal: React.FC = () => {
                   type="number"
                   value={directReports}
                   onChange={(e) => setDirectReports(Number(e.target.value))}
-                  className="w-full p-2.5 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-lg text-xs text-[#2D1B4E]"
+                  className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
                 />
               </div>
             )}
@@ -164,19 +165,19 @@ export const NewUserModal: React.FC = () => {
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
                 placeholder="+52 55 0000 0000"
-                className="w-full p-2.5 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-lg text-xs text-[#2D1B4E]"
+                className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
               />
             </div>
           </div>
 
-          <div className="pt-4 border-t border-[#493447]/10 flex items-center justify-between">
+          <div className="pt-4 border-t border-[#493447]/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <span className="text-[11px] text-[#4A3F55]/70 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#BF3A1B]" />
+              <ShieldCheck className="w-3.5 h-3.5 text-[#BF3A1B] shrink-0" />
               Datos protegidos bajo confidencialidad
             </span>
             <button
               type="submit"
-              className="px-5 py-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+              className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center active:scale-95"
             >
               Completar Registro
             </button>

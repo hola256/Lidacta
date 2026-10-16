@@ -68,38 +68,39 @@ export const HRView: React.FC = () => {
   });
 
   return (
-    <div className="flex-1 bg-[#FFF7EF] overflow-y-auto p-4 sm:p-8 space-y-8">
-      {/* Top Banner with Strict Confidentiality Protocol */}
-      <div className="bg-white border border-[#493447]/15 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#BF3A1B]">
-              Panel de Recursos Humanos
-            </span>
-            <span className="text-xs text-[#4A3F55]/70">·</span>
-            <span className="text-xs font-semibold text-[#2D1B4E]">{currentCompany.name}</span>
+    <div className="flex-1 bg-[#FFF7EF] overflow-y-auto min-w-0">
+      <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6 sm:space-y-8">
+        {/* Top Banner with Strict Confidentiality Protocol */}
+        <div className="bg-white border border-[#493447]/15 rounded-2xl p-4 sm:p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#BF3A1B]">
+                Panel de Recursos Humanos
+              </span>
+              <span className="text-xs text-[#4A3F55]/70">·</span>
+              <span className="text-xs font-semibold text-[#2D1B4E]">{currentCompany.name}</span>
+            </div>
+            <h1 className="font-heading font-extrabold text-xl sm:text-2xl text-[#2D1B4E]">
+              Indicadores de Liderazgo, Uso e Impacto
+            </h1>
+            <p className="text-xs sm:text-sm text-[#4A3F55] leading-relaxed max-w-2xl">
+              Monitorea el desarrollo de habilidades, autonomía y temas abordados por tus líderes.
+            </p>
           </div>
-          <h1 className="font-heading font-extrabold text-2xl text-[#2D1B4E]">
-            Indicadores de Liderazgo, Uso e Impacto
-          </h1>
-          <p className="text-xs text-[#4A3F55] leading-relaxed max-w-2xl">
-            Monitorea el desarrollo de habilidades, autonomía y temas abordados por tus líderes.
-          </p>
+
+          {/* Confidentiality Seal */}
+          <div className="p-3 bg-[#FFD3BF]/20 border border-[#FFD3BF] rounded-xl flex items-center gap-2 text-xs text-[#2D1B4E] shrink-0 w-full sm:w-auto">
+            <Lock className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+            <div>
+              <span className="font-bold block">100% Confidencial</span>
+              <span className="text-[11px] text-[#4A3F55]/80">Sin acceso a conversaciones privadas</span>
+            </div>
+          </div>
         </div>
 
-        {/* Confidentiality Seal */}
-        <div className="p-3 bg-[#FFD3BF]/20 border border-[#FFD3BF] rounded-xl flex items-center gap-2 text-xs text-[#2D1B4E] shrink-0">
-          <Lock className="w-4 h-4 text-[#BF3A1B] shrink-0" />
-          <div>
-            <span className="font-bold block">100% Confidencial</span>
-            <span className="text-[11px] text-[#4A3F55]/80">Sin acceso a conversaciones privadas</span>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Cards: The Primary 3 Key Health Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 bg-white border border-[#493447]/10 rounded-2xl shadow-xs space-y-2">
+        {/* KPI Cards: The Primary 3 Key Health Metrics */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="p-4 sm:p-5 bg-white border border-[#493447]/10 rounded-2xl shadow-xs space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-[#4A3F55]/80">
               I. Líderes Registrados
@@ -350,7 +351,46 @@ export const HRView: React.FC = () => {
           <span className="text-xs text-[#4A3F55]/70 tabular-nums">{companyUsers.length} líderes</span>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Mobile Cards View for Small Screens */}
+        <div className="grid grid-cols-1 gap-2.5 md:hidden">
+          {companyUsers.map((u) => {
+            const userMentorships = companyMentorships.filter((m) => m.leaderId === u.id);
+            const hasUsed = userMentorships.length > 0;
+            return (
+              <div key={u.id} className="p-3 bg-[#FFF7EF]/50 border border-[#493447]/10 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-[#493447] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                      {u.name.charAt(0)}
+                    </div>
+                    <div>
+                      <span className="font-bold text-xs text-[#2D1B4E] block">{u.name}</span>
+                      <span className="text-[10px] text-[#4A3F55]/70 block">{u.position} · {u.area || 'Operaciones'}</span>
+                    </div>
+                  </div>
+                  {hasUsed ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#E2F7E1] text-[#246B2A] shrink-0">
+                      Activo ({userMentorships.length})
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-neutral-100 text-[#4A3F55]/70 shrink-0">
+                      Sin uso
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-[#4A3F55]/80 pt-1 border-t border-[#493447]/5">
+                  <span>Personas a cargo: <strong className="text-[#2D1B4E]">{u.directReports ?? 0}</strong></span>
+                  <span className="text-[10px] text-[#4A3F55]/60">
+                    Reg: {new Date(u.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Desktop Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-xs text-left">
             <thead className="bg-[#FFF7EF] text-[#2D1B4E] uppercase text-[10px] tracking-wider font-bold">
               <tr>
@@ -401,5 +441,6 @@ export const HRView: React.FC = () => {
         </div>
       </div>
     </div>
+  </div>
   );
 };
