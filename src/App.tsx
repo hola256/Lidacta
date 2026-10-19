@@ -4,15 +4,21 @@ import { Navbar } from './components/Navbar';
 import { LeaderView } from './components/LeaderView';
 import { HRView } from './components/HRView';
 import { AdminView } from './components/AdminView';
+import { LoginView } from './components/LoginView';
 import { EmailSimulatorDrawer } from './components/EmailSimulatorDrawer';
 import { NewUserModal } from './components/NewUserModal';
 import { WelcomeModal } from './components/WelcomeModal';
 
 const AppContent: React.FC = () => {
-  const { currentUser } = useLidacta();
+  const { currentUser, isAuthenticated } = useLidacta();
+
+  // If user is not authenticated, show the login portal in Ciruela Noche (#2D1B4E)
+  if (!isAuthenticated) {
+    return <LoginView />;
+  }
 
   return (
-    <div className="min-h-screen bg-[#FFF7EF] flex flex-col font-sans text-[#4A3F55] selection:bg-[#FFD3BF] selection:text-[#2D1B4E]">
+    <div className="min-h-screen bg-[#FFF7EF] flex flex-col font-sans text-[#4A3F55] selection:bg-[#FFD3BF] selection:text-[#2D1B4E] animate-in fade-in duration-300">
       <Navbar />
 
       <main className="flex-1 flex flex-col min-h-0 w-full overflow-hidden">

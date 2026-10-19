@@ -28,6 +28,17 @@ interface LidactaContextType {
   showNewUserModal: boolean;
   welcomeModalData: { user: UserProfile; emailText: string } | null;
 
+  // Authentication
+  isAuthenticated: boolean;
+  login: (email: string, password?: string) => { success: boolean; message?: string };
+  logout: () => void;
+  registerOrSetPassword: (
+    email: string,
+    password: string,
+    name?: string,
+    role?: UserRole
+  ) => { success: boolean; message?: string };
+  
   // Actions
   switchUser: (userId: string) => void;
   createNewUser: (profile: Partial<UserProfile>) => UserProfile;
@@ -87,6 +98,9 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [selectedEmailForPreview, setSelectedEmailForPreview] = useState<NotificationItem | null>(null);
   const [showNewUserModal, setShowNewUserModal] = useState(false);
   const [welcomeModalData, setWelcomeModalData] = useState<{ user: UserProfile; emailText: string } | null>(null);
+
+  // App starts by default on the login screen
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
   // Sync to localStorage
   useEffect(() => {
@@ -644,6 +658,73 @@ El Equipo de Lidacta`;
     setIsEmailDrawerOpen(false);
   };
 
+  const login = (email: string, _password?: string): { success: boolean; message?: string } => {
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Check if user exists in allUsers
+    let user = allUsers.find((u) => u.email.toLowerCase() === cleanEmail);
+
+    // If typing 'admin' or generic admin email or Tania's email
+    if (!user && (cleanEmail === 'admin' || cleanEmail === 'admin@lidacta.com')) {
+      user = allUsers.find((u) => u.role === 'admin') || allUsers[0];
+    }
+
+    if (!user) {
+      return {
+        success: false,
+        message: 'No se encontró una cuenta con este correo. Puedes crear tu acceso o registrarte en la pestaña "Crear Contraseña".',
+      };
+    }
+
+    setCurrentUserId(user.id);
+    setIsAuthenticated(true);
+
+    if (user.role === 'leader') {
+      const leaderMentorship = mentorships.find((m) => m.leaderId === user.id);
+      setActiveMentorshipIdState(leaderMentorship ? leaderMentorship.id : null);
+    }
+
+    return { success: true };
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+  };
+
+  const registerOrSetPassword = (
+    email: string,
+    _password: string,
+    name?: string,
+    role?: UserRole
+  ): { success: boolean; message?: string } => {
+    const cleanEmail = email.trim().toLowerCase();
+    const existingUser = allUsers.find((u) => u.email.toLowerCase() === cleanEmail);
+
+    if (existingUser) {
+      setCurrentUserId(existingUser.id);
+      setIsAuthenticated(true);
+      return { success: true };
+    }
+
+    const assignedRole: UserRole = role || 'admin';
+    const newUser: UserProfile = {
+      id: `user_${Date.now()}`,
+      name: name?.trim() || (assignedRole === 'admin' ? 'Administradora Lidacta' : 'Nuevo Usuario'),
+      email: cleanEmail,
+      role: assignedRole,
+      companyId: companies[0]?.id || 'comp_nexus',
+      companyName: companies[0]?.name || 'Lidacta Platform',
+      position: assignedRole === 'admin' ? 'Administradora de Plataforma' : 'Líder Operativo',
+      area: assignedRole === 'admin' ? 'Dirección y Auditoría' : 'Operaciones',
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+
+    setAllUsers((prev) => [newUser, ...prev]);
+    setCurrentUserId(newUser.id);
+    setIsAuthenticated(true);
+    return { success: true };
+  };
+
   return (
     <LidactaContext.Provider
       value={{
@@ -659,6 +740,10 @@ El Equipo de Lidacta`;
         selectedEmailForPreview,
         showNewUserModal,
         welcomeModalData,
+        isAuthenticated,
+        login,
+        logout,
+        registerOrSetPassword,
         switchUser,
         createNewUser,
         setShowNewUserModal,
