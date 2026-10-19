@@ -38,11 +38,11 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-[#493447] text-white shadow-md border-b border-[#2D1B4E]/30 no-print">
+    <header className="sticky top-0 z-40 bg-[#2D1B4E] text-white shadow-md border-b border-white/10 no-print">
       <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
         {/* Zone 1: Brand Wordmark & Descriptor */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#2D1B4E] border border-white/20 flex items-center justify-center text-[#F7B538] shadow-sm shrink-0">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/15 border border-white/25 flex items-center justify-center text-[#F7B538] shadow-sm shrink-0">
             <span className="font-heading font-bold text-base sm:text-lg leading-none">L</span>
           </div>
           <div className="flex flex-col min-w-0">
@@ -94,7 +94,7 @@ export const Navbar: React.FC = () => {
             >
               <Bell className="w-4 h-4 text-white" />
               {unreadNotificationsCount > 0 && (
-                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#E8512F] ring-2 ring-[#493447]" />
+                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#E8512F] ring-2 ring-[#2D1B4E]" />
               )}
             </button>
 
