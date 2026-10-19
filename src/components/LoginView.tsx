@@ -158,7 +158,7 @@ export const LoginView: React.FC = () => {
               Portal de Acceso
             </h1>
             <p className="text-xs sm:text-sm text-[#FFF7EF]/80 leading-relaxed max-w-sm mx-auto">
-              Ingresa tus credenciales para acceder a tus herramientas operativas, sesiones confidenciales y paneles de gestión.
+              Ingresa a Lidacta
             </p>
           </div>
 
