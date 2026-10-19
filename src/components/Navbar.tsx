@@ -38,34 +38,34 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-[#FFF7EF]/95 backdrop-blur-md border-b border-[#493447]/10 no-print">
+    <header className="sticky top-0 z-40 bg-[#493447] text-white shadow-md border-b border-[#2D1B4E]/30 no-print">
       <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
         {/* Zone 1: Brand Wordmark & Descriptor */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#2D1B4E] flex items-center justify-center text-[#F7B538] shadow-sm shrink-0">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#2D1B4E] border border-white/20 flex items-center justify-center text-[#F7B538] shadow-sm shrink-0">
             <span className="font-heading font-bold text-base sm:text-lg leading-none">L</span>
           </div>
           <div className="flex flex-col min-w-0">
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="font-heading font-extrabold text-lg sm:text-xl tracking-tight text-[#2D1B4E]">
+              <span className="font-heading font-extrabold text-lg sm:text-xl tracking-tight text-white">
                 Lidacta
               </span>
-              <span className="text-[10px] sm:text-[11px] font-semibold tracking-wider uppercase text-[#BF3A1B] bg-[#FFD3BF]/60 px-1.5 py-0.5 rounded hidden xs:inline-block">
+              <span className="text-[10px] sm:text-[11px] font-bold tracking-wider uppercase text-[#2D1B4E] bg-[#FFD3BF] px-1.5 py-0.5 rounded hidden xs:inline-block shadow-2xs">
                 Líder + Acción
               </span>
             </div>
-            <span className="text-xs text-[#4A3F55]/80 hidden sm:inline">
+            <span className="text-xs text-[#FFF7EF]/85 hidden sm:inline">
               Desarrollo de Liderazgo en acción
             </span>
           </div>
         </div>
 
         {/* Zone 2: Confidentiality & Context Status */}
-        <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-white/70 border border-[#493447]/10 rounded-full text-xs text-[#4A3F55]">
-          <ShieldCheck className="w-3.5 h-3.5 text-[#BF3A1B] shrink-0" />
-          <span className="whitespace-nowrap">Espacio 100% Confidencial</span>
-          <span className="text-[#493447]/30">·</span>
-          <span className="font-medium text-[#2D1B4E] truncate max-w-[180px]">
+        <div className="hidden lg:flex items-center gap-2 px-3.5 py-1.5 bg-white/10 border border-white/15 rounded-full text-xs text-[#FFF7EF]">
+          <ShieldCheck className="w-3.5 h-3.5 text-[#F7B538] shrink-0" />
+          <span className="whitespace-nowrap font-medium text-white">Espacio 100% Confidencial</span>
+          <span className="text-white/40">·</span>
+          <span className="font-semibold text-[#FFD3BF] truncate max-w-[180px]">
             {currentUser.companyName}
           </span>
         </div>
@@ -76,9 +76,9 @@ export const Navbar: React.FC = () => {
           <button
             onClick={() => openEmailDrawer()}
             title="Ver bandeja de correos transaccionales simulados"
-            className="min-h-[44px] flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium text-[#2D1B4E] bg-white border border-[#493447]/15 rounded-xl hover:bg-[#FFD3BF]/20 transition-colors whitespace-nowrap cursor-pointer shadow-xs active:scale-95"
+            className="min-h-[44px] flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl transition-colors whitespace-nowrap cursor-pointer shadow-xs active:scale-95"
           >
-            <Mail className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+            <Mail className="w-4 h-4 text-[#F7B538] shrink-0" />
             <span className="hidden sm:inline">Bandeja de Correos</span>
           </button>
 
@@ -90,16 +90,16 @@ export const Navbar: React.FC = () => {
                 if (!showNotificationsDropdown) markNotificationsAsRead();
               }}
               title="Notificaciones en la aplicación"
-              className="relative min-h-[44px] min-w-[44px] flex items-center justify-center p-2 text-[#4A3F55] hover:text-[#2D1B4E] hover:bg-white rounded-xl border border-transparent hover:border-[#493447]/10 transition-colors cursor-pointer active:scale-95"
+              className="relative min-h-[44px] min-w-[44px] flex items-center justify-center p-2 text-white hover:text-[#FFF7EF] hover:bg-white/15 rounded-xl border border-transparent hover:border-white/20 transition-colors cursor-pointer active:scale-95"
             >
-              <Bell className="w-4 h-4" />
+              <Bell className="w-4 h-4 text-white" />
               {unreadNotificationsCount > 0 && (
-                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#E8512F]" />
+                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#E8512F] ring-2 ring-[#493447]" />
               )}
             </button>
 
             {showNotificationsDropdown && (
-              <div className="fixed sm:absolute right-3 sm:right-0 top-16 sm:top-auto sm:mt-2 w-[calc(100vw-24px)] max-w-sm sm:w-96 bg-white border border-[#493447]/15 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2">
+              <div className="fixed sm:absolute right-3 sm:right-0 top-16 sm:top-auto sm:mt-2 w-[calc(100vw-24px)] max-w-sm sm:w-96 bg-white border border-[#493447]/15 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 text-[#4A3F55]">
                 <div className="px-4 py-2 border-b border-[#493447]/10 flex items-center justify-between">
                   <span className="font-heading font-bold text-sm text-[#2D1B4E]">Notificaciones</span>
                   <span className="text-xs text-[#4A3F55]/70">Sistema y Correo</span>
@@ -146,9 +146,9 @@ export const Navbar: React.FC = () => {
           <div className="relative">
             <button
               onClick={() => setShowUserDropdown(!showUserDropdown)}
-              className="min-h-[44px] flex items-center gap-2 pl-2 pr-2.5 sm:pr-3 py-1.5 bg-white border border-[#493447]/15 rounded-xl hover:border-[#BF3A1B]/40 transition-colors cursor-pointer text-left shadow-xs active:scale-95"
+              className="min-h-[44px] flex items-center gap-2 pl-2 pr-2.5 sm:pr-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl transition-colors cursor-pointer text-left shadow-xs active:scale-95"
             >
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#493447] text-white flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#2D1B4E] border border-white/25 text-[#F7B538] flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
                 {currentUser.avatarUrl ? (
                   <img
                     src={currentUser.avatarUrl}
@@ -161,15 +161,16 @@ export const Navbar: React.FC = () => {
                 )}
               </div>
               <div className="flex flex-col min-w-0">
-                <span className="text-xs font-bold text-[#2D1B4E] leading-tight truncate max-w-[90px] xs:max-w-[120px] sm:max-w-[140px]">
+                <span className="text-xs font-bold text-white leading-tight truncate max-w-[90px] xs:max-w-[120px] sm:max-w-[140px]">
                   {currentUser.name}
                 </span>
-                <span className="text-[10px] text-[#BF3A1B] font-semibold leading-tight truncate max-w-[90px] xs:max-w-[120px] sm:max-w-[140px]">
+                <span className="text-[10px] text-[#FFD3BF] font-semibold leading-tight truncate max-w-[90px] xs:max-w-[120px] sm:max-w-[140px]">
                   {roleLabels[currentUser.role]}
                 </span>
               </div>
-              <ChevronDown className="w-3.5 h-3.5 text-[#4A3F55]/70 shrink-0" />
+              <ChevronDown className="w-3.5 h-3.5 text-white/80 shrink-0" />
             </button>
+
 
             {showUserDropdown && (
               <div className="fixed sm:absolute right-3 sm:right-0 top-16 sm:top-auto sm:mt-2 w-[calc(100vw-24px)] max-w-xs sm:w-72 bg-white border border-[#493447]/15 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2">
