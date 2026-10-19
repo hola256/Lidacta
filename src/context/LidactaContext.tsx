@@ -36,7 +36,9 @@ interface LidactaContextType {
     email: string,
     password: string,
     name?: string,
-    role?: UserRole
+    role?: UserRole,
+    position?: string,
+    companyId?: string
   ) => { success: boolean; message?: string };
   
   // Actions
@@ -695,26 +697,44 @@ El Equipo de Lidacta`;
     email: string,
     _password: string,
     name?: string,
-    role?: UserRole
+    role?: UserRole,
+    position?: string,
+    companyId?: string
   ): { success: boolean; message?: string } => {
     const cleanEmail = email.trim().toLowerCase();
     const existingUser = allUsers.find((u) => u.email.toLowerCase() === cleanEmail);
 
     if (existingUser) {
+      if (name?.trim() || role || position?.trim()) {
+        const updatedUser = {
+          ...existingUser,
+          name: name?.trim() || existingUser.name,
+          role: role || existingUser.role,
+          position: position?.trim() || existingUser.position,
+        };
+        setAllUsers((prev) => prev.map((u) => (u.id === existingUser.id ? updatedUser : u)));
+      }
       setCurrentUserId(existingUser.id);
       setIsAuthenticated(true);
       return { success: true };
     }
 
     const assignedRole: UserRole = role || 'admin';
+    const targetCompany = companies.find((c) => c.id === companyId) || companies[0];
     const newUser: UserProfile = {
       id: `user_${Date.now()}`,
-      name: name?.trim() || (assignedRole === 'admin' ? 'Administradora Lidacta' : 'Nuevo Usuario'),
+      name: name?.trim() || (assignedRole === 'admin' ? 'Tania Padierna' : 'Usuario Lidacta'),
       email: cleanEmail,
       role: assignedRole,
-      companyId: companies[0]?.id || 'comp_nexus',
-      companyName: companies[0]?.name || 'Lidacta Platform',
-      position: assignedRole === 'admin' ? 'Administradora de Plataforma' : 'Líder Operativo',
+      companyId: targetCompany?.id || 'comp_nexus',
+      companyName: targetCompany?.name || 'Lidacta Platform',
+      position:
+        position?.trim() ||
+        (assignedRole === 'admin'
+          ? 'Administradora de Plataforma'
+          : assignedRole === 'hr'
+          ? 'Gestión de Talento Humano'
+          : 'Líder Operativo'),
       area: assignedRole === 'admin' ? 'Dirección y Auditoría' : 'Operaciones',
       createdAt: new Date().toISOString().split('T')[0],
     };

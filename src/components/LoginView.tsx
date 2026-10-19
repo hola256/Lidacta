@@ -5,28 +5,26 @@ import {
   Lock,
   Mail,
   KeyRound,
+  User,
+  Briefcase,
   Eye,
   EyeOff,
   ShieldCheck,
   Sparkles,
   ArrowRight,
-  UserCheck,
   AlertCircle,
   Building2,
 } from 'lucide-react';
 
 export const LoginView: React.FC = () => {
-  const { login, registerOrSetPassword, allUsers, companies } = useLidacta();
+  const { registerOrSetPassword, login, allUsers, companies } = useLidacta();
 
-  // Mode: 'login' (Iniciar Sesión) or 'register' (Crear Contraseña / Registro inicial)
-  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
-
-  // Form fields
+  // Unified form fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState<UserRole>('admin');
+  const [position, setPosition] = useState('');
   const [companyId, setCompanyId] = useState(companies[0]?.id || 'comp_nexus');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -34,13 +32,27 @@ export const LoginView: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Handle Login submission
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  // Auto-fill profile helpers when typing recognizable emails
+  const handleEmailChange = (val: string) => {
+    setEmail(val);
+    const lower = val.trim().toLowerCase();
+    const existing = allUsers.find((u) => u.email.toLowerCase() === lower);
+    if (existing) {
+      if (!name) setName(existing.name);
+      setRole(existing.role);
+      if (!position) setPosition(existing.position);
+      setCompanyId(existing.companyId);
+    }
+  };
+
+  // Single-step Unified Form Submission
+  const handleUnifiedSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!email.trim()) {
-      setErrorMessage('Por favor, ingresa tu correo electrónico.');
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setErrorMessage('Por favor, ingresa tu correo electrónico corporativo.');
       return;
     }
 
@@ -50,46 +62,32 @@ export const LoginView: React.FC = () => {
     }
 
     setIsLoading(true);
+
     setTimeout(() => {
-      const res = login(email, password);
+      // Process unified access: creates profile if new or updates/logs in if existing
+      const res = registerOrSetPassword(
+        cleanEmail,
+        password,
+        name.trim() || (role === 'admin' ? 'Tania Padierna' : 'Usuario Lidacta'),
+        role,
+        position.trim() ||
+          (role === 'admin'
+            ? 'Administradora de Plataforma'
+            : role === 'hr'
+            ? 'Gestión de Talento Humano'
+            : 'Líder de Operaciones'),
+        companyId
+      );
+
       setIsLoading(false);
+
       if (!res.success) {
-        setErrorMessage(res.message || 'Credenciales inválidas.');
+        setErrorMessage(res.message || 'No se pudo procesar el acceso.');
       }
     }, 300);
   };
 
-  // Handle Register / Create Password submission
-  const handleRegisterSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    if (!email.trim()) {
-      setErrorMessage('Ingresa un correo electrónico corporativo.');
-      return;
-    }
-
-    if (password.length < 6) {
-      setErrorMessage('La contraseña debe contener al menos 6 caracteres.');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setErrorMessage('Las contraseñas no coinciden. Por favor, verifícalas.');
-      return;
-    }
-
-    setIsLoading(true);
-    setTimeout(() => {
-      const res = registerOrSetPassword(email, password, name, role);
-      setIsLoading(false);
-      if (!res.success) {
-        setErrorMessage(res.message || 'No se pudo crear la cuenta.');
-      }
-    }, 350);
-  };
-
-  // Quick Demo Access handlers
+  // Quick 1-click test handlers
   const handleQuickLoginAdmin = () => {
     setErrorMessage(null);
     setIsLoading(true);
@@ -146,8 +144,8 @@ export const LoginView: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Centered Login / Registration Container */}
-      <main className="w-full max-w-md mx-auto my-6 sm:my-10 flex-1 flex flex-col justify-center animate-in fade-in zoom-in-95 duration-300">
+      {/* Main Centered Login / Registration Container (Single unified step) */}
+      <main className="w-full max-w-lg mx-auto my-6 sm:my-8 flex-1 flex flex-col justify-center animate-in fade-in zoom-in-95 duration-300">
         <div className="bg-[#24153F]/95 backdrop-blur-xl border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
           {/* Card Header */}
           <div className="text-center space-y-2">
@@ -162,40 +160,6 @@ export const LoginView: React.FC = () => {
             </p>
           </div>
 
-          {/* Navigation Tabs: Iniciar Sesión / Crear Contraseña */}
-          <div className="grid grid-cols-2 p-1 bg-white/5 border border-white/10 rounded-2xl text-xs font-bold">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('login');
-                setErrorMessage(null);
-              }}
-              className={`py-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                activeTab === 'login'
-                  ? 'bg-[#F7B538] text-[#2D1B4E] shadow-sm font-extrabold'
-                  : 'text-[#FFF7EF]/70 hover:text-white'
-              }`}
-            >
-              <KeyRound className="w-3.5 h-3.5" />
-              <span>Iniciar Sesión</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('register');
-                setErrorMessage(null);
-              }}
-              className={`py-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                activeTab === 'register'
-                  ? 'bg-[#F7B538] text-[#2D1B4E] shadow-sm font-extrabold'
-                  : 'text-[#FFF7EF]/70 hover:text-white'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Crear Contraseña</span>
-            </button>
-          </div>
-
           {/* Error / Alert notification banner in Coral Profundo (#BF3A1B) */}
           {errorMessage && (
             <div className="p-3 bg-[#BF3A1B]/25 border border-[#BF3A1B] text-[#FFF7EF] rounded-xl text-xs flex items-start gap-2.5 animate-in fade-in">
@@ -204,186 +168,137 @@ export const LoginView: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 1: INICIAR SESIÓN */}
-          {activeTab === 'login' && (
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
-                  Correo Electrónico
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="ejemplo@empresa.com o hola@taniapadierna.com"
-                    className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
-                    Contraseña
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('register')}
-                    className="text-[11px] text-[#F7B538] hover:underline cursor-pointer"
-                  >
-                    ¿Primera vez? Crear clave
-                  </button>
-                </div>
-                <div className="relative">
-                  <KeyRound className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className="w-full pl-10 pr-10 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-3 text-white/50 hover:text-white cursor-pointer p-0.5"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Action Button: Ámbar Impulso (#F7B538) */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full min-h-[48px] py-3 px-6 bg-[#F7B538] hover:bg-[#e5a62f] text-[#2D1B4E] font-heading font-extrabold text-sm rounded-xl shadow-lg shadow-[#F7B538]/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 mt-2"
-              >
-                {isLoading ? (
-                  <span>Verificando credenciales...</span>
-                ) : (
-                  <>
-                    <span>Ingresar a Lidacta</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </form>
-          )}
-
-          {/* TAB 2: CREAR CONTRASEÑA / REGISTRO */}
-          {activeTab === 'register' && (
-            <form onSubmit={handleRegisterSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
-                  Nombre Completo
-                </label>
+          {/* UNIFIED SINGLE-STEP FORM */}
+          <form onSubmit={handleUnifiedSubmit} className="space-y-4">
+            {/* 1. Correo Electrónico */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
+                Correo Electrónico *
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
                 <input
-                  type="text"
+                  type="email"
                   required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ej. Roberto Gómez o Tania Padierna"
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
+                  value={email}
+                  onChange={(e) => handleEmailChange(e.target.value)}
+                  placeholder="hola@taniapadierna.com o tu.correo@empresa.com"
+                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
                 />
               </div>
+            </div>
 
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
-                  Correo Electrónico
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="tania@lidacta.com o tu.correo@empresa.com"
-                    className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
-                  />
-                </div>
+            {/* 2. Contraseña */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
+                Contraseña *
+              </label>
+              <div className="relative">
+                <KeyRound className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full pl-10 pr-10 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3 text-white/50 hover:text-white cursor-pointer p-0.5"
+                  title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
+            </div>
 
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
-                  Rol de Acceso
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: 'admin', label: 'Admin' },
-                    { id: 'leader', label: 'Líder' },
-                    { id: 'hr', label: 'RRHH' },
-                  ].map((r) => (
-                    <button
-                      type="button"
-                      key={r.id}
-                      onClick={() => setRole(r.id as UserRole)}
-                      className={`py-2 px-1 text-center rounded-xl border text-xs font-bold cursor-pointer transition-all ${
-                        role === r.id
-                          ? 'bg-[#F7B538] text-[#2D1B4E] border-[#F7B538]'
-                          : 'bg-white/5 text-white/70 border-white/15 hover:border-white/30'
-                      }`}
-                    >
-                      {r.label}
-                    </button>
-                  ))}
-                </div>
+            {/* 3. Datos de Perfil: Nombre Completo */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
+                Nombre Completo
+              </label>
+              <div className="relative">
+                <User className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ej. Tania Padierna o Roberto Gómez"
+                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
+                />
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
-                    Contraseña
-                  </label>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
-                    className="w-full px-3.5 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
-                    Confirmar Clave
-                  </label>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Repite la contraseña"
-                    className="w-full px-3.5 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
-                  />
-                </div>
+            {/* 4. Datos de Perfil: Rol de Acceso */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
+                Rol en la Plataforma
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'admin', label: 'Administradora' },
+                  { id: 'leader', label: 'Líder' },
+                  { id: 'hr', label: 'RRHH' },
+                ].map((r) => (
+                  <button
+                    type="button"
+                    key={r.id}
+                    onClick={() => setRole(r.id as UserRole)}
+                    className={`py-2 px-1 text-center rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                      role === r.id
+                        ? 'bg-[#F7B538] text-[#2D1B4E] border-[#F7B538] shadow-xs'
+                        : 'bg-white/5 text-white/70 border-white/15 hover:border-white/30'
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
               </div>
+            </div>
 
-              {/* Action Button: Ámbar Impulso (#F7B538) */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full min-h-[48px] py-3 px-6 bg-[#F7B538] hover:bg-[#e5a62f] text-[#2D1B4E] font-heading font-extrabold text-sm rounded-xl shadow-lg shadow-[#F7B538]/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 mt-2"
-              >
-                {isLoading ? (
-                  <span>Registrando usuario...</span>
-                ) : (
-                  <>
-                    <span>Crear Contraseña y Acceder</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </form>
-          )}
+            {/* 5. Datos de Perfil: Puesto / Área */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
+                Puesto / Cargo
+              </label>
+              <div className="relative">
+                <Briefcase className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
+                <input
+                  type="text"
+                  value={position}
+                  onChange={(e) => setPosition(e.target.value)}
+                  placeholder={
+                    role === 'admin'
+                      ? 'Creadora & Directora de Plataforma'
+                      : role === 'hr'
+                      ? 'Directora de Gestión Humana & Talento'
+                      : 'Líder de Línea de Ensamble y Calidad'
+                  }
+                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
+                />
+              </div>
+            </div>
 
-          {/* Quick Demo Access (1 Click Direct Access to Admin Role) */}
+            {/* 6. UN SOLO BOTÓN PRINCIPAL DE ACCIÓN en Ámbar Impulso (#F7B538) */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full min-h-[48px] py-3.5 px-6 bg-[#F7B538] hover:bg-[#e5a62f] text-[#2D1B4E] font-heading font-extrabold text-sm rounded-xl shadow-lg shadow-[#F7B538]/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 mt-4"
+            >
+              {isLoading ? (
+                <span>Validando y accediendo...</span>
+              ) : (
+                <>
+                  <span>Acceder a Lidacta</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Quick Demo Access (1-Click Instant Access) */}
           <div className="pt-4 border-t border-white/10 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-[#FFF7EF]/70 flex items-center gap-1.5">
@@ -392,7 +307,7 @@ export const LoginView: React.FC = () => {
               </span>
             </div>
 
-            {/* Direct Admin Access Button highlighted with Ámbar Impulso and Coral acents */}
+            {/* Direct Admin Access Button */}
             <button
               type="button"
               onClick={handleQuickLoginAdmin}
@@ -414,7 +329,7 @@ export const LoginView: React.FC = () => {
               <ArrowRight className="w-4 h-4 text-[#F7B538] group-hover:translate-x-1 transition-transform shrink-0" />
             </button>
 
-            {/* Other quick test accounts */}
+            {/* Quick buttons for Líder and RRHH */}
             <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
               <button
                 type="button"
