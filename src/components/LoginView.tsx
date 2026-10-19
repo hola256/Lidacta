@@ -130,14 +130,9 @@ export const LoginView: React.FC = () => {
             <span className="font-heading font-extrabold text-xl leading-none">L</span>
           </div>
           <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <span className="font-heading font-extrabold text-2xl tracking-tight text-white">
-                Lidacta
-              </span>
-              <span className="text-[10px] font-bold tracking-wider uppercase text-[#2D1B4E] bg-[#FFD3BF] px-2 py-0.5 rounded shadow-xs hidden sm:inline-block">
-                Líder + Acción
-              </span>
-            </div>
+            <span className="font-heading font-extrabold text-2xl tracking-tight text-white">
+              Lidacta
+            </span>
             <span className="text-xs text-[#FFF7EF]/80">
               Desarrollo de Liderazgo en acción
             </span>
