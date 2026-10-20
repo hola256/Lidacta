@@ -115,6 +115,24 @@ export const LoginView: React.FC = () => {
     }, 250);
   };
 
+  const handleQuickLoginPendingLeader = () => {
+    setErrorMessage(null);
+    setIsLoading(true);
+    setTimeout(() => {
+      login('carlos.mendoza@novaretail.com');
+      setIsLoading(false);
+    }, 250);
+  };
+
+  const handleQuickLoginPendingHR = () => {
+    setErrorMessage(null);
+    setIsLoading(true);
+    setTimeout(() => {
+      login('mariana.castillo@novaretail.com');
+      setIsLoading(false);
+    }, 250);
+  };
+
   return (
     <div className="min-h-screen w-full bg-[#2D1B4E] flex flex-col justify-between p-4 sm:p-6 lg:p-8 font-sans text-white relative overflow-x-hidden selection:bg-[#FFD3BF] selection:text-[#2D1B4E]">
       {/* Decorative ambient subtle glow */}
@@ -336,7 +354,7 @@ export const LoginView: React.FC = () => {
                 onClick={handleQuickLoginLeader}
                 className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-left cursor-pointer transition-colors"
               >
-                <span className="font-semibold text-[#FFD3BF] block">Líder Operativo</span>
+                <span className="font-semibold text-[#FFD3BF] block">Líder Activo</span>
                 <span className="text-[10px] text-[#FFF7EF]/60 truncate block">Roberto Gómez</span>
               </button>
               <button
@@ -344,9 +362,42 @@ export const LoginView: React.FC = () => {
                 onClick={handleQuickLoginHR}
                 className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-left cursor-pointer transition-colors"
               >
-                <span className="font-semibold text-[#C9BDF2] block">Recursos Humanos</span>
+                <span className="font-semibold text-[#C9BDF2] block">RH Activa</span>
                 <span className="text-[10px] text-[#FFF7EF]/60 truncate block">Sofía Valenzuela</span>
               </button>
+            </div>
+
+            {/* Dedicated Onboarding Test Section */}
+            <div className="pt-2 border-t border-white/10">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#FFD3BF] block mb-1.5">
+                Probar Flujo Obligatorio de Onboarding:
+              </span>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <button
+                  type="button"
+                  onClick={handleQuickLoginPendingLeader}
+                  className="p-2.5 bg-[#BF3A1B]/15 hover:bg-[#BF3A1B]/25 border border-[#BF3A1B]/35 rounded-xl text-left cursor-pointer transition-colors group"
+                >
+                  <span className="font-bold text-[#FFD3BF] group-hover:text-white block">
+                    ⚡ Líder Incompleto
+                  </span>
+                  <span className="text-[10px] text-[#FFF7EF]/70 truncate block">
+                    Carlos Mendoza · Requiere datos
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleQuickLoginPendingHR}
+                  className="p-2.5 bg-[#BF3A1B]/15 hover:bg-[#BF3A1B]/25 border border-[#BF3A1B]/35 rounded-xl text-left cursor-pointer transition-colors group"
+                >
+                  <span className="font-bold text-[#FFD3BF] group-hover:text-white block">
+                    ⚡ RH Incompleta
+                  </span>
+                  <span className="text-[10px] text-[#FFF7EF]/70 truncate block">
+                    Mariana Castillo · Requiere datos
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import {
   CompanyContext,
   MentorshipSession,
@@ -28,10 +28,18 @@ interface LidactaContextType {
   showNewUserModal: boolean;
   welcomeModalData: { user: UserProfile; emailText: string } | null;
 
-  // Authentication
+  // Authentication & Onboarding
   isAuthenticated: boolean;
+  isProfileComplete: boolean;
   login: (email: string, password?: string) => { success: boolean; message?: string };
   logout: () => void;
+  completeUserProfile: (data: {
+    companyName: string;
+    area?: string;
+    birthDate: string;
+    directReports?: number;
+    whatsapp: string;
+  }) => { success: boolean; message?: string };
   registerOrSetPassword: (
     email: string,
     password: string,
@@ -689,6 +697,101 @@ El Equipo de Lidacta`;
     return { success: true };
   };
 
+  const isProfileComplete = useMemo(() => {
+    if (currentUser.role === 'admin') return true;
+    if (currentUser.isProfileCompleted === false) return false;
+
+    const hasCompany = Boolean(currentUser.companyName && currentUser.companyName.trim());
+    const hasBirthDate = Boolean(currentUser.birthDate && currentUser.birthDate.trim());
+    const hasWhatsapp = Boolean(currentUser.whatsapp && currentUser.whatsapp.trim());
+
+    if (currentUser.role === 'hr') {
+      return hasCompany && hasBirthDate && hasWhatsapp;
+    }
+
+    if (currentUser.role === 'leader') {
+      const hasArea = Boolean(currentUser.area && currentUser.area.trim());
+      const hasReports =
+        currentUser.directReports !== undefined &&
+        currentUser.directReports !== null &&
+        !isNaN(Number(currentUser.directReports)) &&
+        Number(currentUser.directReports) >= 0;
+      return hasCompany && hasArea && hasBirthDate && hasReports && hasWhatsapp;
+    }
+
+    return true;
+  }, [currentUser]);
+
+  const completeUserProfile = (data: {
+    companyName: string;
+    area?: string;
+    birthDate: string;
+    directReports?: number;
+    whatsapp: string;
+  }): { success: boolean; message?: string } => {
+    const { companyName, area, birthDate, directReports, whatsapp } = data;
+
+    if (!companyName || !companyName.trim()) {
+      return { success: false, message: 'El nombre de la empresa es obligatorio.' };
+    }
+    if (!birthDate || !birthDate.trim()) {
+      return { success: false, message: 'La fecha de nacimiento es obligatoria.' };
+    }
+    if (!whatsapp || !whatsapp.trim()) {
+      return { success: false, message: 'El número de WhatsApp es obligatorio.' };
+    }
+
+    if (currentUser.role === 'leader') {
+      if (!area || !area.trim()) {
+        return { success: false, message: 'El área es obligatoria para el rol de Líder.' };
+      }
+      if (
+        directReports === undefined ||
+        directReports === null ||
+        isNaN(Number(directReports)) ||
+        Number(directReports) < 0
+      ) {
+        return { success: false, message: 'El número de personas a cargo es obligatorio.' };
+      }
+    }
+
+    const updatedUser: UserProfile = {
+      ...currentUser,
+      companyName: companyName.trim(),
+      birthDate: birthDate.trim(),
+      whatsapp: whatsapp.trim(),
+      isProfileCompleted: true,
+      ...(currentUser.role === 'leader'
+        ? {
+            area: area?.trim() || '',
+            directReports: Number(directReports),
+          }
+        : {}),
+    };
+
+    setAllUsers((prev) => prev.map((u) => (u.id === currentUser.id ? updatedUser : u)));
+
+    // Update companies list if company name changed
+    setCompanies((prev) =>
+      prev.map((c) =>
+        c.id === currentUser.companyId ? { ...c, name: companyName.trim() } : c
+      )
+    );
+
+    // Update mentorship session company and area if leader
+    if (currentUser.role === 'leader') {
+      setMentorships((prev) =>
+        prev.map((m) =>
+          m.leaderId === currentUser.id
+            ? { ...m, companyName: companyName.trim(), leaderArea: area?.trim() || m.leaderArea }
+            : m
+        )
+      );
+    }
+
+    return { success: true };
+  };
+
   const logout = () => {
     setIsAuthenticated(false);
   };
@@ -735,7 +838,8 @@ El Equipo de Lidacta`;
           : assignedRole === 'hr'
           ? 'Gestión de Talento Humano'
           : 'Líder Operativo'),
-      area: assignedRole === 'admin' ? 'Dirección y Auditoría' : 'Operaciones',
+      area: assignedRole === 'admin' ? 'Dirección y Auditoría' : '',
+      isProfileCompleted: assignedRole === 'admin',
       createdAt: new Date().toISOString().split('T')[0],
     };
 
@@ -761,8 +865,10 @@ El Equipo de Lidacta`;
         showNewUserModal,
         welcomeModalData,
         isAuthenticated,
+        isProfileComplete,
         login,
         logout,
+        completeUserProfile,
         registerOrSetPassword,
         switchUser,
         createNewUser,

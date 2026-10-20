@@ -5,16 +5,22 @@ import { LeaderView } from './components/LeaderView';
 import { HRView } from './components/HRView';
 import { AdminView } from './components/AdminView';
 import { LoginView } from './components/LoginView';
+import { CompleteProfileView } from './components/CompleteProfileView';
 import { EmailSimulatorDrawer } from './components/EmailSimulatorDrawer';
 import { NewUserModal } from './components/NewUserModal';
 import { WelcomeModal } from './components/WelcomeModal';
 
 const AppContent: React.FC = () => {
-  const { currentUser, isAuthenticated } = useLidacta();
+  const { currentUser, isAuthenticated, isProfileComplete } = useLidacta();
 
   // If user is not authenticated, show the login portal in Ciruela Noche (#2D1B4E)
   if (!isAuthenticated) {
     return <LoginView />;
+  }
+
+  // Mandatory Onboarding Flow: block access to panel if HR or Leader has not completed profile
+  if ((currentUser.role === 'leader' || currentUser.role === 'hr') && !isProfileComplete) {
+    return <CompleteProfileView />;
   }
 
   return (

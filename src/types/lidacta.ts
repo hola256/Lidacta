@@ -13,6 +13,7 @@ export interface UserProfile {
   directReports?: number;
   whatsapp?: string;
   avatarUrl?: string;
+  isProfileCompleted?: boolean;
   createdAt: string;
 }
 

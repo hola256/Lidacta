@@ -75,6 +75,7 @@ export const INITIAL_USERS: UserProfile[] = [
     directReports: 14,
     whatsapp: '+52 55 4912 8841',
     avatarUrl: '/src/assets/images/avatar_leader_roberto_1792074706592.jpg',
+    isProfileCompleted: true,
     createdAt: '2026-09-10',
   },
   {
@@ -85,10 +86,11 @@ export const INITIAL_USERS: UserProfile[] = [
     companyId: 'comp_nova',
     companyName: 'Retail Nova Grupo Comercial',
     position: 'Gerente de Sucursal Centro',
-    area: 'Operaciones Comerciales',
-    birthDate: '1984-11-23',
-    directReports: 9,
-    whatsapp: '+52 55 3180 7729',
+    area: '',
+    birthDate: '',
+    directReports: undefined,
+    whatsapp: '',
+    isProfileCompleted: false,
     createdAt: '2026-09-15',
   },
   {
@@ -103,6 +105,7 @@ export const INITIAL_USERS: UserProfile[] = [
     birthDate: '1985-08-19',
     whatsapp: '+52 55 8820 1492',
     avatarUrl: '/src/assets/images/avatar_hr_sofia_1792074705689.jpg',
+    isProfileCompleted: true,
     createdAt: '2026-08-20',
   },
   {
@@ -114,8 +117,9 @@ export const INITIAL_USERS: UserProfile[] = [
     companyName: 'Retail Nova Grupo Comercial',
     position: 'Gerente de Desarrollo Organizacional',
     area: 'Recursos Humanos',
-    birthDate: '1990-02-14',
-    whatsapp: '+52 55 7711 0033',
+    birthDate: '',
+    whatsapp: '',
+    isProfileCompleted: false,
     createdAt: '2026-08-25',
   },
 ];
