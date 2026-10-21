@@ -151,6 +151,8 @@ export const LeaderView: React.FC = () => {
   const [learningFuture, setLearningFuture] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const mainContainerRef = useRef<HTMLElement>(null);
+  const activeScrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Accordion open/collapse state for the 7 stages (default: only currentStage is open)
   const [openStages, setOpenStages] = useState<Record<StageNumber, boolean>>({
@@ -259,10 +261,16 @@ export const LeaderView: React.FC = () => {
     }
   }, [activeMentorship]);
 
-  // Scroll to bottom of message stream
+  // Initial positioning: Ensure screen and containers are strictly positioned at the top on mount and session load
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeMentorship?.messages]);
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    if (mainContainerRef.current) {
+      mainContainerRef.current.scrollTop = 0;
+    }
+    if (activeScrollContainerRef.current) {
+      activeScrollContainerRef.current.scrollTop = 0;
+    }
+  }, [activeMentorship?.id]);
 
   const handleStartChallenge = async () => {
     if (!newChallengePrompt.trim()) return;
@@ -278,6 +286,10 @@ export const LeaderView: React.FC = () => {
     const text = inputText;
     setInputText('');
     await sendMessageInActiveSession(text, activeMentorship?.currentStage === 4);
+    // Smooth scroll only on intentional user message submission
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 150);
   };
 
   const toggleVoicePlayback = (text: string) => {
@@ -679,7 +691,7 @@ export const LeaderView: React.FC = () => {
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col bg-[#FFF7EF] overflow-y-auto min-w-0">
+      <main ref={mainContainerRef} className="flex-1 flex flex-col bg-[#FFF7EF] overflow-y-auto min-w-0">
         {/* If no active mentorship is selected, or "+ Nuevo Acompañamiento" was clicked: SHOW INITIAL HERO & PROMPT */}
         {!activeMentorship ? (
           <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6 sm:space-y-8 animate-in fade-in">
@@ -977,7 +989,10 @@ export const LeaderView: React.FC = () => {
             </div>
 
             {/* Active Mentorship Body: Vertical Adaptive Accordion (7 Etapas) */}
-            <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-5 w-full max-w-screen-xl mx-auto">
+            <div
+              ref={activeScrollContainerRef}
+              className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-5 w-full max-w-screen-xl mx-auto"
+            >
               {/* Privacy Notice */}
               <div className="p-3 bg-[#FFF7EF] border border-[#FFD3BF] rounded-xl flex items-center justify-between text-xs text-[#4A3F55]">
                 <div className="flex items-center gap-2">
