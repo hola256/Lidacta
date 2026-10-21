@@ -153,9 +153,9 @@ export const LeaderView: React.FC = () => {
   const mainContainerRef = useRef<HTMLElement>(null);
   const activeScrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Accordion open/collapse state for the 7 stages (default: only currentStage is open)
+  // Accordion open/collapse state for the 7 stages (default: all collapsed for completed cases; current open for active cases)
   const [openStages, setOpenStages] = useState<Record<StageNumber, boolean>>({
-    1: true,
+    1: false,
     2: false,
     3: false,
     4: false,
@@ -164,21 +164,46 @@ export const LeaderView: React.FC = () => {
     7: false,
   });
 
-  // Keep active stage open by default when switching session or advancing stage
+  // Keep active stage open by default when switching session or advancing stage (only for active cases)
   useEffect(() => {
     if (activeMentorship) {
-      const stage = activeMentorship.currentStage || 1;
-      setOpenStages({
-        1: stage === 1,
-        2: stage === 2,
-        3: stage === 3,
-        4: stage === 4,
-        5: stage === 5,
-        6: stage === 6,
-        7: stage === 7,
-      });
+      const isCompleted =
+        activeMentorship.status === 'completed' ||
+        (activeMentorship.status as string) === 'closed' ||
+        (activeMentorship.status as string) === 'concluido' ||
+        !!activeMentorship.completedAt ||
+        activeMentorship.currentStage === 7;
+
+      if (isCompleted) {
+        // Closed / completed case: all 7 stages stay compressed (closed) by default
+        setOpenStages({
+          1: false,
+          2: false,
+          3: false,
+          4: false,
+          5: false,
+          6: false,
+          7: false,
+        });
+      } else {
+        const stage = activeMentorship.currentStage || 1;
+        setOpenStages({
+          1: stage === 1,
+          2: stage === 2,
+          3: stage === 3,
+          4: stage === 4,
+          5: stage === 5,
+          6: stage === 6,
+          7: stage === 7,
+        });
+      }
     }
-  }, [activeMentorship?.id, activeMentorship?.currentStage]);
+  }, [
+    activeMentorship?.id,
+    activeMentorship?.currentStage,
+    activeMentorship?.status,
+    activeMentorship?.completedAt,
+  ]);
 
   const toggleStage = (st: StageNumber) => {
     setOpenStages((prev) => ({
@@ -199,8 +224,31 @@ export const LeaderView: React.FC = () => {
     });
   };
 
+  const collapseAllStages = () => {
+    setOpenStages({
+      1: false,
+      2: false,
+      3: false,
+      4: false,
+      5: false,
+      6: false,
+      7: false,
+    });
+  };
+
   const collapseAllExceptCurrent = () => {
     if (!activeMentorship) return;
+    const isCompleted =
+      activeMentorship.status === 'completed' ||
+      (activeMentorship.status as string) === 'closed' ||
+      (activeMentorship.status as string) === 'concluido' ||
+      !!activeMentorship.completedAt ||
+      activeMentorship.currentStage === 7;
+
+    if (isCompleted) {
+      collapseAllStages();
+      return;
+    }
     const stage = activeMentorship.currentStage || 1;
     setOpenStages({
       1: stage === 1,
@@ -977,8 +1025,22 @@ export const LeaderView: React.FC = () => {
                 <div>
                   <h3 className="font-heading font-extrabold text-sm sm:text-base text-[#2D1B4E] flex items-center gap-2 flex-wrap">
                     <span>Mentoría - {activeMentorship.title}</span>
-                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#FFD3BF] text-[#BF3A1B]">
-                      {activeMentorship.currentStage === 7
+                    <span
+                      className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                        activeMentorship.status === 'completed' ||
+                        (activeMentorship.status as string) === 'closed' ||
+                        (activeMentorship.status as string) === 'concluido' ||
+                        !!activeMentorship.completedAt ||
+                        activeMentorship.currentStage === 7
+                          ? 'bg-[#E2F7E1] text-[#246B2A]'
+                          : 'bg-[#FFD3BF] text-[#BF3A1B]'
+                      }`}
+                    >
+                      {activeMentorship.status === 'completed' ||
+                      (activeMentorship.status as string) === 'closed' ||
+                      (activeMentorship.status as string) === 'concluido' ||
+                      !!activeMentorship.completedAt ||
+                      activeMentorship.currentStage === 7
                         ? 'Proceso Concluido'
                         : `Etapa activa: ${activeMentorship.currentStage} de 7`}
                     </span>
@@ -1001,7 +1063,13 @@ export const LeaderView: React.FC = () => {
                     onClick={collapseAllExceptCurrent}
                     className="px-3 py-1.5 rounded-xl border border-[#493447]/20 text-[#4A3F55] hover:text-[#2D1B4E] hover:bg-[#FFF7EF] font-semibold transition-colors cursor-pointer"
                   >
-                    Solo etapa actual
+                    {activeMentorship.status === 'completed' ||
+                    (activeMentorship.status as string) === 'closed' ||
+                    (activeMentorship.status as string) === 'concluido' ||
+                    !!activeMentorship.completedAt ||
+                    activeMentorship.currentStage === 7
+                      ? 'Comprimir todas'
+                      : 'Solo etapa actual'}
                   </button>
                 </div>
               </div>
@@ -1009,9 +1077,17 @@ export const LeaderView: React.FC = () => {
               {/* Vertical Stack of 7 Accordion Cards */}
               <div className="space-y-3">
                 {([1, 2, 3, 4, 5, 6, 7] as StageNumber[]).map((st) => {
-                  const isPassed = activeMentorship.currentStage > st;
-                  const isCurrent = activeMentorship.currentStage === st;
-                  const isPending = activeMentorship.currentStage < st;
+                  const isCaseCompleted =
+                    activeMentorship.status === 'completed' ||
+                    (activeMentorship.status as string) === 'closed' ||
+                    (activeMentorship.status as string) === 'concluido' ||
+                    !!activeMentorship.completedAt ||
+                    activeMentorship.currentStage === 7;
+
+                  // If case is closed/completed, all 7 stages are marked as completed; otherwise rely on stage progress
+                  const isPassed = isCaseCompleted ? true : activeMentorship.currentStage > st;
+                  const isCurrent = isCaseCompleted ? false : activeMentorship.currentStage === st;
+                  const isPending = isCaseCompleted ? false : activeMentorship.currentStage < st;
                   const isOpen = !!openStages[st];
                   const meta = STAGE_META[st];
                   const stageMessages = activeMentorship.messages.filter((m) => (m.stage || 1) === st);
@@ -1475,13 +1551,15 @@ export const LeaderView: React.FC = () => {
                                   <CheckCircle2 className="w-3.5 h-3.5" />
                                   Etapa completada exitosamente
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => advanceStage(st)}
-                                  className="text-xs text-[#BF3A1B] hover:underline font-bold cursor-pointer"
-                                >
-                                  Reabrir como etapa activa
-                                </button>
+                                {st < 7 && !isCaseCompleted && (
+                                  <button
+                                    type="button"
+                                    onClick={() => advanceStage(st)}
+                                    className="text-xs text-[#BF3A1B] hover:underline font-bold cursor-pointer"
+                                  >
+                                    Reabrir como etapa activa
+                                  </button>
+                                )}
                               </div>
                             )}
 
@@ -1491,7 +1569,7 @@ export const LeaderView: React.FC = () => {
                               </span>
                             )}
 
-                            {st === 7 && isCurrent && (
+                            {st === 7 && (isCurrent || isCaseCompleted) && (
                               <span className="text-xs font-bold text-[#246B2A] flex items-center gap-1">
                                 <CheckCircle2 className="w-4 h-4" />
                                 Proceso de 7 etapas concluido satisfactoriamente.
@@ -1530,19 +1608,40 @@ export const LeaderView: React.FC = () => {
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder={
-                    isListeningMic
+                    activeMentorship.status === 'completed' ||
+                    (activeMentorship.status as string) === 'closed' ||
+                    (activeMentorship.status as string) === 'concluido' ||
+                    !!activeMentorship.completedAt ||
+                    activeMentorship.currentStage === 7
+                      ? 'Este acompañamiento ha concluido. Puedes consultar el historial completo.'
+                      : isListeningMic
                       ? 'Escuchando tu voz...'
                       : activeMentorship.currentStage === 4
                       ? 'Responde a la práctica o simula...'
                       : `Escribe tu respuesta para la Etapa ${activeMentorship.currentStage}...`
                   }
-                  className="min-h-[44px] flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 min-w-0"
-                  disabled={isSendingMessage}
+                  className="min-h-[44px] flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 min-w-0 disabled:bg-neutral-100 disabled:text-[#4A3F55]/60"
+                  disabled={
+                    isSendingMessage ||
+                    activeMentorship.status === 'completed' ||
+                    (activeMentorship.status as string) === 'closed' ||
+                    (activeMentorship.status as string) === 'concluido' ||
+                    !!activeMentorship.completedAt ||
+                    activeMentorship.currentStage === 7
+                  }
                 />
 
                 <button
                   type="submit"
-                  disabled={!inputText.trim() || isSendingMessage}
+                  disabled={
+                    !inputText.trim() ||
+                    isSendingMessage ||
+                    activeMentorship.status === 'completed' ||
+                    (activeMentorship.status as string) === 'closed' ||
+                    (activeMentorship.status as string) === 'concluido' ||
+                    !!activeMentorship.completedAt ||
+                    activeMentorship.currentStage === 7
+                  }
                   className="min-h-[44px] min-w-[44px] p-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer shrink-0 flex items-center justify-center active:scale-95"
                 >
                   <Send className="w-4 h-4" />
