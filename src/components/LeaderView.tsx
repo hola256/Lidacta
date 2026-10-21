@@ -31,6 +31,8 @@ import {
   Target,
   Award,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   CornerDownRight,
   HelpCircle,
   Download,
@@ -50,6 +52,59 @@ const STAGE_TITLES: Record<StageNumber, string> = {
   5: '5. Actuar (Plan de Acción)',
   6: '6. Aprender y reflexionar',
   7: '7. Cierre & Retroalimentación',
+};
+
+export const STAGE_META: Record<
+  StageNumber,
+  {
+    name: string;
+    shortTitle: string;
+    subtitle: string;
+    objective: string;
+  }
+> = {
+  1: {
+    name: 'Etapa 1',
+    shortTitle: 'Detectar qué sucede',
+    subtitle: 'Comprender a fondo sin juzgar, validando tu contexto y hechos.',
+    objective: 'Identificar hechos concretos, detonantes y personas involucradas sin juicios previos.',
+  },
+  2: {
+    name: 'Etapa 2',
+    shortTitle: 'Analizar perspectivas & Habilidades',
+    subtitle: 'Explorar puntos de vista y descubrir habilidades clave de liderazgo.',
+    objective: 'Explorar la perspectiva de los involucrados y mapear las habilidades indispensables a desplegar.',
+  },
+  3: {
+    name: 'Etapa 3',
+    shortTitle: 'Diseñar alternativas',
+    subtitle: 'Idear y estructurar caminos viables de solución (tú lideras la salida).',
+    objective: 'Estructurar al menos 2 o 3 alternativas viables; Lidacta acompaña y fortalece.',
+  },
+  4: {
+    name: 'Etapa 4',
+    shortTitle: 'Practicar antes de actuar',
+    subtitle: 'Simulación y roleplay conversacional con voz o texto.',
+    objective: 'Entrenar el diálogo en un entorno seguro antes de la conversación real en el trabajo.',
+  },
+  5: {
+    name: 'Etapa 5',
+    shortTitle: 'Actuar (Plan de Acción)',
+    subtitle: 'Definir compromisos: qué, cuándo, con quién y qué cuidar.',
+    objective: 'Aterrizar la intervención en un plan medible con fecha, hora y recordatorio concreto.',
+  },
+  6: {
+    name: 'Etapa 6',
+    shortTitle: 'Aprender y reflexionar',
+    subtitle: 'Reflexión indispensable tras la acción para ajustar hábitos.',
+    objective: 'Evaluar qué ocurrió, qué funcionó y consolidar aprendizajes de autonomía directiva.',
+  },
+  7: {
+    name: 'Etapa 7',
+    shortTitle: 'Cierre & Retroalimentación',
+    subtitle: 'Consolidación de fortalezas y reporte de desarrollo.',
+    objective: 'Obtención del reporte confidencial de retroalimentación de autonomía y cierre del proceso.',
+  },
 };
 
 export const LeaderView: React.FC = () => {
@@ -96,6 +151,66 @@ export const LeaderView: React.FC = () => {
   const [learningFuture, setLearningFuture] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Accordion open/collapse state for the 7 stages (default: only currentStage is open)
+  const [openStages, setOpenStages] = useState<Record<StageNumber, boolean>>({
+    1: true,
+    2: false,
+    3: false,
+    4: false,
+    5: false,
+    6: false,
+    7: false,
+  });
+
+  // Keep active stage open by default when switching session or advancing stage
+  useEffect(() => {
+    if (activeMentorship) {
+      const stage = activeMentorship.currentStage || 1;
+      setOpenStages({
+        1: stage === 1,
+        2: stage === 2,
+        3: stage === 3,
+        4: stage === 4,
+        5: stage === 5,
+        6: stage === 6,
+        7: stage === 7,
+      });
+    }
+  }, [activeMentorship?.id, activeMentorship?.currentStage]);
+
+  const toggleStage = (st: StageNumber) => {
+    setOpenStages((prev) => ({
+      ...prev,
+      [st]: !prev[st],
+    }));
+  };
+
+  const expandAllStages = () => {
+    setOpenStages({
+      1: true,
+      2: true,
+      3: true,
+      4: true,
+      5: true,
+      6: true,
+      7: true,
+    });
+  };
+
+  const collapseAllExceptCurrent = () => {
+    if (!activeMentorship) return;
+    const stage = activeMentorship.currentStage || 1;
+    setOpenStages({
+      1: stage === 1,
+      2: stage === 2,
+      3: stage === 3,
+      4: stage === 4,
+      5: stage === 5,
+      6: stage === 6,
+      7: stage === 7,
+    });
+  };
 
   // Initialize Speech Recognizer
   useEffect(() => {
@@ -208,6 +323,81 @@ export const LeaderView: React.FC = () => {
       insights: learningInsights,
       futureAdjustments: learningFuture,
     });
+  };
+
+  const renderSingleMessage = (msg: {
+    id: string;
+    sender: 'leader' | 'lidacta';
+    text: string;
+    timestamp: string;
+    isLeaderVoiceQuote?: boolean;
+  }) => {
+    const isLidacta = msg.sender === 'lidacta';
+
+    if (isLidacta) {
+      return (
+        <div key={msg.id} className="flex gap-2.5 sm:gap-3 items-start animate-in fade-in">
+          <div className="w-8 h-8 rounded-xl bg-[#2D1B4E] text-[#F7B538] flex items-center justify-center font-bold text-xs shrink-0 mt-0.5 shadow-xs">
+            L
+          </div>
+          <div className="flex-1 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-2xl rounded-tl-sm p-3.5 sm:p-4 shadow-xs space-y-2 min-w-0">
+            <div className="flex items-center justify-between border-b border-[#493447]/10 pb-2">
+              <span className="font-heading font-bold text-xs text-[#2D1B4E]">
+                Lidacta · Mentora Sr.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => toggleVoicePlayback(msg.text)}
+                  title="Escuchar intervención de Lidacta con voz"
+                  className="text-[#BF3A1B] hover:text-[#2D1B4E] text-xs flex items-center gap-1 cursor-pointer min-h-[32px] px-2 py-0.5 rounded-lg hover:bg-[#FFD3BF]/20 transition-colors"
+                >
+                  {isPlayingAudio ? (
+                    <>
+                      <VolumeX className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Pausar</span>
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Escuchar</span>
+                    </>
+                  )}
+                </button>
+                <span className="text-[10px] text-[#4A3F55]/60 tabular-nums">
+                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            </div>
+
+            <div className="text-xs sm:text-sm text-[#4A3F55] leading-relaxed whitespace-pre-line font-normal">
+              {msg.text}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Leader message: styled according to brand guidelines
+    return (
+      <div key={msg.id} className="flex gap-2.5 sm:gap-3 justify-end items-start animate-in fade-in">
+        <div className="max-w-[85%] sm:max-w-xl bg-[#FFD3BF]/30 border border-[#FFD3BF] rounded-2xl rounded-tr-sm p-3.5 sm:p-4 space-y-1 text-right">
+          <div className="flex items-center justify-between text-[10px] text-[#4A3F55]/70 mb-1 gap-2">
+            <span className="font-semibold text-[#BF3A1B]">Voz del líder</span>
+            <span className="tabular-nums">
+              {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+          <p
+            className={`text-xs sm:text-sm text-[#2D1B4E] leading-relaxed text-left ${
+              msg.isLeaderVoiceQuote ? 'font-leader text-sm sm:text-base' : ''
+            }`}
+          >
+            {msg.text}
+          </p>
+        </div>
+      </div>
+    );
   };
 
   const filteredMentorships = leaderMentorships.filter((m) => {
@@ -784,36 +974,10 @@ export const LeaderView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Visual 7-Stage Progress Bar */}
-              <div className="w-full max-w-screen-xl mx-auto mt-2.5 pt-2.5 border-t border-[#493447]/10">
-                <div className="grid grid-cols-7 gap-1 sm:gap-2">
-                  {([1, 2, 3, 4, 5, 6, 7] as StageNumber[]).map((st) => {
-                    const isPassed = activeMentorship.currentStage > st;
-                    const isCurrent = activeMentorship.currentStage === st;
-                    return (
-                      <button
-                        key={st}
-                        onClick={() => advanceStage(st)}
-                        className={`min-h-[38px] sm:min-h-[40px] text-center py-1 sm:py-1.5 px-0.5 sm:px-1 rounded-lg transition-colors text-[10px] sm:text-xs font-medium cursor-pointer ${
-                          isCurrent
-                            ? 'bg-[#2D1B4E] text-[#F7B538] font-bold shadow-xs'
-                            : isPassed
-                            ? 'bg-[#C9BDF2]/40 text-[#2D1B4E]'
-                            : 'bg-neutral-100 text-[#4A3F55]/60 hover:bg-neutral-200'
-                        }`}
-                        title={STAGE_TITLES[st]}
-                      >
-                        <span className="block sm:hidden font-bold">{st}</span>
-                        <span className="hidden sm:block truncate">{STAGE_TITLES[st]}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
             </div>
 
-            {/* Conversation Stream & Interactive Stage Cards */}
-            <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 w-full max-w-screen-xl mx-auto">
+            {/* Active Mentorship Body: Vertical Adaptive Accordion (7 Etapas) */}
+            <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-5 w-full max-w-screen-xl mx-auto">
               {/* Privacy Notice */}
               <div className="p-3 bg-[#FFF7EF] border border-[#FFD3BF] rounded-xl flex items-center justify-between text-xs text-[#4A3F55]">
                 <div className="flex items-center gap-2">
@@ -824,385 +988,549 @@ export const LeaderView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Messages timeline */}
-              {activeMentorship.messages.map((msg) => {
-                const isLidacta = msg.sender === 'lidacta';
+              {/* Accordion Navigation Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
+                <div>
+                  <h3 className="font-heading font-extrabold text-sm sm:text-base text-[#2D1B4E] flex items-center gap-2 flex-wrap">
+                    <span>Ruta de Acompañamiento · 7 Etapas</span>
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#FFD3BF] text-[#BF3A1B]">
+                      {activeMentorship.currentStage === 7
+                        ? 'Proceso Concluido'
+                        : `Etapa activa: ${activeMentorship.currentStage} de 7`}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-[#4A3F55]/80 mt-0.5">
+                    Toca cualquier etapa para desplegar o comprimir su contenido, herramientas e historial.
+                  </p>
+                </div>
 
-                if (isLidacta) {
+                <div className="flex items-center gap-2 text-xs shrink-0">
+                  <button
+                    type="button"
+                    onClick={expandAllStages}
+                    className="px-3 py-1.5 rounded-xl border border-[#493447]/20 text-[#4A3F55] hover:text-[#2D1B4E] hover:bg-[#FFF7EF] font-semibold transition-colors cursor-pointer"
+                  >
+                    Expandir todas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={collapseAllExceptCurrent}
+                    className="px-3 py-1.5 rounded-xl border border-[#493447]/20 text-[#4A3F55] hover:text-[#2D1B4E] hover:bg-[#FFF7EF] font-semibold transition-colors cursor-pointer"
+                  >
+                    Solo etapa actual
+                  </button>
+                </div>
+              </div>
+
+              {/* Vertical Stack of 7 Accordion Cards */}
+              <div className="space-y-3">
+                {([1, 2, 3, 4, 5, 6, 7] as StageNumber[]).map((st) => {
+                  const isPassed = activeMentorship.currentStage > st;
+                  const isCurrent = activeMentorship.currentStage === st;
+                  const isPending = activeMentorship.currentStage < st;
+                  const isOpen = !!openStages[st];
+                  const meta = STAGE_META[st];
+                  const stageMessages = activeMentorship.messages.filter((m) => (m.stage || 1) === st);
+
                   return (
-                    <div key={msg.id} className="flex gap-2.5 sm:gap-3 items-start animate-in fade-in">
-                      <div className="w-8 h-8 rounded-xl bg-[#2D1B4E] text-[#F7B538] flex items-center justify-center font-bold text-xs shrink-0 mt-0.5 shadow-xs">
-                        L
-                      </div>
-                      <div className="flex-1 bg-white border border-[#493447]/15 rounded-2xl rounded-tl-sm p-3.5 sm:p-5 shadow-xs space-y-2.5 sm:space-y-3 min-w-0">
-                        <div className="flex items-center justify-between border-b border-[#493447]/10 pb-2">
-                          <span className="font-heading font-bold text-xs text-[#2D1B4E]">
-                            Lidacta · Mentora Sr.
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => toggleVoicePlayback(msg.text)}
-                              title="Escuchar intervención de Lidacta con voz"
-                              className="text-[#BF3A1B] hover:text-[#2D1B4E] text-xs flex items-center gap-1 cursor-pointer min-h-[36px] px-2 py-1 rounded-lg hover:bg-[#FFD3BF]/20"
-                            >
-                              {isPlayingAudio ? (
-                                <>
-                                  <VolumeX className="w-3.5 h-3.5" />
-                                  <span className="hidden sm:inline">Pausar</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Volume2 className="w-3.5 h-3.5" />
-                                  <span className="hidden sm:inline">Escuchar</span>
-                                </>
-                              )}
-                            </button>
-                            <span className="text-[10px] text-[#4A3F55]/60 tabular-nums">
-                              {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+                    <div
+                      key={st}
+                      className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
+                        isCurrent
+                          ? 'bg-white border-[#F7B538] ring-2 ring-[#F7B538]/30 shadow-md'
+                          : isPassed
+                          ? 'bg-white border-[#246B2A]/25 shadow-xs'
+                          : 'bg-white border-[#493447]/15 opacity-90'
+                      }`}
+                    >
+                      {/* Accordion Bar / Header Button */}
+                      <button
+                        type="button"
+                        onClick={() => toggleStage(st)}
+                        className={`w-full text-left p-3.5 sm:p-4.5 flex items-center justify-between gap-3 cursor-pointer transition-colors ${
+                          isCurrent
+                            ? 'bg-[#FFF7EF]/90 hover:bg-[#FFF7EF]'
+                            : isPassed
+                            ? 'hover:bg-[#E2F7E1]/20'
+                            : 'hover:bg-neutral-50'
+                        }`}
+                        aria-expanded={isOpen}
+                      >
+                        {/* Left: Stage number badge & titles */}
+                        <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
+                          <div
+                            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-heading font-extrabold text-sm sm:text-base shrink-0 transition-transform ${
+                              isCurrent
+                                ? 'bg-[#F7B538] text-[#2D1B4E] shadow-xs'
+                                : isPassed
+                                ? 'bg-[#E2F7E1] text-[#246B2A]'
+                                : 'bg-neutral-100 text-[#4A3F55]/60'
+                            }`}
+                          >
+                            {isPassed ? <CheckCircle2 className="w-5 h-5 text-[#246B2A]" /> : st}
+                          </div>
+
+                          <div className="min-w-0 space-y-0.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-heading font-extrabold text-xs sm:text-sm text-[#2D1B4E]">
+                                {meta.name}: {meta.shortTitle}
+                              </span>
+                            </div>
+                            <p className="text-[11px] sm:text-xs text-[#4A3F55]/80 line-clamp-1">
+                              {meta.subtitle}
+                            </p>
                           </div>
                         </div>
 
-                        <div className="text-xs sm:text-sm text-[#4A3F55] leading-relaxed whitespace-pre-line font-normal">
-                          {msg.text}
+                        {/* Right: Status badge & Chevron */}
+                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                          {isPassed && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-bold bg-[#E2F7E1] text-[#246B2A] border border-[#246B2A]/20">
+                              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>Completada</span>
+                            </span>
+                          )}
+                          {isCurrent && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-extrabold bg-[#F7B538] text-[#2D1B4E] shadow-xs">
+                              <span className="w-2 h-2 rounded-full bg-[#2D1B4E] animate-ping shrink-0" />
+                              <span>En curso</span>
+                            </span>
+                          )}
+                          {isPending && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-lg text-[10px] sm:text-xs font-medium bg-neutral-100 text-[#4A3F55]/60 border border-neutral-200">
+                              Pendiente
+                            </span>
+                          )}
+
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[#4A3F55] hover:text-[#2D1B4E] transition-colors">
+                            {isOpen ? (
+                              <ChevronUp className="w-5 h-5 text-[#BF3A1B]" />
+                            ) : (
+                              <ChevronDown className="w-5 h-5 text-[#4A3F55]" />
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      </button>
+
+                      {/* Accordion Content Panel */}
+                      {isOpen && (
+                        <div className="border-t border-[#493447]/10 p-3.5 sm:p-5 space-y-4 bg-white animate-in fade-in duration-200">
+                          {/* Objective Banner */}
+                          <div className="p-3 bg-[#FFF7EF] border border-[#FFD3BF]/60 rounded-xl text-xs text-[#4A3F55] flex items-start gap-2.5">
+                            <Compass className="w-4 h-4 text-[#BF3A1B] shrink-0 mt-0.5" />
+                            <div>
+                              <span className="font-bold text-[#2D1B4E] mr-1">Propósito de la etapa:</span>
+                              <span>{meta.objective}</span>
+                            </div>
+                          </div>
+
+                          {/* Stage 1: Initial Challenge Card */}
+                          {st === 1 && activeMentorship.initialChallenge && (
+                            <div className="p-3.5 bg-neutral-50 border border-[#493447]/10 rounded-xl space-y-1">
+                              <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#BF3A1B]">
+                                <FileText className="w-3.5 h-3.5" />
+                                <span>Situación o reto inicial planteado:</span>
+                              </div>
+                              <p className="text-xs sm:text-sm text-[#2D1B4E] leading-relaxed">
+                                {activeMentorship.initialChallenge}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Stage 2: Identified Skills Highlight */}
+                          {st === 2 && activeMentorship.identifiedSkills && activeMentorship.identifiedSkills.length > 0 && (
+                            <div className="p-4 bg-white border border-[#493447]/15 rounded-2xl space-y-2.5 shadow-xs">
+                              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#BF3A1B]">
+                                <Target className="w-4 h-4 shrink-0" />
+                                <span>Habilidades clave identificadas en Etapa 2:</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                                {activeMentorship.identifiedSkills.map((sk, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="px-2.5 py-1 bg-[#FFF7EF] border border-[#BF3A1B]/30 text-[#2D1B4E] font-semibold text-xs rounded-lg"
+                                  >
+                                    {sk}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Messages Timeline for this Stage */}
+                          {stageMessages.length > 0 ? (
+                            <div className="space-y-3 pt-1">
+                              <div className="text-[11px] font-bold uppercase tracking-wider text-[#4A3F55]/70 flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
+                                <span>Intercambios reflexivos de esta etapa:</span>
+                              </div>
+                              {stageMessages.map(renderSingleMessage)}
+                            </div>
+                          ) : isPending ? (
+                            <div className="p-4 bg-neutral-50 border border-dashed border-[#493447]/20 rounded-xl text-center space-y-1.5 text-xs text-[#4A3F55]/70">
+                              <Clock className="w-4 h-4 mx-auto text-[#4A3F55]/50" />
+                              <p className="font-medium text-[#2D1B4E]">Esta etapa aún no ha iniciado.</p>
+                              <p className="text-[11px]">Se activará automáticamente conforme avances en las etapas previas del acompañamiento.</p>
+                            </div>
+                          ) : (
+                            <div className="p-3 bg-neutral-50 rounded-xl text-xs text-[#4A3F55]/70 italic">
+                              No hay intervenciones registradas en esta etapa.
+                            </div>
+                          )}
+
+                          {/* Stage 4: Roleplay Practice Arena */}
+                          {st === 4 && (
+                            <div className="p-4 sm:p-5 bg-white border-2 border-[#BF3A1B]/40 rounded-2xl shadow-sm space-y-4">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-lg bg-[#FFD3BF] text-[#BF3A1B] flex items-center justify-center font-bold shrink-0">
+                                    <Sparkles className="w-4 h-4" />
+                                  </div>
+                                  <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
+                                    Etapa 4: Practicar antes de actuar (Roleplay opcional)
+                                  </h4>
+                                </div>
+                                <span className="text-[11px] font-semibold text-[#BF3A1B] bg-[#FFD3BF]/40 px-2 py-0.5 rounded w-fit">
+                                  Práctica con voz o texto
+                                </span>
+                              </div>
+
+                              <p className="text-xs sm:text-sm text-[#4A3F55] leading-relaxed">
+                                Practica aquí la conversación o diálogo que tendrás. Lidacta asumirá el rol del colaborador o involucrado y te dará retroalimentación instantánea de lo que debes cuidar o mejorar.
+                              </p>
+
+                              <div className="p-3 bg-[#FFF7EF] border border-[#493447]/10 rounded-xl space-y-2">
+                                <span className="text-xs font-bold text-[#2D1B4E]">Opciones de práctica:</span>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      sendMessageInActiveSession(
+                                        'Lidacta, quiero simular que tú eres mi colaborador y yo te cito a solas para darte retroalimentación.',
+                                        true
+                                      )
+                                    }
+                                    className="min-h-[44px] text-xs px-3.5 py-2 bg-white border border-[#493447]/15 rounded-xl hover:border-[#BF3A1B] font-semibold text-[#2D1B4E] cursor-pointer flex items-center justify-center gap-1.5 shadow-xs active:scale-98"
+                                  >
+                                    🎭 Iniciar simulación de diálogo
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => advanceStage(5)}
+                                    className="min-h-[44px] text-xs px-3.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#4A3F55] rounded-xl cursor-pointer flex items-center justify-center font-medium active:scale-98"
+                                  >
+                                    ⏭️ Omitir práctica y pasar al Plan de Acción (Etapa 5)
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Stage 5: Action Plan Editor */}
+                          {st === 5 && (
+                            <div className="p-4 sm:p-5 bg-white border-2 border-[#BF3A1B]/30 rounded-2xl shadow-sm space-y-4">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <Calendar className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                                  <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
+                                    Etapa 5: Plan de Acción Concreto
+                                  </h4>
+                                </div>
+                                {activeMentorship.actionPlan?.isCompleted ? (
+                                  <span className="text-xs font-bold text-[#246B2A] bg-[#E2F7E1] px-2.5 py-1 rounded-lg flex items-center gap-1 w-fit">
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    Acción Realizada
+                                  </span>
+                                ) : (
+                                  <span className="text-xs font-semibold text-[#BF3A1B] bg-[#FFD3BF]/60 px-2 py-0.5 rounded w-fit">
+                                    En Seguimiento
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                <div className="space-y-1">
+                                  <label className="font-bold text-[#2D1B4E]">1. ¿Qué exactamente harás?</label>
+                                  <input
+                                    type="text"
+                                    value={actionWhat}
+                                    onChange={(e) => setActionWhat(e.target.value)}
+                                    placeholder="Ej. Conversación 1 a 1 de alineación"
+                                    className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="font-bold text-[#2D1B4E]">2. ¿Cuándo lo harás? (Fecha específica)</label>
+                                  <input
+                                    type="text"
+                                    value={actionWhen}
+                                    onChange={(e) => setActionWhen(e.target.value)}
+                                    placeholder="Ej. Jueves 17 a las 15:30 hrs"
+                                    className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="font-bold text-[#2D1B4E]">3. ¿Con quién lo harás?</label>
+                                  <input
+                                    type="text"
+                                    value={actionWithWhom}
+                                    onChange={(e) => setActionWithWhom(e.target.value)}
+                                    placeholder="Ej. Supervisor de turno"
+                                    className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="font-bold text-[#2D1B4E]">4. ¿Qué vas a cuidar o recordar?</label>
+                                  <input
+                                    type="text"
+                                    value={actionCare}
+                                    onChange={(e) => setActionCare(e.target.value)}
+                                    placeholder="Ej. Mantener serenidad y escuchar con empatía"
+                                    className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-[#493447]/10">
+                                <button
+                                  type="button"
+                                  onClick={handleSaveActionPlan}
+                                  className="w-full sm:w-auto min-h-[44px] px-4 py-2 bg-[#BF3A1B] text-white font-bold text-xs rounded-xl hover:bg-[#a63014] transition-colors cursor-pointer shadow-xs active:scale-98 flex items-center justify-center"
+                                >
+                                  Guardar y Activar Recordatorio
+                                </button>
+                                {!activeMentorship.actionPlan?.isCompleted && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      markActionCompleted();
+                                      advanceStage(6);
+                                    }}
+                                    className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-4 py-2 bg-[#2D1B4E] text-[#F7B538] font-bold text-xs rounded-xl hover:bg-[#493447] transition-colors cursor-pointer shadow-xs active:scale-98"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Ya ejecuté la acción → Ir a Etapa 6 (Aprender)</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Stage 6: Learnings & Reflections */}
+                          {st === 6 && (
+                            <div className="p-4 sm:p-5 bg-white border border-[#493447]/15 rounded-2xl shadow-sm space-y-4">
+                              <div className="flex items-center gap-2">
+                                <BookOpen className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                                <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
+                                  Etapa 6: Aprender - Ajustar (Reflexión indispensable)
+                                </h4>
+                              </div>
+
+                              <div className="space-y-3 text-xs">
+                                <div>
+                                  <label className="font-bold text-[#2D1B4E]">¿Qué ocurrió después de tu acción?</label>
+                                  <textarea
+                                    value={learningWhatHappened}
+                                    onChange={(e) => setLearningWhatHappened(e.target.value)}
+                                    placeholder="Describe cómo reaccionó la otra persona o el equipo..."
+                                    rows={2}
+                                    className="w-full mt-1 p-2.5 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs"
+                                  />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="font-bold text-[#2D1B4E]">¿Qué funcionó?</label>
+                                    <input
+                                      type="text"
+                                      value={learningWhatWorked}
+                                      onChange={(e) => setLearningWhatWorked(e.target.value)}
+                                      placeholder="Lo que dio buen resultado..."
+                                      className="w-full mt-1 p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="font-bold text-[#2D1B4E]">¿De qué te das cuenta y qué aprendes?</label>
+                                    <input
+                                      type="text"
+                                      value={learningInsights}
+                                      onChange={(e) => setLearningInsights(e.target.value)}
+                                      placeholder="Tu insight de liderazgo..."
+                                      className="w-full mt-1 p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-[#493447]/10">
+                                <button
+                                  type="button"
+                                  onClick={handleSaveLearnings}
+                                  className="w-full sm:w-auto min-h-[44px] px-4 py-2 bg-neutral-200 text-[#2D1B4E] font-bold text-xs rounded-xl hover:bg-neutral-300 transition-colors cursor-pointer flex items-center justify-center"
+                                >
+                                  Guardar Reflexión
+                                </button>
+                                {activeMentorship.currentStage === 6 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => advanceStage(7)}
+                                    className="w-full sm:w-auto min-h-[44px] px-4 py-2 bg-[#BF3A1B] text-white font-bold text-xs rounded-xl hover:bg-[#a63014] transition-colors cursor-pointer shadow-xs active:scale-98 flex items-center justify-center"
+                                  >
+                                    Concluir e ir a Cierre (Etapa 7) →
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Stage 7: Comprehensive Feedback Report */}
+                          {st === 7 && activeMentorship.finalFeedbackReport && (
+                            <div className="p-4 sm:p-6 bg-white border-2 border-[#2D1B4E] rounded-2xl shadow-md space-y-5 print:border-none">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#493447]/15 pb-4">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <Award className="w-5 h-5 text-[#BF3A1B] shrink-0" />
+                                    <h3 className="font-heading font-extrabold text-base sm:text-lg text-[#2D1B4E]">
+                                      Reporte de Retroalimentación de Liderazgo y Autonomía
+                                    </h3>
+                                  </div>
+                                  <p className="text-xs text-[#4A3F55]/80 mt-0.5">
+                                    Lidacta · Desarrollo de Liderazgo en acción · {currentUser.companyName}
+                                  </p>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => window.print()}
+                                  className="min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-[#2D1B4E] bg-[#FFF7EF] border border-[#493447]/20 rounded-xl hover:bg-[#FFD3BF]/30 transition-colors cursor-pointer no-print w-full sm:w-auto"
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                  <span>Imprimir / PDF</span>
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                                {/* Strengths */}
+                                <div className="p-4 bg-[#FFF7EF] rounded-xl space-y-2 border border-[#493447]/10">
+                                  <span className="font-heading font-bold text-[#2D1B4E] uppercase tracking-wider text-[11px] block">
+                                    🌟 Fortalezas detectadas en el líder
+                                  </span>
+                                  <ul className="space-y-1.5 list-disc list-inside text-[#4A3F55]">
+                                    {activeMentorship.finalFeedbackReport.detectedStrengths.map((s, i) => (
+                                      <li key={i}>{s}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+
+                                {/* Stage 2 Skills */}
+                                <div className="p-4 bg-[#FFD3BF]/20 rounded-xl space-y-2 border border-[#FFD3BF]">
+                                  <span className="font-heading font-bold text-[#BF3A1B] uppercase tracking-wider text-[11px] block">
+                                    🎯 Habilidades clave puestas en juego (Etapa 2)
+                                  </span>
+                                  <ul className="space-y-1.5 list-disc list-inside text-[#2D1B4E]">
+                                    {activeMentorship.finalFeedbackReport.stageTwoSkills.map((s, i) => (
+                                      <li key={i}>{s}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+
+                                {/* Actions Chosen */}
+                                <div className="p-4 bg-[#C9BDF2]/20 rounded-xl space-y-2 border border-[#C9BDF2]/40">
+                                  <span className="font-heading font-bold text-[#2D1B4E] uppercase tracking-wider text-[11px] block">
+                                    ⚡ Acciones que eligió el líder
+                                  </span>
+                                  <ul className="space-y-1.5 list-disc list-inside text-[#4A3F55]">
+                                    {activeMentorship.finalFeedbackReport.chosenActions.map((s, i) => (
+                                      <li key={i}>{s}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+
+                                {/* Stage 6 Learnings */}
+                                <div className="p-4 bg-[#FFF7EF] rounded-xl space-y-2 border border-[#493447]/10">
+                                  <span className="font-heading font-bold text-[#2D1B4E] uppercase tracking-wider text-[11px] block">
+                                    💡 Aprendizajes y reflexiones (Etapa 6)
+                                  </span>
+                                  <ul className="space-y-1.5 list-disc list-inside text-[#4A3F55]">
+                                    {activeMentorship.finalFeedbackReport.stageSixLearnings.map((s, i) => (
+                                      <li key={i}>{s}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </div>
+
+                              {/* Recommendations for Autonomy */}
+                              <div className="p-4 bg-[#2D1B4E] text-[#FFF7EF] rounded-xl space-y-2">
+                                <span className="font-heading font-bold text-[#F7B538] uppercase tracking-wider text-[11px] block">
+                                  🚀 Recomendaciones para el fortalecimiento de tu autonomía
+                                </span>
+                                <ul className="space-y-1.5 list-disc list-inside text-xs leading-relaxed text-[#FFF7EF]/90">
+                                  {activeMentorship.finalFeedbackReport.recommendationsForAutonomy.map((rec, i) => (
+                                    <li key={i}>{rec}</li>
+                                  ))}
+                                </ul>
+                              </div>
+
+                              <div className="p-3 bg-[#FFF7EF] rounded-xl text-center text-xs text-[#4A3F55]/70">
+                                Este reporte ha sido enviado también a tu correo electrónico registrado ({currentUser.email}).
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Stage Footer: Advance CTA or Status */}
+                          <div className="pt-3 border-t border-[#493447]/10 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+                            {isCurrent && st < 7 && (
+                              <>
+                                <span className="text-[11px] text-[#4A3F55]/70 flex items-center gap-1">
+                                  <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
+                                  Al cumplir con el objetivo de esta etapa, puedes avanzar al siguiente paso.
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => advanceStage()}
+                                  disabled={isSendingMessage}
+                                  className="w-full sm:w-auto min-h-[40px] px-4 py-2 bg-[#BF3A1B] hover:bg-[#a63014] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50"
+                                >
+                                  <span>Avanzar a Etapa {st + 1}</span>
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+
+                            {isPassed && (
+                              <div className="w-full flex items-center justify-between text-[11px] text-[#246B2A] font-semibold">
+                                <span className="flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  Etapa completada exitosamente
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => advanceStage(st)}
+                                  className="text-xs text-[#BF3A1B] hover:underline font-bold cursor-pointer"
+                                >
+                                  Reabrir como etapa activa
+                                </button>
+                              </div>
+                            )}
+
+                            {isPending && (
+                              <span className="text-[11px] text-[#4A3F55]/60 italic">
+                                Etapa pendiente de inicio
+                              </span>
+                            )}
+
+                            {st === 7 && isCurrent && (
+                              <span className="text-xs font-bold text-[#246B2A] flex items-center gap-1">
+                                <CheckCircle2 className="w-4 h-4" />
+                                Proceso de 7 etapas concluido satisfactoriamente.
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
-                }
-
-                // Leader message: styled according to brand guidelines
-                return (
-                  <div key={msg.id} className="flex gap-2.5 sm:gap-3 justify-end items-start animate-in fade-in">
-                    <div className="max-w-[85%] sm:max-w-xl bg-[#FFD3BF]/30 border border-[#FFD3BF] rounded-2xl rounded-tr-sm p-3.5 sm:p-4 space-y-1 text-right">
-                      <div className="flex items-center justify-between text-[10px] text-[#4A3F55]/70 mb-1 gap-2">
-                        <span className="font-semibold text-[#BF3A1B]">Voz del líder</span>
-                        <span className="tabular-nums">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                      <p
-                        className={`text-xs sm:text-sm text-[#2D1B4E] leading-relaxed text-left ${
-                          msg.isLeaderVoiceQuote ? 'font-leader text-sm sm:text-base' : ''
-                        }`}
-                      >
-                        {msg.text}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* INTERACTIVE STAGE SPECIFIC PANELS */}
-
-              {/* Stage 2: Identified Skills Highlight */}
-              {activeMentorship.currentStage >= 2 && activeMentorship.identifiedSkills && activeMentorship.identifiedSkills.length > 0 && (
-                <div className="p-4 bg-white border border-[#493447]/15 rounded-2xl space-y-2.5 shadow-xs">
-                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#BF3A1B]">
-                    <Target className="w-4 h-4 shrink-0" />
-                    <span>Habilidades clave identificadas en Etapa 2:</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                    {activeMentorship.identifiedSkills.map((sk, idx) => (
-                      <span
-                        key={idx}
-                        className="px-2.5 py-1 bg-[#FFF7EF] border border-[#BF3A1B]/30 text-[#2D1B4E] font-semibold text-xs rounded-lg"
-                      >
-                        {sk}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Stage 4: Roleplay Practice Arena (Optional with Voice) */}
-              {activeMentorship.currentStage === 4 && (
-                <div className="p-4 sm:p-5 bg-white border-2 border-[#BF3A1B]/40 rounded-2xl shadow-sm space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-[#FFD3BF] text-[#BF3A1B] flex items-center justify-center font-bold shrink-0">
-                        <Sparkles className="w-4 h-4" />
-                      </div>
-                      <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
-                        Etapa 4: Practicar antes de actuar (Roleplay opcional)
-                      </h4>
-                    </div>
-                    <span className="text-[11px] font-semibold text-[#BF3A1B] bg-[#FFD3BF]/40 px-2 py-0.5 rounded w-fit">
-                      Práctica con voz o texto
-                    </span>
-                  </div>
-
-                  <p className="text-xs sm:text-sm text-[#4A3F55] leading-relaxed">
-                    Practica aquí la conversación o diálogo que tendrás. Lidacta asumirá el rol del colaborador o involucrado y te dará retroalimentación instantánea de lo que debes cuidar o mejorar.
-                  </p>
-
-                  <div className="p-3 bg-[#FFF7EF] border border-[#493447]/10 rounded-xl space-y-2">
-                    <span className="text-xs font-bold text-[#2D1B4E]">Opciones de práctica:</span>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <button
-                        onClick={() =>
-                          sendMessageInActiveSession(
-                            'Lidacta, quiero simular que tú eres mi colaborador y yo te cito a solas para darte retroalimentación.',
-                            true
-                          )
-                        }
-                        className="min-h-[44px] text-xs px-3.5 py-2 bg-white border border-[#493447]/15 rounded-xl hover:border-[#BF3A1B] font-semibold text-[#2D1B4E] cursor-pointer flex items-center justify-center gap-1.5 shadow-xs active:scale-98"
-                      >
-                        🎭 Iniciar simulación de diálogo
-                      </button>
-                      <button
-                        onClick={() => advanceStage(5)}
-                        className="min-h-[44px] text-xs px-3.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#4A3F55] rounded-xl cursor-pointer flex items-center justify-center font-medium active:scale-98"
-                      >
-                        ⏭️ Omitir práctica y pasar al Plan de Acción (Etapa 5)
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Stage 5: Action Plan Editor */}
-              {activeMentorship.currentStage >= 5 && (
-                <div className="p-4 sm:p-5 bg-white border-2 border-[#BF3A1B]/30 rounded-2xl shadow-sm space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-[#BF3A1B] shrink-0" />
-                      <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
-                        Etapa 5: Plan de Acción Concreto
-                      </h4>
-                    </div>
-                    {activeMentorship.actionPlan?.isCompleted ? (
-                      <span className="text-xs font-bold text-[#246B2A] bg-[#E2F7E1] px-2.5 py-1 rounded-lg flex items-center gap-1 w-fit">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        Acción Realizada
-                      </span>
-                    ) : (
-                      <span className="text-xs font-semibold text-[#BF3A1B] bg-[#FFD3BF]/60 px-2 py-0.5 rounded w-fit">
-                        En Seguimiento
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div className="space-y-1">
-                      <label className="font-bold text-[#2D1B4E]">1. ¿Qué exactamente harás?</label>
-                      <input
-                        type="text"
-                        value={actionWhat}
-                        onChange={(e) => setActionWhat(e.target.value)}
-                        placeholder="Ej. Conversación 1 a 1 de alineación"
-                        className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="font-bold text-[#2D1B4E]">2. ¿Cuándo lo harás? (Fecha específica)</label>
-                      <input
-                        type="text"
-                        value={actionWhen}
-                        onChange={(e) => setActionWhen(e.target.value)}
-                        placeholder="Ej. Jueves 17 a las 15:30 hrs"
-                        className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="font-bold text-[#2D1B4E]">3. ¿Con quién lo harás?</label>
-                      <input
-                        type="text"
-                        value={actionWithWhom}
-                        onChange={(e) => setActionWithWhom(e.target.value)}
-                        placeholder="Ej. Supervisor de turno"
-                        className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="font-bold text-[#2D1B4E]">4. ¿Qué vas a cuidar o recordar?</label>
-                      <input
-                        type="text"
-                        value={actionCare}
-                        onChange={(e) => setActionCare(e.target.value)}
-                        placeholder="Ej. Mantener serenidad y escuchar con empatía"
-                        className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-[#493447]/10">
-                    <button
-                      onClick={handleSaveActionPlan}
-                      className="w-full sm:w-auto min-h-[44px] px-4 py-2 bg-[#BF3A1B] text-white font-bold text-xs rounded-xl hover:bg-[#a63014] transition-colors cursor-pointer shadow-xs active:scale-98 flex items-center justify-center"
-                    >
-                      Guardar y Activar Recordatorio
-                    </button>
-                    {!activeMentorship.actionPlan?.isCompleted && (
-                      <button
-                        onClick={() => {
-                          markActionCompleted();
-                          advanceStage(6);
-                        }}
-                        className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-4 py-2 bg-[#2D1B4E] text-[#F7B538] font-bold text-xs rounded-xl hover:bg-[#493447] transition-colors cursor-pointer shadow-xs active:scale-98"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Ya ejecuté la acción → Ir a Etapa 6 (Aprender)</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Stage 6: Learnings & Reflections */}
-              {activeMentorship.currentStage >= 6 && (
-                <div className="p-4 sm:p-5 bg-white border border-[#493447]/15 rounded-2xl shadow-sm space-y-4">
-                  <div className="flex items-center gap-2">
-                    <BookOpen className="w-4 h-4 text-[#BF3A1B] shrink-0" />
-                    <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
-                      Etapa 6: Aprender - Ajustar (Reflexión indispensable)
-                    </h4>
-                  </div>
-
-                  <div className="space-y-3 text-xs">
-                    <div>
-                      <label className="font-bold text-[#2D1B4E]">¿Qué ocurrió después de tu acción?</label>
-                      <textarea
-                        value={learningWhatHappened}
-                        onChange={(e) => setLearningWhatHappened(e.target.value)}
-                        placeholder="Describe cómo reaccionó la otra persona o el equipo..."
-                        rows={2}
-                        className="w-full mt-1 p-2.5 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs"
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="font-bold text-[#2D1B4E]">¿Qué funcionó?</label>
-                        <input
-                          type="text"
-                          value={learningWhatWorked}
-                          onChange={(e) => setLearningWhatWorked(e.target.value)}
-                          placeholder="Lo que dio buen resultado..."
-                          className="w-full mt-1 p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-bold text-[#2D1B4E]">¿De qué te das cuenta y qué aprendes?</label>
-                        <input
-                          type="text"
-                          value={learningInsights}
-                          onChange={(e) => setLearningInsights(e.target.value)}
-                          placeholder="Tu insight de liderazgo..."
-                          className="w-full mt-1 p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-[#493447]/10">
-                    <button
-                      onClick={handleSaveLearnings}
-                      className="w-full sm:w-auto min-h-[44px] px-4 py-2 bg-neutral-200 text-[#2D1B4E] font-bold text-xs rounded-xl hover:bg-neutral-300 transition-colors cursor-pointer flex items-center justify-center"
-                    >
-                      Guardar Reflexión
-                    </button>
-                    {activeMentorship.currentStage === 6 && (
-                      <button
-                        onClick={() => advanceStage(7)}
-                        className="w-full sm:w-auto min-h-[44px] px-4 py-2 bg-[#BF3A1B] text-white font-bold text-xs rounded-xl hover:bg-[#a63014] transition-colors cursor-pointer shadow-xs active:scale-98 flex items-center justify-center"
-                      >
-                        Concluir e ir a Cierre (Etapa 7) →
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Stage 7: Comprehensive Feedback Report */}
-              {activeMentorship.currentStage === 7 && activeMentorship.finalFeedbackReport && (
-                <div className="p-4 sm:p-6 bg-white border-2 border-[#2D1B4E] rounded-2xl shadow-md space-y-5 print:border-none">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#493447]/15 pb-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Award className="w-5 h-5 text-[#BF3A1B] shrink-0" />
-                        <h3 className="font-heading font-extrabold text-base sm:text-lg text-[#2D1B4E]">
-                          Reporte de Retroalimentación de Liderazgo y Autonomía
-                        </h3>
-                      </div>
-                      <p className="text-xs text-[#4A3F55]/80 mt-0.5">
-                        Lidacta · Desarrollo de Liderazgo en acción · {currentUser.companyName}
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={() => window.print()}
-                      className="min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-[#2D1B4E] bg-[#FFF7EF] border border-[#493447]/20 rounded-xl hover:bg-[#FFD3BF]/30 transition-colors cursor-pointer no-print w-full sm:w-auto"
-                    >
-                      <Printer className="w-3.5 h-3.5" />
-                      <span>Imprimir / PDF</span>
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                    {/* Strengths */}
-                    <div className="p-4 bg-[#FFF7EF] rounded-xl space-y-2 border border-[#493447]/10">
-                      <span className="font-heading font-bold text-[#2D1B4E] uppercase tracking-wider text-[11px] block">
-                        🌟 Fortalezas detectadas en el líder
-                      </span>
-                      <ul className="space-y-1.5 list-disc list-inside text-[#4A3F55]">
-                        {activeMentorship.finalFeedbackReport.detectedStrengths.map((s, i) => (
-                          <li key={i}>{s}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {/* Stage 2 Skills */}
-                    <div className="p-4 bg-[#FFD3BF]/20 rounded-xl space-y-2 border border-[#FFD3BF]">
-                      <span className="font-heading font-bold text-[#BF3A1B] uppercase tracking-wider text-[11px] block">
-                        🎯 Habilidades clave puestas en juego (Etapa 2)
-                      </span>
-                      <ul className="space-y-1.5 list-disc list-inside text-[#2D1B4E]">
-                        {activeMentorship.finalFeedbackReport.stageTwoSkills.map((s, i) => (
-                          <li key={i}>{s}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {/* Actions Chosen */}
-                    <div className="p-4 bg-[#C9BDF2]/20 rounded-xl space-y-2 border border-[#C9BDF2]/40">
-                      <span className="font-heading font-bold text-[#2D1B4E] uppercase tracking-wider text-[11px] block">
-                        ⚡ Acciones que eligió el líder
-                      </span>
-                      <ul className="space-y-1.5 list-disc list-inside text-[#4A3F55]">
-                        {activeMentorship.finalFeedbackReport.chosenActions.map((s, i) => (
-                          <li key={i}>{s}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {/* Stage 6 Learnings */}
-                    <div className="p-4 bg-[#FFF7EF] rounded-xl space-y-2 border border-[#493447]/10">
-                      <span className="font-heading font-bold text-[#2D1B4E] uppercase tracking-wider text-[11px] block">
-                        💡 Aprendizajes y reflexiones (Etapa 6)
-                      </span>
-                      <ul className="space-y-1.5 list-disc list-inside text-[#4A3F55]">
-                        {activeMentorship.finalFeedbackReport.stageSixLearnings.map((s, i) => (
-                          <li key={i}>{s}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-
-                  {/* Recommendations for Autonomy */}
-                  <div className="p-4 bg-[#2D1B4E] text-[#FFF7EF] rounded-xl space-y-2">
-                    <span className="font-heading font-bold text-[#F7B538] uppercase tracking-wider text-[11px] block">
-                      🚀 Recomendaciones para el fortalecimiento de tu autonomía
-                    </span>
-                    <ul className="space-y-1.5 list-disc list-inside text-xs leading-relaxed text-[#FFF7EF]/90">
-                      {activeMentorship.finalFeedbackReport.recommendationsForAutonomy.map((rec, i) => (
-                        <li key={i}>{rec}</li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="p-3 bg-[#FFF7EF] rounded-xl text-center text-xs text-[#4A3F55]/70">
-                    Este reporte ha sido enviado también a tu correo electrónico registrado ({currentUser.email}).
-                  </div>
-                </div>
-              )}
+                })}
+              </div>
 
               <div ref={messagesEndRef} />
             </div>
