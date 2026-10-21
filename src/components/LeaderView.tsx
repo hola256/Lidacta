@@ -1007,7 +1007,7 @@ export const LeaderView: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
                 <div>
                   <h3 className="font-heading font-extrabold text-sm sm:text-base text-[#2D1B4E] flex items-center gap-2 flex-wrap">
-                    <span>Ruta de Acompañamiento · 7 Etapas</span>
+                    <span>Mentoría - {activeMentorship.title}</span>
                     <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#FFD3BF] text-[#BF3A1B]">
                       {activeMentorship.currentStage === 7
                         ? 'Proceso Concluido'
