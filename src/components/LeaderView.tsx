@@ -36,7 +36,6 @@ import {
   CornerDownRight,
   HelpCircle,
   Download,
-  Printer,
   Menu,
   X,
   ArrowLeft,
@@ -1370,27 +1369,16 @@ export const LeaderView: React.FC = () => {
                           {/* Stage 7: Comprehensive Feedback Report */}
                           {st === 7 && activeMentorship.finalFeedbackReport && (
                             <div className="p-4 sm:p-6 bg-white border-2 border-[#2D1B4E] rounded-2xl shadow-md space-y-5 print:border-none">
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#493447]/15 pb-4">
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <Award className="w-5 h-5 text-[#BF3A1B] shrink-0" />
-                                    <h3 className="font-heading font-extrabold text-base sm:text-lg text-[#2D1B4E]">
-                                      Reporte de Retroalimentación de Liderazgo y Autonomía
-                                    </h3>
-                                  </div>
-                                  <p className="text-xs text-[#4A3F55]/80 mt-0.5">
-                                    Lidacta · Desarrollo de Liderazgo en acción · {currentUser.companyName}
-                                  </p>
+                              <div className="border-b border-[#493447]/15 pb-4">
+                                <div className="flex items-center gap-2">
+                                  <Award className="w-5 h-5 text-[#BF3A1B] shrink-0" />
+                                  <h3 className="font-heading font-extrabold text-base sm:text-lg text-[#2D1B4E]">
+                                    Reporte de Retroalimentación de Liderazgo y Autonomía
+                                  </h3>
                                 </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => window.print()}
-                                  className="min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-[#2D1B4E] bg-[#FFF7EF] border border-[#493447]/20 rounded-xl hover:bg-[#FFD3BF]/30 transition-colors cursor-pointer no-print w-full sm:w-auto"
-                                >
-                                  <Printer className="w-3.5 h-3.5" />
-                                  <span>Imprimir / PDF</span>
-                                </button>
+                                <p className="text-xs text-[#4A3F55]/80 mt-0.5">
+                                  Lidacta · Desarrollo de Liderazgo en acción · {currentUser.companyName}
+                                </p>
                               </div>
 
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
