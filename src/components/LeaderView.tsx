@@ -445,7 +445,7 @@ export const LeaderView: React.FC = () => {
                 className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] font-heading font-extrabold text-sm rounded-xl shadow-md transition-all cursor-pointer min-h-[44px] active:scale-95"
               >
                 <Plus className="w-4 h-4" />
-                <span>+ Nuevo Acompañamiento</span>
+                <span>Nuevo acompañamiento</span>
               </button>
             </div>
 
@@ -571,7 +571,7 @@ export const LeaderView: React.FC = () => {
             className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] font-heading font-extrabold text-sm rounded-xl shadow-md transition-all cursor-pointer min-h-[44px] active:scale-95"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Nuevo Acompañamiento</span>
+            <span>Nuevo acompañamiento</span>
           </button>
         </div>
 
@@ -729,12 +729,12 @@ export const LeaderView: React.FC = () => {
                     className="text-xs font-bold text-[#2D1B4E] bg-[#F7B538] hover:bg-[#F5A623] px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5 text-[#2D1B4E]" />
-                    <span>+ Nuevo</span>
+                    <span>Nuevo acompañamiento</span>
                   </button>
                 </div>
                 {filteredMentorships.length === 0 ? (
                   <div className="p-6 bg-white border border-[#493447]/10 rounded-2xl text-center text-xs text-[#4A3F55]/60">
-                    No hay acompañamientos registrados. Pulsa en "+ Nuevo" para iniciar.
+                    No hay acompañamientos registrados. Pulsa en "Nuevo acompañamiento" para iniciar.
                   </div>
                 ) : (
                   filteredMentorships.map((m) => (
@@ -963,8 +963,8 @@ export const LeaderView: React.FC = () => {
                     title="Registrar nuevo caso o reto"
                   >
                     <Plus className="w-4 h-4 text-[#2D1B4E]" />
-                    <span className="hidden sm:inline">+ Nuevo Acompañamiento</span>
-                    <span className="sm:hidden">+ Nuevo</span>
+                    <span className="hidden sm:inline">Nuevo acompañamiento</span>
+                    <span className="sm:hidden">Nuevo</span>
                   </button>
 
                   {activeMentorship.currentStage < 7 && (
