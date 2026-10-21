@@ -917,7 +917,7 @@ export const LeaderView: React.FC = () => {
             {/* Top Bar of Active Mentorship */}
             <div className="p-3 sm:p-4 bg-white border-b border-[#493447]/10 shrink-0">
               <div className="w-full max-w-screen-xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <button
                     onClick={() => setShowMobileSidebar(true)}
                     className="md:hidden min-h-[44px] flex items-center gap-1.5 px-3 py-2 bg-[#FFF7EF] border border-[#493447]/15 rounded-xl text-xs font-bold text-[#2D1B4E] cursor-pointer shrink-0 active:scale-95"
@@ -926,32 +926,11 @@ export const LeaderView: React.FC = () => {
                     <Menu className="w-4 h-4 text-[#BF3A1B]" />
                     <span>Casos</span>
                   </button>
-                  <div className="space-y-0.5 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#FFD3BF] text-[#BF3A1B] shrink-0">
-                        Etapa {activeMentorship.currentStage} de 7
-                      </span>
-                      {activeMentorship.priority && (
-                        <span
-                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 ${
-                            activeMentorship.priority === 'alta'
-                              ? 'bg-[#BF3A1B]/15 text-[#BF3A1B]'
-                              : activeMentorship.priority === 'media'
-                              ? 'bg-[#F7B538]/30 text-[#2D1B4E]'
-                              : 'bg-[#E2F7E1] text-[#246B2A]'
-                          }`}
-                        >
-                          Prioridad {activeMentorship.priority}
-                        </span>
-                      )}
-                      <span className="text-xs text-[#4A3F55]/70 hidden xs:inline">·</span>
-                      <span className="text-xs font-semibold text-[#2D1B4E] truncate max-w-[150px] sm:max-w-none">
-                        {activeMentorship.theme}
-                      </span>
-                    </div>
-                    <h2 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E] truncate">
-                      {activeMentorship.title}
-                    </h2>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-[#FFF7EF] border border-[#FFD3BF] rounded-xl text-xs sm:text-sm text-[#2D1B4E] font-medium leading-snug">
+                    <ShieldCheck className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                    <span>
+                      Conversación 100% confidencial con tu mentor Lidacta. Recursos Humanos solo ve indicadores de desarrollo
+                    </span>
                   </div>
                 </div>
 
@@ -993,15 +972,6 @@ export const LeaderView: React.FC = () => {
               ref={activeScrollContainerRef}
               className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-5 w-full max-w-screen-xl mx-auto"
             >
-              {/* Privacy Notice */}
-              <div className="p-3 bg-[#FFF7EF] border border-[#FFD3BF] rounded-xl flex items-center justify-between text-xs text-[#4A3F55]">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-[#BF3A1B] shrink-0" />
-                  <span className="leading-snug">
-                    Conversación 100% confidencial con tu mentor Lidacta. Recursos Humanos solo ve indicadores de desarrollo.
-                  </span>
-                </div>
-              </div>
 
               {/* Accordion Navigation Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
