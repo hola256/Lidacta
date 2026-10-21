@@ -91,6 +91,7 @@ export interface MentorshipSession {
   messages: MentorshipMessage[];
   theme: string;
   status: 'active' | 'in_action' | 'completed';
+  priority?: 'alta' | 'media' | 'baja';
   startedAt: string;
   lastActiveAt: string;
   completedAt?: string;

@@ -38,7 +38,9 @@ import {
   Menu,
   X,
   ArrowLeft,
+  AlertTriangle,
 } from 'lucide-react';
+import { NewMentorshipModal } from './NewMentorshipModal';
 
 const STAGE_TITLES: Record<StageNumber, string> = {
   1: '1. Detectar qué sucede',
@@ -72,6 +74,7 @@ export const LeaderView: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [newChallengePrompt, setNewChallengePrompt] = useState('');
   const [isStartingNew, setIsStartingNew] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isListeningMic, setIsListeningMic] = useState(false);
   const [speechRecognizer, setSpeechRecognizer] = useState<{ start: () => void; stop: () => void } | null>(null);
@@ -234,14 +237,13 @@ export const LeaderView: React.FC = () => {
             <div className="p-4 border-b border-[#493447]/10">
               <button
                 onClick={() => {
-                  setActiveMentorshipId(null);
                   setShowMobileSidebar(false);
-                  setMobileHomeTab('prompt');
+                  setIsModalOpen(true);
                 }}
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#BF3A1B] hover:bg-[#a63014] text-white font-bold text-sm rounded-xl shadow-sm transition-all cursor-pointer min-h-[44px]"
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] font-heading font-extrabold text-sm rounded-xl shadow-md transition-all cursor-pointer min-h-[44px] active:scale-95"
               >
                 <Plus className="w-4 h-4" />
-                <span>Nuevo Acompañamiento</span>
+                <span>+ Nuevo Acompañamiento</span>
               </button>
             </div>
 
@@ -296,17 +298,32 @@ export const LeaderView: React.FC = () => {
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1 mb-1">
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
-                            m.status === 'completed'
-                              ? 'bg-[#E2F7E1] text-[#246B2A]'
-                              : m.status === 'in_action'
-                              ? 'bg-[#FFD3BF] text-[#BF3A1B]'
-                              : 'bg-[#C9BDF2]/50 text-[#2D1B4E]'
-                          }`}
-                        >
-                          {m.status === 'completed' ? 'Concluido' : `Etapa ${m.currentStage}`}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+                              m.status === 'completed'
+                                ? 'bg-[#E2F7E1] text-[#246B2A]'
+                                : m.status === 'in_action'
+                                ? 'bg-[#FFD3BF] text-[#BF3A1B]'
+                                : 'bg-[#C9BDF2]/50 text-[#2D1B4E]'
+                            }`}
+                          >
+                            {m.status === 'completed' ? 'Concluido' : `Etapa ${m.currentStage}`}
+                          </span>
+                          {m.priority && (
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                m.priority === 'alta'
+                                  ? 'bg-[#BF3A1B]/15 text-[#BF3A1B]'
+                                  : m.priority === 'media'
+                                  ? 'bg-[#F7B538]/30 text-[#2D1B4E]'
+                                  : 'bg-[#E2F7E1] text-[#246B2A]'
+                              }`}
+                            >
+                              {m.priority}
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] text-[#4A3F55]/60">
                           {new Date(m.startedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                         </span>
@@ -348,11 +365,11 @@ export const LeaderView: React.FC = () => {
         {/* Primary CTA: Nuevo Acompañamiento */}
         <div className="p-4 border-b border-[#493447]/10">
           <button
-            onClick={() => setActiveMentorshipId(null)}
-            className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#BF3A1B] hover:bg-[#a63014] text-white font-bold text-sm rounded-xl shadow-sm transition-all cursor-pointer min-h-[44px]"
+            onClick={() => setIsModalOpen(true)}
+            className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] font-heading font-extrabold text-sm rounded-xl shadow-md transition-all cursor-pointer min-h-[44px] active:scale-95"
           >
             <Plus className="w-4 h-4" />
-            <span>Nuevo Acompañamiento</span>
+            <span>+ Nuevo Acompañamiento</span>
           </button>
         </div>
 
@@ -409,17 +426,32 @@ export const LeaderView: React.FC = () => {
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1 mb-1">
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
-                        m.status === 'completed'
-                          ? 'bg-[#E2F7E1] text-[#246B2A]'
-                          : m.status === 'in_action'
-                          ? 'bg-[#FFD3BF] text-[#BF3A1B]'
-                          : 'bg-[#C9BDF2]/50 text-[#2D1B4E]'
-                      }`}
-                    >
-                      {m.status === 'completed' ? 'Concluido' : `Etapa ${m.currentStage}`}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+                          m.status === 'completed'
+                            ? 'bg-[#E2F7E1] text-[#246B2A]'
+                            : m.status === 'in_action'
+                            ? 'bg-[#FFD3BF] text-[#BF3A1B]'
+                            : 'bg-[#C9BDF2]/50 text-[#2D1B4E]'
+                        }`}
+                      >
+                        {m.status === 'completed' ? 'Concluido' : `Etapa ${m.currentStage}`}
+                      </span>
+                      {m.priority && (
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                            m.priority === 'alta'
+                              ? 'bg-[#BF3A1B]/15 text-[#BF3A1B]'
+                              : m.priority === 'media'
+                              ? 'bg-[#F7B538]/30 text-[#2D1B4E]'
+                              : 'bg-[#E2F7E1] text-[#246B2A]'
+                          }`}
+                        >
+                          {m.priority}
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[10px] text-[#4A3F55]/60">
                       {new Date(m.startedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                     </span>
@@ -491,16 +523,16 @@ export const LeaderView: React.FC = () => {
                     Tus Acompañamientos Registrados
                   </span>
                   <button
-                    onClick={() => setMobileHomeTab('prompt')}
-                    className="text-xs font-bold text-[#BF3A1B] flex items-center gap-1"
+                    onClick={() => setIsModalOpen(true)}
+                    className="text-xs font-bold text-[#2D1B4E] bg-[#F7B538] hover:bg-[#F5A623] px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Nuevo</span>
+                    <Plus className="w-3.5 h-3.5 text-[#2D1B4E]" />
+                    <span>+ Nuevo</span>
                   </button>
                 </div>
                 {filteredMentorships.length === 0 ? (
                   <div className="p-6 bg-white border border-[#493447]/10 rounded-2xl text-center text-xs text-[#4A3F55]/60">
-                    No hay acompañamientos registrados. Pulsa en "+ Nuevo Reto" para iniciar.
+                    No hay acompañamientos registrados. Pulsa en "+ Nuevo" para iniciar.
                   </div>
                 ) : (
                   filteredMentorships.map((m) => (
@@ -510,17 +542,32 @@ export const LeaderView: React.FC = () => {
                       className="p-4 bg-white border border-[#493447]/15 rounded-xl shadow-xs space-y-2 cursor-pointer active:scale-98 transition-transform"
                     >
                       <div className="flex items-center justify-between">
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
-                            m.status === 'completed'
-                              ? 'bg-[#E2F7E1] text-[#246B2A]'
-                              : m.status === 'in_action'
-                              ? 'bg-[#FFD3BF] text-[#BF3A1B]'
-                              : 'bg-[#C9BDF2]/50 text-[#2D1B4E]'
-                          }`}
-                        >
-                          {m.status === 'completed' ? 'Concluido' : `Etapa ${m.currentStage}`}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+                              m.status === 'completed'
+                                ? 'bg-[#E2F7E1] text-[#246B2A]'
+                                : m.status === 'in_action'
+                                ? 'bg-[#FFD3BF] text-[#BF3A1B]'
+                                : 'bg-[#C9BDF2]/50 text-[#2D1B4E]'
+                            }`}
+                          >
+                            {m.status === 'completed' ? 'Concluido' : `Etapa ${m.currentStage}`}
+                          </span>
+                          {m.priority && (
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                m.priority === 'alta'
+                                  ? 'bg-[#BF3A1B]/15 text-[#BF3A1B]'
+                                  : m.priority === 'media'
+                                  ? 'bg-[#F7B538]/30 text-[#2D1B4E]'
+                                  : 'bg-[#E2F7E1] text-[#246B2A]'
+                              }`}
+                            >
+                              {m.priority}
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] text-[#4A3F55]/60">
                           {new Date(m.startedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                         </span>
@@ -610,11 +657,20 @@ export const LeaderView: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="pt-2 flex justify-end">
+                <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-[#493447]/20 text-[#2D1B4E] hover:bg-[#FFF7EF] font-bold text-xs sm:text-sm transition-colors cursor-pointer min-h-[44px]"
+                  >
+                    <Plus className="w-4 h-4 text-[#BF3A1B]" />
+                    <span>+ Formulario de Caso con Prioridad</span>
+                  </button>
+
                   <button
                     onClick={handleStartChallenge}
                     disabled={!newChallengePrompt.trim() || isStartingNew}
-                    className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-2 px-6 py-3 bg-[#BF3A1B] hover:bg-[#a63014] text-white font-bold text-sm rounded-xl shadow-sm transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+                    className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-3 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] font-heading font-extrabold text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
                   >
                     {isStartingNew ? (
                       <span>Iniciando mentoría con Lidacta...</span>
@@ -673,6 +729,19 @@ export const LeaderView: React.FC = () => {
                       <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#FFD3BF] text-[#BF3A1B] shrink-0">
                         Etapa {activeMentorship.currentStage} de 7
                       </span>
+                      {activeMentorship.priority && (
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 ${
+                            activeMentorship.priority === 'alta'
+                              ? 'bg-[#BF3A1B]/15 text-[#BF3A1B]'
+                              : activeMentorship.priority === 'media'
+                              ? 'bg-[#F7B538]/30 text-[#2D1B4E]'
+                              : 'bg-[#E2F7E1] text-[#246B2A]'
+                          }`}
+                        >
+                          Prioridad {activeMentorship.priority}
+                        </span>
+                      )}
                       <span className="text-xs text-[#4A3F55]/70 hidden xs:inline">·</span>
                       <span className="text-xs font-semibold text-[#2D1B4E] truncate max-w-[150px] sm:max-w-none">
                         {activeMentorship.theme}
@@ -684,8 +753,18 @@ export const LeaderView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Stage Advance Action */}
+                {/* Header Actions */}
                 <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] text-xs font-heading font-extrabold rounded-xl shadow-xs transition-colors cursor-pointer min-h-[44px] active:scale-95"
+                    title="Registrar nuevo caso o reto"
+                  >
+                    <Plus className="w-4 h-4 text-[#2D1B4E]" />
+                    <span className="hidden sm:inline">+ Nuevo Acompañamiento</span>
+                    <span className="sm:hidden">+ Nuevo</span>
+                  </button>
+
                   {activeMentorship.currentStage < 7 && (
                     <button
                       onClick={() => advanceStage()}
@@ -1172,6 +1251,12 @@ export const LeaderView: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* Interactive New Mentorship / Challenge Registration Modal */}
+      <NewMentorshipModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
     </div>
   );
 };

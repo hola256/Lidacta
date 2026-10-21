@@ -55,7 +55,14 @@ interface LidactaContextType {
   setShowNewUserModal: (open: boolean) => void;
   closeWelcomeModal: () => void;
   setActiveMentorshipId: (id: string | null) => void;
-  startNewMentorship: (challengeText: string) => Promise<MentorshipSession>;
+  startNewMentorship: (
+    challengeText: string,
+    options?: {
+      title?: string;
+      stage?: StageNumber;
+      priority?: 'alta' | 'media' | 'baja';
+    }
+  ) => Promise<MentorshipSession>;
   sendMessageInActiveSession: (text: string, isPractice?: boolean) => Promise<void>;
   advanceStage: (targetStage?: StageNumber) => Promise<void>;
   updateActionPlan: (plan: MentorshipSession['actionPlan']) => void;
@@ -227,9 +234,30 @@ El Equipo de Lidacta`;
     setActiveMentorshipIdState(id);
   };
 
-  const startNewMentorship = async (challengeText: string): Promise<MentorshipSession> => {
+  const startNewMentorship = async (
+    challengeText: string,
+    options?: {
+      title?: string;
+      stage?: StageNumber;
+      priority?: 'alta' | 'media' | 'baja';
+    }
+  ): Promise<MentorshipSession> => {
     const company = companies.find((c) => c.id === currentUser.companyId) || companies[0];
     const newSessionId = `ment_${Date.now()}`;
+    const initialStage = options?.stage || 1;
+    const sessionTitle =
+      options?.title?.trim() ||
+      challengeText.slice(0, 60) + (challengeText.length > 60 ? '...' : '');
+
+    const stageNames: Record<StageNumber, string> = {
+      1: 'Detectar qué sucede con profundidad',
+      2: 'Analizar y ver desde otras perspectivas',
+      3: 'Diseñar alternativas de solución',
+      4: 'Practicar antes de actuar (Roleplay)',
+      5: 'Definir plan de acción concreto',
+      6: 'Aprender y reflexionar tras la acción',
+      7: 'Cierre y retroalimentación de liderazgo',
+    };
 
     const newSession: MentorshipSession = {
       id: newSessionId,
@@ -238,17 +266,18 @@ El Equipo de Lidacta`;
       companyId: currentUser.companyId,
       companyName: currentUser.companyName,
       leaderArea: currentUser.area,
-      title: challengeText.slice(0, 60) + (challengeText.length > 60 ? '...' : ''),
+      title: sessionTitle,
       initialChallenge: challengeText,
-      currentStage: 1,
+      currentStage: initialStage,
       theme: 'Alineación y Comunicación',
-      status: 'active',
+      status: initialStage === 7 ? 'completed' : initialStage === 5 ? 'in_action' : 'active',
+      priority: options?.priority || 'media',
       startedAt: new Date().toISOString(),
       lastActiveAt: new Date().toISOString(),
       stageHistory: [
         {
-          stage: 1,
-          stageName: 'Detectar qué sucede con profundidad',
+          stage: initialStage,
+          stageName: stageNames[initialStage],
           enteredAt: new Date().toISOString(),
         },
       ],
@@ -258,7 +287,7 @@ El Equipo de Lidacta`;
           sender: 'leader',
           text: challengeText,
           timestamp: new Date().toISOString(),
-          stage: 1,
+          stage: initialStage,
         },
       ],
       identifiedSkills: [],
@@ -273,7 +302,7 @@ El Equipo de Lidacta`;
       recipientRole: 'hr',
       companyId: currentUser.companyId,
       title: 'Líder inició acompañamiento en Lidacta',
-      message: `${currentUser.name} ha empezado a usar Lidacta para abordar un reto de liderazgo.`,
+      message: `${currentUser.name} ha empezado a usar Lidacta para abordar un reto de liderazgo: "${sessionTitle}".`,
       type: 'case_started',
       timestamp: new Date().toISOString(),
       read: false,
@@ -292,7 +321,7 @@ El Equipo de Lidacta`;
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          stage: 1,
+          stage: initialStage,
           leaderProfile: currentUser,
           companyContext: company,
           conversationHistory: newSession.messages,
