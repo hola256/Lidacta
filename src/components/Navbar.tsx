@@ -10,7 +10,6 @@ import {
   Sparkles,
   LogOut,
 } from 'lucide-react';
-import lidactaLogo from '../assets/images/Lidacta_logo_version_fondo_oscuro.svg';
 
 export const Navbar: React.FC = () => {
   const {
@@ -45,12 +44,7 @@ export const Navbar: React.FC = () => {
       <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
         {/* Zone 1: Brand Logo */}
         <div className="flex items-center shrink-0">
-          <img
-            src={lidactaLogo}
-            alt="Lidacta - Desarrollo de Liderazgo en Acción"
-            className="h-8 sm:h-9 md:h-10 w-auto max-w-[150px] xs:max-w-[190px] sm:max-w-[240px] md:max-w-[280px] object-contain select-none"
-            loading="eager"
-          />
+          <img src="/logo.svg" alt="Lidacta" className="h-8 w-auto" />
         </div>
 
         {/* Zone 2: Confidentiality & Context Status */}

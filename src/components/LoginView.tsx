@@ -15,7 +15,6 @@ import {
   AlertCircle,
   Building2,
 } from 'lucide-react';
-import lidactaLogo from '../assets/images/Lidacta_logo_version_fondo_oscuro.svg';
 
 export const LoginView: React.FC = () => {
   const { registerOrSetPassword, login, allUsers, companies } = useLidacta();
@@ -143,12 +142,7 @@ export const LoginView: React.FC = () => {
       {/* Top Brand Bar */}
       <header className="w-full max-w-screen-xl mx-auto flex items-center justify-between py-2 shrink-0">
         <div className="flex items-center shrink-0">
-          <img
-            src={lidactaLogo}
-            alt="Lidacta - Desarrollo de Liderazgo en Acción"
-            className="h-9 sm:h-11 md:h-12 w-auto max-w-[170px] xs:max-w-[210px] sm:max-w-[260px] md:max-w-[300px] object-contain select-none"
-            loading="eager"
-          />
+          <img src="/logo.svg" alt="Lidacta" className="h-9 sm:h-10 w-auto" />
         </div>
 
         <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 border border-white/15 rounded-full text-xs text-[#FFF7EF] shrink-0">
