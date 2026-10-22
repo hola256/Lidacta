@@ -47,7 +47,7 @@ export const Navbar: React.FC = () => {
           <img
             src="/logo.svg"
             alt="Lidacta - Desarrollo de Liderazgo en Acción"
-            className="h-10 sm:h-12 md:h-14 lg:h-16 w-auto object-contain select-none"
+            className="h-10 md:h-14 w-auto object-contain select-none"
           />
         </div>
 
