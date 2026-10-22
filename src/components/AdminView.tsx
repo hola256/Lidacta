@@ -20,14 +20,34 @@ import {
   BarChart2,
   Users,
   ShieldAlert,
+  Headphones,
+  MessageSquare,
+  Mail,
+  ExternalLink,
+  Check,
+  PhoneCall,
+  Sparkles,
 } from 'lucide-react';
 
 export const AdminView: React.FC = () => {
-  const { companies, updateCompanyContext, addCompany, mentorships, allUsers } = useLidacta();
+  const {
+    companies,
+    updateCompanyContext,
+    addCompany,
+    mentorships,
+    allUsers,
+    notifications,
+    openEmailDrawer,
+    updateMentorRequestStatus,
+  } = useLidacta();
 
-  const [activeTab, setActiveTab] = useState<'onboarding' | 'stages_monitoring' | 'analytics' | 'users'>('onboarding');
+  const [activeTab, setActiveTab] = useState<
+    'onboarding' | 'stages_monitoring' | 'analytics' | 'users' | 'mentor_requests'
+  >('onboarding');
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(companies[0]?.id || 'comp_nexus');
   const [selectedMentorshipForAudit, setSelectedMentorshipForAudit] = useState<MentorshipSession | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pendiente' | 'contactado' | 'atendido'>('all');
+  const [adminNoteInput, setAdminNoteInput] = useState<Record<string, string>>({});
 
   // Filters for segmentation
   const [segmentCompany, setSegmentCompany] = useState<string>('all');

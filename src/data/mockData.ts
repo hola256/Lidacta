@@ -60,6 +60,8 @@ export const INITIAL_USERS: UserProfile[] = [
     companyName: 'Lidacta Platform',
     position: 'Creadora de la Plataforma & Coach Sr.',
     area: 'Dirección de Producto y Mentoría',
+    whatsapp: '+52 55 1234 5678',
+    isProfileCompleted: true,
     createdAt: '2026-01-01',
   },
   {

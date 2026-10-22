@@ -40,9 +40,11 @@ import {
   X,
   ArrowLeft,
   AlertTriangle,
+  Headphones,
 } from 'lucide-react';
 import { NewMentorshipModal } from './NewMentorshipModal';
 import { WhatsAppVoiceRecorder } from './WhatsAppVoiceRecorder';
+import { RequestMentorModal } from './RequestMentorModal';
 
 const STAGE_TITLES: Record<StageNumber, string> = {
   1: '1. Detectar qué sucede',
@@ -131,6 +133,7 @@ export const LeaderView: React.FC = () => {
   const [newChallengePrompt, setNewChallengePrompt] = useState('');
   const [isStartingNew, setIsStartingNew] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMentorModalOpen, setIsMentorModalOpen] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isListeningMic, setIsListeningMic] = useState(false);
   const [speechRecognizer, setSpeechRecognizer] = useState<{ start: () => void; stop: () => void } | null>(null);
@@ -1067,7 +1070,18 @@ export const LeaderView: React.FC = () => {
                 </div>
 
                 {/* Header Actions */}
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+                  {/* Hablar con un Mentor Button */}
+                  <button
+                    onClick={() => setIsMentorModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-[#FFF7EF] hover:bg-[#FFD3BF]/60 text-[#BF3A1B] border-2 border-[#BF3A1B]/40 hover:border-[#BF3A1B] text-xs font-heading font-extrabold rounded-xl shadow-xs transition-all cursor-pointer min-h-[44px] active:scale-95"
+                    title="Solicitar apoyo directo de un mentor humano (Notifica a Tania Padierna)"
+                  >
+                    <Headphones className="w-4 h-4 text-[#BF3A1B]" />
+                    <span className="hidden sm:inline">Hablar con un Mentor</span>
+                    <span className="sm:hidden">Mentor</span>
+                  </button>
+
                   <button
                     onClick={() => setIsModalOpen(true)}
                     className="flex items-center gap-1.5 px-3 py-2 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] text-xs font-heading font-extrabold rounded-xl shadow-xs transition-colors cursor-pointer min-h-[44px] active:scale-95"
@@ -1823,10 +1837,36 @@ export const LeaderView: React.FC = () => {
         )}
       </main>
 
+      {/* Persistent Floating Shortcut: Hablar con un Mentor */}
+      <div className="fixed bottom-20 right-3 sm:right-6 z-30">
+        <button
+          type="button"
+          onClick={() => setIsMentorModalOpen(true)}
+          className="flex items-center gap-2 px-3.5 sm:px-4 py-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white rounded-2xl shadow-xl border-2 border-white cursor-pointer active:scale-95 transition-all group"
+          title="Hablar con un Mentor Humano (Notificación a Tania Padierna)"
+        >
+          <div className="w-6 h-6 rounded-lg bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold shrink-0">
+            <Headphones className="w-3.5 h-3.5 text-[#2D1B4E]" />
+          </div>
+          <span className="font-heading font-extrabold text-xs tracking-wide hidden sm:inline">
+            Hablar con un Mentor
+          </span>
+          <span className="font-heading font-extrabold text-xs tracking-wide sm:hidden">
+            Mentor
+          </span>
+        </button>
+      </div>
+
       {/* Interactive New Mentorship / Challenge Registration Modal */}
       <NewMentorshipModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+      />
+
+      {/* Interactive Request Mentor Modal (Text + Voice) */}
+      <RequestMentorModal
+        isOpen={isMentorModalOpen}
+        onClose={() => setIsMentorModalOpen(false)}
       />
     </div>
   );

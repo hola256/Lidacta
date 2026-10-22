@@ -73,6 +73,15 @@ interface LidactaContextType {
   markNotificationsAsRead: () => void;
   openEmailDrawer: (notification?: NotificationItem) => void;
   closeEmailDrawer: () => void;
+  requestHumanMentor: (
+    reasonText: string,
+    isVoiceAudio?: boolean
+  ) => Promise<{ success: boolean; message: string; notificationId: string; whatsappUrl: string }>;
+  updateMentorRequestStatus: (
+    notificationId: string,
+    status: 'pendiente' | 'contactado' | 'atendido',
+    notes?: string
+  ) => void;
 }
 
 const LidactaContext = createContext<LidactaContextType | undefined>(undefined);
@@ -700,6 +709,157 @@ El Equipo de Lidacta`;
     setIsEmailDrawerOpen(false);
   };
 
+  const requestHumanMentor = async (
+    reasonText: string,
+    isVoiceAudio: boolean = false
+  ): Promise<{ success: boolean; message: string; notificationId: string; whatsappUrl: string }> => {
+    const adminUser = allUsers.find((u) => u.role === 'admin') || {
+      email: 'hola@taniapadierna.com',
+      whatsapp: '+52 55 1234 5678',
+    };
+    const currentStageNum = (activeMentorship?.currentStage || 1) as StageNumber;
+    const currentCaseTitle = activeMentorship?.title || 'Acompañamiento en Lidacta';
+    const notifId = `notif_${Date.now()}_mentor_req`;
+
+    const stageNames: Record<number, string> = {
+      1: 'Detectar qué sucede',
+      2: 'Analizar perspectivas & Habilidades',
+      3: 'Diseñar alternativas',
+      4: 'Practicar antes de actuar',
+      5: 'Actuar (Plan de Acción)',
+      6: 'Aprender y reflexionar',
+      7: 'Cierre & Retroalimentación',
+    };
+
+    let serverWhatsappUrl = `https://wa.me/525512345678?text=${encodeURIComponent(
+      `🚨 *LIDACTA: Solicitud de Mentoría*\n*Líder:* ${currentUser.name}\n*Empresa:* ${currentUser.companyName}\n*Etapa:* ${currentStageNum} (${stageNames[currentStageNum]})\n*Motivo:* ${reasonText}`
+    )}`;
+
+    let simulatedEmailObj = {
+      to: adminUser.email || 'hola@taniapadierna.com',
+      subject: `🚨 [URGENTE] Solicitud de Mentor Humano: ${currentUser.name} (${currentUser.companyName} · Etapa ${currentStageNum})`,
+      bodyText: `Estimada Tania Padierna,\n\nEl líder ${currentUser.name} (${currentUser.position || 'Líder'}) de la empresa "${currentUser.companyName}" ha solicitado hablar directamente con un mentor humano en Lidacta.\n\n• Reto actual: ${currentCaseTitle}\n• Etapa en curso: Etapa ${currentStageNum} (${stageNames[currentStageNum]})\n• Formato: ${isVoiceAudio ? 'Nota de voz dictada / grabada' : 'Texto escrito'}\n\nMotivo expresado por el líder:\n"${reasonText}"\n\nDatos de contacto directo:\n• Email: ${currentUser.email}\n• WhatsApp: ${currentUser.whatsapp || 'No registrado'}\n• Fecha y hora: ${new Date().toLocaleString('es-MX')}\n\nAtentamente,\nSistema de Notificaciones Lidacta`,
+    };
+
+    try {
+      const resp = await fetch('/api/mentor/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leaderId: currentUser.id,
+          leaderName: currentUser.name,
+          leaderEmail: currentUser.email,
+          leaderWhatsapp: currentUser.whatsapp || '',
+          leaderPosition: currentUser.position,
+          companyName: currentUser.companyName,
+          currentStage: currentStageNum,
+          caseTitle: currentCaseTitle,
+          reasonText,
+          isVoiceAudio,
+          adminEmail: adminUser.email,
+          adminWhatsapp: adminUser.whatsapp,
+        }),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        if (data.whatsappUrl) serverWhatsappUrl = data.whatsappUrl;
+        if (data.simulatedEmail) simulatedEmailObj = data.simulatedEmail;
+      }
+    } catch (e) {
+      console.warn('Backend call failed, using local simulated notification:', e);
+    }
+
+    const newNotification: NotificationItem = {
+      id: notifId,
+      recipientRole: 'admin',
+      recipientUserId: 'user_admin_tania',
+      companyId: currentUser.companyId,
+      title: `🚨 Solicitud de Mentor: ${currentUser.name} (Etapa ${currentStageNum})`,
+      message: `${currentUser.name} (${currentUser.companyName}) ha solicitado hablar con un mentor para el caso "${currentCaseTitle}". Motivo: "${reasonText}"`,
+      type: 'mentor_request',
+      timestamp: new Date().toISOString(),
+      read: false,
+      emailSimulated: simulatedEmailObj,
+      mentorRequestDetails: {
+        leaderId: currentUser.id,
+        leaderName: currentUser.name,
+        leaderEmail: currentUser.email,
+        leaderWhatsapp: currentUser.whatsapp || '',
+        leaderPosition: currentUser.position,
+        companyName: currentUser.companyName,
+        currentStage: currentStageNum,
+        stageName: stageNames[currentStageNum] || `Etapa ${currentStageNum}`,
+        caseTitle: currentCaseTitle,
+        reasonText,
+        isVoiceAudio,
+        status: 'pendiente',
+        whatsappSent: true,
+        emailSent: true,
+      },
+    };
+
+    setNotifications((prev) => [newNotification, ...prev]);
+
+    // Also inject confirmation in the active session so the leader sees reassurance in chat
+    if (activeMentorship) {
+      const leaderNoteMsg = {
+        id: `msg_${Date.now()}_lead_req`,
+        sender: 'leader' as const,
+        text: `[Solicitud de Mentor Humano enviada a Tania Padierna]\nMotivo: "${reasonText}"`,
+        timestamp: new Date().toISOString(),
+        stage: currentStageNum,
+      };
+
+      const lidactaConfirmMsg = {
+        id: `msg_${Date.now()}_lid_confirm`,
+        sender: 'lidacta' as const,
+        text: `He recibido tu solicitud para hablar con un mentor humano, ${currentUser.name}. Se ha notificado inmediatamente a Tania Padierna (Directora de Mentoría) por correo electrónico (hola@taniapadierna.com) y WhatsApp con tu contexto de la Etapa ${currentStageNum}. Nos pondremos en contacto contigo a la brevedad. Tu conversación sigue siendo 100% confidencial.`,
+        timestamp: new Date().toISOString(),
+        stage: currentStageNum,
+      };
+
+      setMentorships((prev) =>
+        prev.map((m) =>
+          m.id === activeMentorship.id
+            ? {
+                ...m,
+                messages: [...m.messages, leaderNoteMsg, lidactaConfirmMsg],
+                lastActiveAt: new Date().toISOString(),
+              }
+            : m
+        )
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Solicitud enviada exitosamente a la administradora.',
+      notificationId: notifId,
+      whatsappUrl: serverWhatsappUrl,
+    };
+  };
+
+  const updateMentorRequestStatus = (
+    notificationId: string,
+    status: 'pendiente' | 'contactado' | 'atendido',
+    notes?: string
+  ) => {
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.id === notificationId && n.mentorRequestDetails
+          ? {
+              ...n,
+              mentorRequestDetails: {
+                ...n.mentorRequestDetails,
+                status,
+                adminNotes: notes !== undefined ? notes : n.mentorRequestDetails.adminNotes,
+              },
+            }
+          : n
+      )
+    );
+  };
+
   const login = (email: string, _password?: string): { success: boolean; message?: string } => {
     const cleanEmail = email.trim().toLowerCase();
 
@@ -920,6 +1080,8 @@ El Equipo de Lidacta`;
         markNotificationsAsRead,
         openEmailDrawer,
         closeEmailDrawer,
+        requestHumanMentor,
+        updateMentorRequestStatus,
       }}
     >
       {children}

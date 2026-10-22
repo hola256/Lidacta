@@ -353,6 +353,106 @@ function inferSkillsFromText(text: string): string[] {
   return list.slice(0, 3);
 }
 
+// POST /api/mentor/request - Multichannel notifications for human mentor requests
+app.post('/api/mentor/request', async (req: Request, res: Response) => {
+  try {
+    const {
+      leaderId,
+      leaderName,
+      leaderEmail,
+      leaderWhatsapp,
+      leaderPosition,
+      companyName,
+      currentStage,
+      caseTitle,
+      reasonText,
+      isVoiceAudio,
+      adminEmail = 'hola@taniapadierna.com',
+      adminWhatsapp = '+525512345678',
+    } = req.body;
+
+    const timestamp = new Date().toISOString();
+    const requestId = `req_mentor_${Date.now()}`;
+
+    // Clean whatsapp phone for wa.me link
+    const cleanPhone = (adminWhatsapp || '+525512345678').replace(/\D/g, '');
+    const waText = encodeURIComponent(
+      `🚨 *LIDACTA: Solicitud de Mentoría*\n\n` +
+      `*Líder:* ${leaderName}\n` +
+      `*Puesto:* ${leaderPosition || 'Líder de Equipo'}\n` +
+      `*Empresa:* ${companyName}\n` +
+      `*Etapa actual:* Etapa ${currentStage}\n` +
+      `*Reto/Caso:* ${caseTitle}\n` +
+      `*Motivo:* "${reasonText}"\n` +
+      `${isVoiceAudio ? '🎙️ [Nota de voz incluida]\n' : ''}` +
+      `*Contacto Líder:* ${leaderEmail} | ${leaderWhatsapp || 'No registrado'}\n` +
+      `*Fecha:* ${new Date(timestamp).toLocaleString('es-MX')}`
+    );
+    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${waText}`;
+
+    // Structured Webhook Payload for external tools (Make, Zapier, Twilio, WhatsApp Cloud API)
+    const webhookPayload = {
+      event: 'leader.requested_human_mentor',
+      requestId,
+      timestamp,
+      leader: {
+        id: leaderId,
+        name: leaderName,
+        email: leaderEmail,
+        whatsapp: leaderWhatsapp,
+        position: leaderPosition,
+        company: companyName,
+      },
+      case: {
+        title: caseTitle,
+        currentStage,
+      },
+      request: {
+        reason: reasonText,
+        isVoiceAudio: !!isVoiceAudio,
+      },
+      destination: {
+        adminEmail,
+        adminWhatsapp,
+        whatsappUrl,
+      },
+    };
+
+    console.log(`[LIDACTA NOTIFICATION] Mentor Request received from ${leaderName}:`, JSON.stringify(webhookPayload, null, 2));
+
+    // Simulated email template payload
+    const simulatedEmail = {
+      to: adminEmail,
+      subject: `🚨 [URGENTE] Solicitud de Mentor Humano: ${leaderName} (${companyName} · Etapa ${currentStage})`,
+      bodyText: `Estimada Tania Padierna,\n\nEl líder ${leaderName} (${leaderPosition || 'Líder'}) de la empresa "${companyName}" ha solicitado hablar directamente con un mentor humano en Lidacta.\n\n` +
+        `• Reto actual: ${caseTitle}\n` +
+        `• Etapa en curso: Etapa ${currentStage}\n` +
+        `• Formato de solicitud: ${isVoiceAudio ? 'Nota de voz dictada / grabada' : 'Texto escrito'}\n\n` +
+        `Motivo expresado por el líder:\n"${reasonText}"\n\n` +
+        `Datos de contacto directo:\n` +
+        `• Email: ${leaderEmail}\n` +
+        `• WhatsApp del líder: ${leaderWhatsapp || 'Sin número registrado'}\n` +
+        `• Fecha y hora: ${new Date(timestamp).toLocaleString('es-MX')}\n\n` +
+        `Acción recomendada:\n` +
+        `Puedes contactar al líder directamente por WhatsApp o agendar una sesión 1 a 1 de desbloqueo.\n\n` +
+        `Enlace directo de WhatsApp:\n${whatsappUrl}\n\n` +
+        `Atentamente,\nSistema de Notificaciones Lidacta`,
+    };
+
+    return res.json({
+      success: true,
+      message: 'Solicitud de mentoría enviada con éxito.',
+      requestId,
+      whatsappUrl,
+      simulatedEmail,
+      webhookPayload,
+    });
+  } catch (error: any) {
+    console.error('Error handling mentor request:', error);
+    return res.status(500).json({ success: false, message: error?.message || 'Error al procesar solicitud' });
+  }
+});
+
 // Vite middleware in dev or static files in production
 async function startServer() {
   app.use(express.static(path.join(__dirname, 'public')));

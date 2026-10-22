@@ -111,6 +111,24 @@ export interface MentorshipSession {
   finalFeedbackReport?: FinalFeedbackReport;
 }
 
+export interface MentorRequestDetails {
+  leaderId: string;
+  leaderName: string;
+  leaderEmail: string;
+  leaderWhatsapp?: string;
+  leaderPosition?: string;
+  companyName: string;
+  currentStage: StageNumber;
+  stageName: string;
+  caseTitle: string;
+  reasonText: string;
+  isVoiceAudio?: boolean;
+  status: 'pendiente' | 'contactado' | 'atendido';
+  whatsappSent?: boolean;
+  emailSent?: boolean;
+  adminNotes?: string;
+}
+
 export interface NotificationItem {
   id: string;
   recipientRole: UserRole;
@@ -118,7 +136,7 @@ export interface NotificationItem {
   companyId: string;
   title: string;
   message: string;
-  type: 'registration' | 'case_started' | 'action_reminder' | 'case_completed' | 'system';
+  type: 'registration' | 'case_started' | 'action_reminder' | 'case_completed' | 'system' | 'mentor_request';
   timestamp: string;
   read: boolean;
   emailSimulated?: {
@@ -126,4 +144,5 @@ export interface NotificationItem {
     subject: string;
     bodyText: string;
   };
+  mentorRequestDetails?: MentorRequestDetails;
 }
