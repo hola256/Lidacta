@@ -123,7 +123,11 @@ export const CompleteProfileView: React.FC = () => {
       {/* Top Header Bar */}
       <header className="w-full max-w-screen-xl mx-auto flex items-center justify-between py-2 shrink-0 z-10">
         <div className="flex items-center shrink-0">
-          <img src="/logo.svg" alt="Lidacta" className="h-9 sm:h-10 w-auto" />
+          <img
+            src="/logo.svg"
+            alt="Lidacta - Desarrollo de Liderazgo en Acción"
+            className="h-10 sm:h-12 md:h-14 lg:h-16 w-auto object-contain select-none"
+          />
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">

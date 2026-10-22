@@ -142,7 +142,11 @@ export const LoginView: React.FC = () => {
       {/* Top Brand Bar */}
       <header className="w-full max-w-screen-xl mx-auto flex items-center justify-between py-2 shrink-0">
         <div className="flex items-center shrink-0">
-          <img src="/logo.svg" alt="Lidacta" className="h-9 sm:h-10 w-auto" />
+          <img
+            src="/logo.svg"
+            alt="Lidacta - Desarrollo de Liderazgo en Acción"
+            className="h-10 sm:h-12 md:h-14 lg:h-16 w-auto object-contain select-none"
+          />
         </div>
 
         <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 border border-white/15 rounded-full text-xs text-[#FFF7EF] shrink-0">
