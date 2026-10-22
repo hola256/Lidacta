@@ -41,13 +41,13 @@ export const Navbar: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-40 bg-[#2D1B4E] text-white shadow-md border-b border-white/10 no-print">
-      <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 md:min-h-20 py-2 flex items-center justify-between gap-2 sm:gap-4">
+      <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-6 lg:px-8 min-h-20 md:min-h-24 py-2.5 sm:py-3 flex items-center justify-between gap-3 sm:gap-6">
         {/* Zone 1: Brand Logo */}
         <div className="flex items-center shrink-0">
           <img
             src="/logo.svg"
             alt="Lidacta - Desarrollo de Liderazgo en Acción"
-            className="h-10 md:h-14 w-auto object-contain select-none"
+            className="h-12 sm:h-14 md:h-16 lg:h-20 w-auto object-contain select-none transition-all"
           />
         </div>
 

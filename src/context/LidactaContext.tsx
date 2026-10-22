@@ -77,7 +77,7 @@ interface LidactaContextType {
 
 const LidactaContext = createContext<LidactaContextType | undefined>(undefined);
 
-const STORAGE_KEY_PREFIX = 'lidacta_v1_';
+const STORAGE_KEY_PREFIX = 'lidacta_v2_';
 
 export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load from local storage or fallback to mock data
@@ -144,6 +144,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const activeMentorship =
     mentorships.find((m) => m.id === activeMentorshipId) ||
+    mentorships.find((m) => m.leaderId === currentUser.id && m.status !== 'completed') ||
     mentorships.find((m) => m.leaderId === currentUser.id) ||
     null;
 
@@ -155,7 +156,9 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setCurrentUserId(userId);
     const targetUser = allUsers.find((u) => u.id === userId);
     if (targetUser && targetUser.role === 'leader') {
-      const leaderMentorship = mentorships.find((m) => m.leaderId === targetUser.id);
+      const leaderMentorship =
+        mentorships.find((m) => m.leaderId === targetUser.id && m.status !== 'completed') ||
+        mentorships.find((m) => m.leaderId === targetUser.id);
       setActiveMentorshipIdState(leaderMentorship ? leaderMentorship.id : null);
     }
   };
@@ -719,7 +722,9 @@ El Equipo de Lidacta`;
     setIsAuthenticated(true);
 
     if (user.role === 'leader') {
-      const leaderMentorship = mentorships.find((m) => m.leaderId === user.id);
+      const leaderMentorship =
+        mentorships.find((m) => m.leaderId === user.id && m.status !== 'completed') ||
+        mentorships.find((m) => m.leaderId === user.id);
       setActiveMentorshipIdState(leaderMentorship ? leaderMentorship.id : null);
     }
 

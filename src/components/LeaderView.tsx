@@ -126,6 +126,7 @@ export const LeaderView: React.FC = () => {
 
   const [filterTab, setFilterTab] = useState<'all' | 'active' | 'completed'>('all');
   const [inputText, setInputText] = useState('');
+  const [stageInputText, setStageInputText] = useState('');
   const [newChallengePrompt, setNewChallengePrompt] = useState('');
   const [isStartingNew, setIsStartingNew] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -266,6 +267,7 @@ export const LeaderView: React.FC = () => {
     if (isSpeechRecognitionSupported()) {
       const rec = createSpeechRecognizer(
         (transcript) => {
+          setStageInputText((prev) => (prev ? `${prev} ${transcript}` : transcript));
           setInputText((prev) => (prev ? `${prev} ${transcript}` : transcript));
           setIsListeningMic(false);
         },
@@ -278,6 +280,7 @@ export const LeaderView: React.FC = () => {
   // Sync stage forms with active mentorship
   useEffect(() => {
     if (activeMentorship) {
+      setStageInputText('');
       if (activeMentorship.actionPlan) {
         setActionWhat(activeMentorship.actionPlan.what || '');
         setActionWhen(activeMentorship.actionPlan.when || '');
@@ -332,8 +335,25 @@ export const LeaderView: React.FC = () => {
     if (!inputText.trim() || isSendingMessage) return;
     const text = inputText;
     setInputText('');
+    setStageInputText('');
     await sendMessageInActiveSession(text, activeMentorship?.currentStage === 4);
     // Smooth scroll only on intentional user message submission
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 150);
+  };
+
+  // Dedicated submission for active stage card
+  const handleSubmitStageMessage = async (st: StageNumber) => {
+    if (!stageInputText.trim() || isSendingMessage) return;
+    const textToSend = stageInputText.trim();
+    setStageInputText('');
+    setInputText('');
+    if (isListeningMic && speechRecognizer) {
+      speechRecognizer.stop();
+      setIsListeningMic(false);
+    }
+    await sendMessageInActiveSession(textToSend, st === 4);
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 150);
@@ -357,6 +377,60 @@ export const LeaderView: React.FC = () => {
     } else {
       speechRecognizer.start();
       setIsListeningMic(true);
+    }
+  };
+
+  const toggleMicListeningForStage = () => {
+    if (!isSpeechRecognitionSupported()) {
+      const sampleText = ' [Nota de voz dictada: reflexiono sobre los puntos críticos y cómo organizar la delegación con mi equipo]';
+      setStageInputText((prev) => (prev ? `${prev}${sampleText}` : sampleText.trim()));
+      setInputText((prev) => (prev ? `${prev}${sampleText}` : sampleText.trim()));
+      return;
+    }
+    if (!speechRecognizer) return;
+    if (isListeningMic) {
+      speechRecognizer.stop();
+      setIsListeningMic(false);
+    } else {
+      speechRecognizer.start();
+      setIsListeningMic(true);
+    }
+  };
+
+  // Coherent opening trigger question tailored to each stage and current mentorship context
+  const getStageTriggerQuestion = (
+    st: StageNumber,
+    mentorship: MentorshipSession
+  ): string => {
+    const leaderFirstName = currentUser?.name ? currentUser.name.split(' ')[0] : 'Líder';
+    const skillsList =
+      mentorship.identifiedSkills && mentorship.identifiedSkills.length > 0
+        ? mentorship.identifiedSkills.join(' y ')
+        : '';
+
+    switch (st) {
+      case 1:
+        return `Hola ${leaderFirstName}. Para comprender a fondo sin juzgar y validar tu contexto: ¿Cuál es el hecho o detonante principal que ocurrió y quiénes están directamente involucrados?`;
+      case 2:
+        return `En la etapa anterior comprendimos los hechos iniciales sobre "${mentorship.title}". Ahora analicemos perspectivas: ¿Cómo crees que perciben la situación los demás involucrados y qué habilidades de liderazgo necesitas poner en juego para abordarlo?`;
+      case 3:
+        if (mentorship.id === 'ment_roberto_2' || mentorship.theme?.toLowerCase().includes('delegación')) {
+          return `En la etapa anterior definimos la falta de delegación y el empoderamiento; para avanzar en esta Etapa 3, ¿qué tarea específica te cuesta más trabajo entregar hoy a tu equipo y qué alternativas visualizas?`;
+        }
+        if (skillsList) {
+          return `En la etapa anterior definimos la necesidad de trabajar en ${skillsList}; para avanzar en esta Etapa 3 y diseñar alternativas de solución, ¿qué tarea o situación específica te cuesta más trabajo resolver hoy y qué caminos viables visualizas?`;
+        }
+        return `En la etapa anterior analizamos las perspectivas y habilidades requeridas; para avanzar en esta Etapa 3 y diseñar alternativas de solución: ¿qué alternativas o caminos viables visualizas tú para resolver esta situación?`;
+      case 4:
+        return `Tú has diseñado las alternativas clave. Antes de actuar en la vida real, preparemos el terreno en este espacio seguro: ¿Qué diálogo, objeción o postura difícil te gustaría simular o entrenar conmigo?`;
+      case 5:
+        return `Con las alternativas y la simulación preparadas, aterricemos la intervención en un Plan de Acción concreto: ¿Qué harás exactamente, en qué fecha y hora específica, con quién y qué cuidarás durante ese momento?`;
+      case 6:
+        return `Tras haber ejecutado tu plan de acción en el trabajo: ¿Qué ocurrió exactamente con tu equipo, qué funcionó, qué no y de qué te das cuenta para tus futuros hábitos de liderazgo?`;
+      case 7:
+        return `Has recorrido el ciclo completo de las 7 etapas con Lidacta. Tu conversación ha sido 100% confidencial. A continuación tienes tu reporte consolidado de retroalimentación de liderazgo y autonomía directiva.`;
+      default:
+        return `Apertura de la Etapa ${st}: Comparte tus reflexiones o dudas para avanzar en tu acompañamiento directivo.`;
     }
   };
 
@@ -1217,6 +1291,40 @@ export const LeaderView: React.FC = () => {
                             </div>
                           )}
 
+                          {/* Pregunta detonadora de Lidacta (Apertura de conversación) */}
+                          {!isPending && (
+                            <div className="bg-[#FFF7EF] border border-[#FFD3BF] rounded-2xl p-4 sm:p-5 shadow-xs space-y-2.5">
+                              <div className="flex items-center justify-between border-b border-[#FFD3BF]/60 pb-2">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-8 h-8 rounded-xl bg-[#2D1B4E] text-[#F7B538] flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                                    L
+                                  </div>
+                                  <div>
+                                    <span className="font-heading font-bold text-xs text-[#2D1B4E]">
+                                      Lidacta · Apertura de conversación
+                                    </span>
+                                    <span className="block text-[10px] text-[#BF3A1B] font-semibold">
+                                      Pregunta detonadora · {meta.name} ({meta.shortTitle})
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleVoicePlayback(getStageTriggerQuestion(st, activeMentorship))}
+                                  title="Escuchar pregunta detonadora con voz"
+                                  className="text-[#BF3A1B] hover:text-[#2D1B4E] text-xs flex items-center gap-1 cursor-pointer px-2.5 py-1 rounded-lg hover:bg-[#FFD3BF]/30 transition-colors"
+                                >
+                                  <Volume2 className="w-3.5 h-3.5" />
+                                  <span className="hidden sm:inline">Escuchar</span>
+                                </button>
+                              </div>
+
+                              <p className="text-xs sm:text-sm text-[#2D1B4E] font-medium leading-relaxed whitespace-pre-line">
+                                {getStageTriggerQuestion(st, activeMentorship)}
+                              </p>
+                            </div>
+                          )}
+
                           {/* Messages Timeline for this Stage */}
                           {stageMessages.length > 0 ? (
                             <div className="space-y-3 pt-1">
@@ -1232,9 +1340,80 @@ export const LeaderView: React.FC = () => {
                               <p className="font-medium text-[#2D1B4E]">Esta etapa aún no ha iniciado.</p>
                               <p className="text-[11px]">Se activará automáticamente conforme avances en las etapas previas del acompañamiento.</p>
                             </div>
-                          ) : (
-                            <div className="p-3 bg-neutral-50 rounded-xl text-xs text-[#4A3F55]/70 italic">
-                              No hay intervenciones registradas en esta etapa.
+                          ) : null}
+
+                          {/* Interactive Conversational Input Form for 'En curso' Stage */}
+                          {isCurrent && !isCaseCompleted && st < 7 && (
+                            <div className="bg-white border-2 border-[#F7B538] rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5 mt-2">
+                              <div className="flex items-center justify-between">
+                                <label className="text-xs font-heading font-extrabold text-[#2D1B4E] flex items-center gap-2">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-[#BF3A1B] animate-pulse" />
+                                  <span>Tu respuesta para la {meta.name}:</span>
+                                </label>
+                                {isListeningMic && (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#BF3A1B] text-white animate-pulse">
+                                    <Mic className="w-3 h-3 animate-spin" />
+                                    <span>Grabando voz... Habla con claridad</span>
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Área de entrada de texto (Escribir) */}
+                              <textarea
+                                value={stageInputText}
+                                onChange={(e) => {
+                                  setStageInputText(e.target.value);
+                                  setInputText(e.target.value);
+                                }}
+                                placeholder="Escribe aquí tu respuesta, dudas o reflexiones..."
+                                rows={4}
+                                disabled={isSendingMessage}
+                                className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
+                              />
+
+                              {/* Controles de Entrada por Voz y Envío */}
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
+                                {/* Opción de entrada por voz (Micrófono) */}
+                                <button
+                                  type="button"
+                                  onClick={toggleMicListeningForStage}
+                                  className={`min-h-[44px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer select-none active:scale-95 ${
+                                    isListeningMic
+                                      ? 'bg-[#BF3A1B] text-white border-[#BF3A1B] shadow-md animate-pulse ring-2 ring-[#BF3A1B]/40'
+                                      : 'bg-[#FFF7EF] text-[#2D1B4E] border-[#493447]/20 hover:border-[#BF3A1B] hover:bg-[#FFD3BF]/30'
+                                  }`}
+                                  title={isListeningMic ? 'Detener dictado de voz' : 'Dictar por voz'}
+                                >
+                                  {isListeningMic ? (
+                                    <>
+                                      <MicOff className="w-4 h-4 text-white" />
+                                      <span>Detener grabación</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Mic className="w-4 h-4 text-[#BF3A1B]" />
+                                      <span>Dictar o hablar por voz</span>
+                                    </>
+                                  )}
+                                </button>
+
+                                {/* Botón de Envío en Ámbar Impulso (#F7B538) */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleSubmitStageMessage(st)}
+                                  disabled={!stageInputText.trim() || isSendingMessage}
+                                  className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+                                >
+                                  {isSendingMessage ? (
+                                    <span>Guardando avance...</span>
+                                  ) : (
+                                    <>
+                                      <span>Enviar avance</span>
+                                      <Send className="w-4 h-4 text-[#2D1B4E]" />
+                                    </>
+                                  )}
+                                </button>
+                              </div>
                             </div>
                           )}
 
