@@ -42,6 +42,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { NewMentorshipModal } from './NewMentorshipModal';
+import { WhatsAppVoiceRecorder } from './WhatsAppVoiceRecorder';
 
 const STAGE_TITLES: Record<StageNumber, string> = {
   1: '1. Detectar qué sucede',
@@ -354,6 +355,16 @@ export const LeaderView: React.FC = () => {
       setIsListeningMic(false);
     }
     await sendMessageInActiveSession(textToSend, st === 4);
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 150);
+  };
+
+  const handleSubmitVoiceDirect = async (st: StageNumber, text: string) => {
+    if (!text.trim() || isSendingMessage) return;
+    setStageInputText('');
+    setInputText('');
+    await sendMessageInActiveSession(text.trim(), st === 4);
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 150);
@@ -1342,20 +1353,18 @@ export const LeaderView: React.FC = () => {
                             </div>
                           ) : null}
 
-                          {/* Interactive Conversational Input Form for 'En curso' Stage */}
-                          {isCurrent && !isCaseCompleted && st < 7 && (
+                          {/* Interactive Conversational Input Form for Stage (Etapa 1 to 7) */}
+                          {isCurrent && (
                             <div className="bg-white border-2 border-[#F7B538] rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5 mt-2">
                               <div className="flex items-center justify-between">
                                 <label className="text-xs font-heading font-extrabold text-[#2D1B4E] flex items-center gap-2">
                                   <span className="w-2.5 h-2.5 rounded-full bg-[#BF3A1B] animate-pulse" />
                                   <span>Tu respuesta para la {meta.name}:</span>
                                 </label>
-                                {isListeningMic && (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#BF3A1B] text-white animate-pulse">
-                                    <Mic className="w-3 h-3 animate-spin" />
-                                    <span>Grabando voz... Habla con claridad</span>
-                                  </span>
-                                )}
+                                <span className="text-[11px] text-[#4A3F55]/70 flex items-center gap-1">
+                                  <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
+                                  <span>Escribe o habla por nota de voz</span>
+                                </span>
                               </div>
 
                               {/* Área de entrada de texto (Escribir) */}
@@ -1365,37 +1374,31 @@ export const LeaderView: React.FC = () => {
                                   setStageInputText(e.target.value);
                                   setInputText(e.target.value);
                                 }}
-                                placeholder="Escribe aquí tu respuesta, dudas o reflexiones..."
+                                placeholder={
+                                  st === 7
+                                    ? 'Escribe tus reflexiones finales o dudas sobre el reporte para Lidacta...'
+                                    : 'Escribe aquí tu respuesta, dudas o reflexiones...'
+                                }
                                 rows={4}
                                 disabled={isSendingMessage}
                                 className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
                               />
 
-                              {/* Controles de Entrada por Voz y Envío */}
+                              {/* Controles de Entrada por Voz estilo WhatsApp y Envío */}
                               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
-                                {/* Opción de entrada por voz (Micrófono) */}
-                                <button
-                                  type="button"
-                                  onClick={toggleMicListeningForStage}
-                                  className={`min-h-[44px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer select-none active:scale-95 ${
-                                    isListeningMic
-                                      ? 'bg-[#BF3A1B] text-white border-[#BF3A1B] shadow-md animate-pulse ring-2 ring-[#BF3A1B]/40'
-                                      : 'bg-[#FFF7EF] text-[#2D1B4E] border-[#493447]/20 hover:border-[#BF3A1B] hover:bg-[#FFD3BF]/30'
-                                  }`}
-                                  title={isListeningMic ? 'Detener dictado de voz' : 'Dictar por voz'}
-                                >
-                                  {isListeningMic ? (
-                                    <>
-                                      <MicOff className="w-4 h-4 text-white" />
-                                      <span>Detener grabación</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Mic className="w-4 h-4 text-[#BF3A1B]" />
-                                      <span>Dictar o hablar por voz</span>
-                                    </>
-                                  )}
-                                </button>
+                                {/* Opción de entrada por voz (Micrófono estilo WhatsApp) */}
+                                <WhatsAppVoiceRecorder
+                                  stageNumber={st}
+                                  stageName={meta.name}
+                                  mode="stage-card"
+                                  disabled={isSendingMessage}
+                                  isSending={isSendingMessage}
+                                  onTranscript={(text) => {
+                                    setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
+                                    setInputText((prev) => (prev ? `${prev} ${text}` : text));
+                                  }}
+                                  onSendDirect={(text) => handleSubmitVoiceDirect(st, text)}
+                                />
 
                                 {/* Botón de Envío en Ámbar Impulso (#F7B538) */}
                                 <button
@@ -1408,7 +1411,7 @@ export const LeaderView: React.FC = () => {
                                     <span>Guardando avance...</span>
                                   ) : (
                                     <>
-                                      <span>Enviar avance</span>
+                                      <span>{st === 7 ? 'Enviar reflexión final' : 'Enviar avance'}</span>
                                       <Send className="w-4 h-4 text-[#2D1B4E]" />
                                     </>
                                   )}
@@ -1765,62 +1768,51 @@ export const LeaderView: React.FC = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Bar for Message Exchange */}
+            {/* Input Bar for Message Exchange (WhatsApp Style Across Stages 1 to 7) */}
             <div className="p-2.5 sm:p-4 bg-white border-t border-[#493447]/10 shrink-0 no-print">
               <form onSubmit={handleSendMessage} className="w-full max-w-screen-xl mx-auto flex items-center gap-2">
-                {/* Voice Input Mic Toggle */}
-                <button
-                  type="button"
-                  onClick={toggleMicListening}
-                  title="Hablar por micrófono"
-                  className={`min-h-[44px] min-w-[44px] p-2.5 rounded-xl border transition-colors cursor-pointer shrink-0 flex items-center justify-center active:scale-95 ${
-                    isListeningMic
-                      ? 'bg-[#E8512F] text-white border-[#E8512F] animate-pulse'
-                      : 'bg-[#FFF7EF] text-[#4A3F55] border-[#493447]/15 hover:border-[#BF3A1B]'
-                  }`}
-                >
-                  {isListeningMic ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                </button>
-
                 <input
                   type="text"
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder={
-                    activeMentorship.status === 'completed' ||
-                    (activeMentorship.status as string) === 'closed' ||
-                    (activeMentorship.status as string) === 'concluido' ||
-                    !!activeMentorship.completedAt ||
                     activeMentorship.currentStage === 7
-                      ? 'Este acompañamiento ha concluido. Puedes consultar el historial completo.'
-                      : isListeningMic
-                      ? 'Escuchando tu voz...'
+                      ? 'Escribe o habla por voz con Lidacta sobre tu reporte final...'
                       : activeMentorship.currentStage === 4
                       ? 'Responde a la práctica o simula...'
-                      : `Escribe tu respuesta para la Etapa ${activeMentorship.currentStage}...`
+                      : `Escribe tu respuesta para la Etapa ${activeMentorship.currentStage || 1}...`
                   }
                   className="min-h-[44px] flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 min-w-0 disabled:bg-neutral-100 disabled:text-[#4A3F55]/60"
-                  disabled={
-                    isSendingMessage ||
-                    activeMentorship.status === 'completed' ||
-                    (activeMentorship.status as string) === 'closed' ||
-                    (activeMentorship.status as string) === 'concluido' ||
-                    !!activeMentorship.completedAt ||
-                    activeMentorship.currentStage === 7
-                  }
+                  disabled={isSendingMessage}
                 />
 
+                {/* WhatsApp Voice Recording Button & Dynamic Audio Bar */}
+                <WhatsAppVoiceRecorder
+                  stageNumber={activeMentorship.currentStage || 1}
+                  stageName={STAGE_META[activeMentorship.currentStage || 1]?.name}
+                  mode="bottom-bar"
+                  disabled={isSendingMessage}
+                  isSending={isSendingMessage}
+                  onTranscript={(text) => {
+                    setInputText((prev) => (prev ? `${prev} ${text}` : text));
+                    setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
+                  }}
+                  onSendDirect={async (text) => {
+                    if (!text.trim() || isSendingMessage) return;
+                    setInputText('');
+                    setStageInputText('');
+                    await sendMessageInActiveSession(text.trim(), activeMentorship.currentStage === 4);
+                    setTimeout(() => {
+                      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                    }, 150);
+                  }}
+                />
+
+                {/* Send Button */}
                 <button
                   type="submit"
-                  disabled={
-                    !inputText.trim() ||
-                    isSendingMessage ||
-                    activeMentorship.status === 'completed' ||
-                    (activeMentorship.status as string) === 'closed' ||
-                    (activeMentorship.status as string) === 'concluido' ||
-                    !!activeMentorship.completedAt ||
-                    activeMentorship.currentStage === 7
-                  }
+                  disabled={!inputText.trim() || isSendingMessage}
+                  title="Enviar respuesta escrita"
                   className="min-h-[44px] min-w-[44px] p-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer shrink-0 flex items-center justify-center active:scale-95"
                 >
                   <Send className="w-4 h-4" />
