@@ -10,6 +10,7 @@ import {
   Sparkles,
   LogOut,
 } from 'lucide-react';
+import lidactaLogo from '../assets/images/Lidacta_logo_version_fondo_oscuro.svg';
 
 export const Navbar: React.FC = () => {
   const {
@@ -42,24 +43,14 @@ export const Navbar: React.FC = () => {
   return (
     <header className="sticky top-0 z-40 bg-[#2D1B4E] text-white shadow-md border-b border-white/10 no-print">
       <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
-        {/* Zone 1: Brand Wordmark & Descriptor */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/15 border border-white/25 flex items-center justify-center text-[#F7B538] shadow-sm shrink-0">
-            <span className="font-heading font-bold text-base sm:text-lg leading-none">L</span>
-          </div>
-          <div className="flex flex-col min-w-0">
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="font-heading font-extrabold text-lg sm:text-xl tracking-tight text-white">
-                Lidacta
-              </span>
-              <span className="text-[10px] sm:text-[11px] font-bold tracking-wider uppercase text-[#2D1B4E] bg-[#FFD3BF] px-1.5 py-0.5 rounded hidden xs:inline-block shadow-2xs">
-                Líder + Acción
-              </span>
-            </div>
-            <span className="text-xs text-[#FFF7EF]/85 hidden sm:inline">
-              Desarrollo de Liderazgo en acción
-            </span>
-          </div>
+        {/* Zone 1: Brand Logo */}
+        <div className="flex items-center shrink-0">
+          <img
+            src={lidactaLogo}
+            alt="Lidacta - Desarrollo de Liderazgo en Acción"
+            className="h-8 sm:h-9 md:h-10 w-auto max-w-[150px] xs:max-w-[190px] sm:max-w-[240px] md:max-w-[280px] object-contain select-none"
+            loading="eager"
+          />
         </div>
 
         {/* Zone 2: Confidentiality & Context Status */}

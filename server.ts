@@ -131,7 +131,7 @@ Datos previos guardados: ${JSON.stringify(sessionData || {})}
 
 Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSON estricto.`;
 
-        const response = await ai.models.generateContent({
+        const geminiCall = ai.models.generateContent({
           model: 'gemini-3.8-flash',
           contents: prompt,
           config: {
@@ -140,6 +140,12 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
             temperature: 0.7,
           },
         });
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Gemini API request timeout (fallback activated)')), 6000)
+        );
+
+        const response = await Promise.race([geminiCall, timeoutPromise]);
 
         const rawText = response.text?.trim() || '{}';
         const parsed = JSON.parse(rawText);
@@ -349,6 +355,8 @@ function inferSkillsFromText(text: string): string[] {
 
 // Vite middleware in dev or static files in production
 async function startServer() {
+  app.use(express.static(path.join(__dirname, 'public')));
+
   if (!isProd) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
