@@ -274,10 +274,13 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto bg-[#2D1B4E]/60 backdrop-blur-xs animate-in fade-in">
-      <div className="w-full max-w-lg mx-auto overflow-hidden rounded-2xl bg-white shadow-2xl border border-[#493447]/20 flex flex-col my-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+      <div
+        className="w-full max-w-lg mx-auto bg-white rounded-2xl shadow-xl overflow-hidden my-auto flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 bg-[#2D1B4E] text-white flex items-center justify-between gap-3">
+        <div className="p-4 sm:p-5 bg-[#2D1B4E] text-white flex items-center justify-between gap-3 w-full">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="w-10 h-10 rounded-xl bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold shadow-md shrink-0">
               <UserCheck className="w-5 h-5 text-[#2D1B4E]" />
@@ -286,14 +289,14 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
               <h2 className="font-heading font-extrabold text-base sm:text-lg leading-tight truncate">
                 Asesoría 1:1 Directa
               </h2>
-              <p className="text-xs text-[#FFF7EF]/80 mt-0.5 line-clamp-2 leading-tight">
+              <p className="text-xs text-[#FFF7EF]/80 mt-0.5 truncate">
                 Acompañamiento personal directivo con Tania Padierna
               </p>
             </div>
           </div>
           <button
             onClick={handleResetAndClose}
-            className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer active:scale-95 shrink-0"
+            className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
             title="Cerrar ventana"
           >
             <X className="w-5 h-5" />
@@ -301,10 +304,10 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 sm:p-6 space-y-4 overflow-y-auto max-h-[80vh]">
+        <div className="p-4 sm:p-6 space-y-4 overflow-y-auto max-h-[80vh] w-full">
           {/* VISIBLE ERROR BANNER: Shown if /api/send fails */}
           {apiError && (
-            <div className="p-3.5 sm:p-4 bg-red-50 border-2 border-red-300 rounded-2xl text-left space-y-3 animate-in fade-in slide-in-from-top-2 max-w-full overflow-hidden box-border">
+            <div className="p-3.5 sm:p-4 bg-red-50 border border-red-300 rounded-xl text-left space-y-3 w-full box-border">
               <div className="flex items-start gap-2.5 sm:gap-3">
                 <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0 mt-0.5">
                   <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -337,7 +340,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                   type="button"
                   onClick={() => handleSubmit(undefined, false)}
                   disabled={isSubmitting}
-                  className="flex-1 min-h-[38px] flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                  className="w-full sm:flex-1 min-h-[38px] flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isSubmitting ? 'animate-spin' : ''}`} />
                   <span>Reintentar envío</span>
@@ -346,7 +349,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                   type="button"
                   onClick={() => handleSubmit(undefined, true)}
                   disabled={isSubmitting}
-                  className="flex-1 min-h-[38px] flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white hover:bg-red-50 text-red-700 border border-red-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                  className="w-full sm:flex-1 min-h-[38px] flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white hover:bg-red-50 text-red-700 border border-red-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                 >
                   <span>Continuar y notificar en el Panel</span>
                 </button>
@@ -356,12 +359,12 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
 
           {submittedData?.success ? (
             /* Success confirmation screen */
-            <div className="text-center py-5 sm:py-7 space-y-5 animate-in zoom-in-95 max-w-full overflow-hidden box-border">
+            <div className="text-center py-6 sm:py-8 space-y-5 w-full box-border">
               <div className="w-14 h-14 sm:w-16 sm:h-16 bg-[#E2F7E1] text-[#246B2A] rounded-2xl mx-auto flex items-center justify-center shadow-sm shrink-0">
                 <CheckCircle2 className="w-8 h-8 sm:w-9 sm:h-9" />
               </div>
 
-              <div className="space-y-2 max-w-md mx-auto px-1 sm:px-2">
+              <div className="space-y-2 max-w-md mx-auto px-1 sm:px-2 w-full">
                 <h3 className="font-heading font-extrabold text-lg sm:text-2xl text-[#2D1B4E] leading-tight">
                   ¡Solicitud Enviada con Éxito!
                 </h3>
