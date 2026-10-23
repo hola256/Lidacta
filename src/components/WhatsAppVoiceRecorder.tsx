@@ -272,37 +272,37 @@ export const WhatsAppVoiceRecorder: React.FC<WhatsAppVoiceRecorderProps> = ({
   // ----------------------------------------------------
   if (isRecording) {
     return (
-      <div className="bg-[#FFF7EF] border-2 border-[#BF3A1B] rounded-2xl p-4 sm:p-5 shadow-md space-y-3 animate-in fade-in duration-200">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#FFD3BF] pb-2.5">
-          <div className="flex items-center gap-2.5">
-            <span className="relative flex h-3.5 w-3.5">
+      <div className="bg-[#FFF7EF] border-2 border-[#BF3A1B] rounded-2xl p-3 sm:p-5 shadow-md space-y-3 animate-in fade-in duration-200 max-w-full overflow-hidden box-border">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#FFD3BF] pb-2.5 max-w-full overflow-hidden">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="relative flex h-3.5 w-3.5 shrink-0">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
               <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#BF3A1B]" />
             </span>
-            <div>
-              <span className="text-xs font-heading font-extrabold text-[#BF3A1B] uppercase tracking-wider block">
+            <div className="min-w-0">
+              <span className="text-xs font-heading font-extrabold text-[#BF3A1B] uppercase tracking-wider block truncate">
                 Grabando audio para {stageName || `Etapa ${stageNumber}`}
               </span>
-              <span className="text-[11px] text-[#4A3F55]/80">
-                Habla con claridad o expresa tus reflexiones de liderazgo
+              <span className="text-[10px] sm:text-[11px] text-[#4A3F55]/80 block truncate">
+                Habla con claridad o expresa tus reflexiones
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="font-mono font-bold text-sm text-[#2D1B4E] tabular-nums bg-white px-3 py-1 rounded-lg border border-[#493447]/15 shadow-2xs">
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="font-mono font-bold text-xs sm:text-sm text-[#2D1B4E] tabular-nums bg-white px-2.5 py-1 rounded-lg border border-[#493447]/15 shadow-2xs">
               ⏱️ {formatDuration(duration)}
             </span>
           </div>
         </div>
 
         {/* Real-time Dynamic Equalizer Bars */}
-        <div className="bg-white/80 rounded-xl p-3 border border-[#493447]/10 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 h-10 px-2 flex-1 justify-center">
+        <div className="bg-white/80 rounded-xl p-3 border border-[#493447]/10 flex items-center justify-between gap-3 max-w-full overflow-hidden">
+          <div className="flex items-center gap-1.5 h-10 px-2 flex-1 justify-center max-w-full overflow-hidden">
             {waveAmplitudes.map((amp, idx) => (
               <span
                 key={idx}
-                className="w-1.5 bg-[#BF3A1B] rounded-full transition-all duration-100 ease-out"
+                className="w-1.5 bg-[#BF3A1B] rounded-full transition-all duration-100 ease-out shrink-0"
                 style={{ height: `${Math.max(15, amp)}%` }}
               />
             ))}
@@ -310,7 +310,7 @@ export const WhatsAppVoiceRecorder: React.FC<WhatsAppVoiceRecorderProps> = ({
         </div>
 
         {/* Live speech preview or contextual indicator */}
-        <div className="p-2.5 bg-white rounded-xl border border-[#FFD3BF] text-xs text-[#2D1B4E] flex items-center gap-2">
+        <div className="p-2.5 bg-white rounded-xl border border-[#FFD3BF] text-xs text-[#2D1B4E] flex items-center gap-2 max-w-full overflow-hidden box-border">
           <Sparkles className="w-4 h-4 text-[#F7B538] shrink-0" />
           <p className="truncate italic">
             {liveTranscript
@@ -320,21 +320,21 @@ export const WhatsAppVoiceRecorder: React.FC<WhatsAppVoiceRecorderProps> = ({
         </div>
 
         {/* Controls: Discard, Stop & Transcribe, Send directly */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1 w-full max-w-full box-border">
           <button
             type="button"
             onClick={cancelRecording}
-            className="min-h-[42px] px-3.5 py-2 rounded-xl border border-red-200 text-red-700 bg-red-50 hover:bg-red-100 text-xs font-semibold transition-colors cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
+            className="w-full sm:w-auto min-h-[40px] px-3.5 py-2 rounded-xl border border-red-200 text-red-700 bg-red-50 hover:bg-red-100 text-xs font-semibold transition-colors cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 box-border"
           >
             <Trash2 className="w-4 h-4 text-red-600" />
             <span>Descartar grabación</span>
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={stopAndTranscribe}
-              className="flex-1 sm:flex-none min-h-[42px] px-4 py-2 bg-white border border-[#493447]/20 hover:border-[#BF3A1B] text-[#2D1B4E] text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-xs active:scale-95"
+              className="w-full sm:w-auto min-h-[40px] px-3.5 py-2 bg-white border border-[#493447]/20 hover:border-[#BF3A1B] text-[#2D1B4E] text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-xs active:scale-95 box-border"
             >
               <Check className="w-4 h-4 text-[#246B2A]" />
               <span>Transcribir al texto</span>
@@ -344,7 +344,7 @@ export const WhatsAppVoiceRecorder: React.FC<WhatsAppVoiceRecorderProps> = ({
               type="button"
               onClick={stopAndSendDirect}
               disabled={isSending}
-              className="flex-1 sm:flex-none min-h-[42px] px-5 py-2 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] text-xs font-heading font-extrabold rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50"
+              className="w-full sm:w-auto min-h-[40px] px-4 py-2 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] text-xs font-heading font-extrabold rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50 box-border"
             >
               <Send className="w-4 h-4 text-[#2D1B4E]" />
               <span>Enviar voz ahora</span>
@@ -356,20 +356,19 @@ export const WhatsAppVoiceRecorder: React.FC<WhatsAppVoiceRecorderProps> = ({
   }
 
   // Idle state inside the stage response card:
-  // Clearly visible microphone button alongside "Enviar avance"
   return (
     <button
       type="button"
       onClick={handleMicButtonClick}
       disabled={disabled || isSending}
-      className="min-h-[44px] flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl border border-[#BF3A1B]/30 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 hover:border-[#BF3A1B] text-xs font-heading font-bold text-[#2D1B4E] transition-all cursor-pointer select-none active:scale-95 shadow-2xs group"
+      className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl border border-[#BF3A1B]/30 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 hover:border-[#BF3A1B] text-xs font-heading font-bold text-[#2D1B4E] transition-all cursor-pointer select-none active:scale-95 shadow-2xs group max-w-full box-border"
       title="Hablar o dictar por voz estilo WhatsApp"
     >
-      <div className="w-6 h-6 rounded-lg bg-[#BF3A1B] text-white flex items-center justify-center group-hover:scale-105 transition-transform shadow-xs">
+      <div className="w-6 h-6 rounded-lg bg-[#BF3A1B] text-white flex items-center justify-center group-hover:scale-105 transition-transform shadow-xs shrink-0">
         <Mic className="w-3.5 h-3.5" />
       </div>
       <span>Dictar o hablar por voz</span>
-      <span className="text-[10px] font-semibold text-[#BF3A1B] bg-[#FFD3BF]/60 px-1.5 py-0.5 rounded">
+      <span className="text-[10px] font-semibold text-[#BF3A1B] bg-[#FFD3BF]/60 px-1.5 py-0.5 rounded shrink-0">
         Voz
       </span>
     </button>

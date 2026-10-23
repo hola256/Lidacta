@@ -274,26 +274,26 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#2D1B4E]/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
-      <div className="w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-[#493447]/20 overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-[#2D1B4E]/60 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 animate-in fade-in">
+      <div className="w-[92vw] sm:w-full max-w-lg mx-auto bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-[#493447]/20 overflow-hidden flex flex-col max-w-full box-border">
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 bg-[#2D1B4E] text-white flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold shadow-md shrink-0">
-              <UserCheck className="w-5 h-5 text-[#2D1B4E]" />
+        <div className="p-3.5 sm:p-5 bg-[#2D1B4E] text-white flex items-center justify-between gap-2 max-w-full overflow-hidden">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold shadow-md shrink-0">
+              <UserCheck className="w-4 h-4 sm:w-5 sm:h-5 text-[#2D1B4E]" />
             </div>
-            <div>
-              <h2 className="font-heading font-extrabold text-base sm:text-lg leading-tight">
+            <div className="min-w-0 flex-1">
+              <h2 className="font-heading font-extrabold text-sm sm:text-lg leading-tight truncate">
                 Asesoría 1:1 Directa
               </h2>
-              <p className="text-xs text-[#FFF7EF]/80 mt-0.5">
-                Acompañamiento personal directivo con Tania Padierna (Dirección de Mentoría)
+              <p className="text-[11px] sm:text-xs text-[#FFF7EF]/80 mt-0.5 line-clamp-2 leading-tight">
+                Acompañamiento personal directivo con Tania Padierna
               </p>
             </div>
           </div>
           <button
             onClick={handleResetAndClose}
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer active:scale-95"
+            className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer active:scale-95 shrink-0"
             title="Cerrar ventana"
           >
             <X className="w-5 h-5" />
@@ -301,30 +301,30 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto max-h-[80vh]">
+        <div className="p-3.5 sm:p-5 space-y-4 overflow-y-auto overflow-x-hidden max-h-[82vh] max-w-full box-border">
           {/* VISIBLE ERROR BANNER: Shown if /api/send fails */}
           {apiError && (
-            <div className="p-4 bg-red-50 border-2 border-red-300 rounded-2xl text-left space-y-3 animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0 mt-0.5">
-                  <AlertTriangle className="w-5 h-5" />
+            <div className="p-3.5 sm:p-4 bg-red-50 border-2 border-red-300 rounded-2xl text-left space-y-3 animate-in fade-in slide-in-from-top-2 max-w-full overflow-hidden box-border">
+              <div className="flex items-start gap-2.5 sm:gap-3">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0 mt-0.5">
+                  <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-heading font-bold text-sm text-red-800">
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center justify-between gap-1">
+                    <h4 className="font-heading font-bold text-xs sm:text-sm text-red-800">
                       Aviso: No se pudo enviar la solicitud por correo
                     </h4>
                     {apiError.status && (
-                      <span className="text-[10px] font-mono bg-red-200 text-red-800 px-2 py-0.5 rounded-full font-bold">
+                      <span className="text-[10px] font-mono bg-red-200 text-red-800 px-1.5 py-0.5 rounded-full font-bold">
                         Código {apiError.status}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-red-700 leading-relaxed font-medium">
+                  <p className="text-xs text-red-700 leading-relaxed font-medium break-words">
                     {apiError.message}
                   </p>
                   {apiError.hint && (
-                    <div className="flex items-start gap-1.5 p-2 bg-white/70 rounded-lg text-[11px] text-red-800 border border-red-200 mt-2">
+                    <div className="flex items-start gap-1.5 p-2 bg-white/70 rounded-lg text-[11px] text-red-800 border border-red-200 mt-2 break-words">
                       <Info className="w-3.5 h-3.5 text-red-600 shrink-0 mt-0.5" />
                       <span>{apiError.hint}</span>
                     </div>
@@ -332,7 +332,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-2 pt-1 border-t border-red-200">
+              <div className="flex flex-col sm:flex-row gap-2 pt-1 border-t border-red-200 w-full">
                 <button
                   type="button"
                   onClick={() => handleSubmit(undefined, false)}
@@ -356,21 +356,21 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
 
           {submittedData?.success ? (
             /* Success confirmation screen */
-            <div className="text-center py-6 sm:py-8 space-y-6 animate-in zoom-in-95">
-              <div className="w-16 h-16 bg-[#E2F7E1] text-[#246B2A] rounded-2xl mx-auto flex items-center justify-center shadow-sm">
-                <CheckCircle2 className="w-9 h-9" />
+            <div className="text-center py-5 sm:py-7 space-y-5 animate-in zoom-in-95 max-w-full overflow-hidden box-border">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-[#E2F7E1] text-[#246B2A] rounded-2xl mx-auto flex items-center justify-center shadow-sm shrink-0">
+                <CheckCircle2 className="w-8 h-8 sm:w-9 sm:h-9" />
               </div>
 
-              <div className="space-y-2.5 max-w-md mx-auto px-2">
-                <h3 className="font-heading font-extrabold text-xl sm:text-2xl text-[#2D1B4E]">
+              <div className="space-y-2 max-w-md mx-auto px-1 sm:px-2">
+                <h3 className="font-heading font-extrabold text-lg sm:text-2xl text-[#2D1B4E] leading-tight">
                   ¡Solicitud Enviada con Éxito!
                 </h3>
-                <p className="text-sm text-[#4A3F55] leading-relaxed">
+                <p className="text-xs sm:text-sm text-[#4A3F55] leading-relaxed">
                   Hemos recibido tu solicitud. Tania Padierna (Directora de Mentoría) ha sido notificada y te contactará a la brevedad para coordinar la sesión.
                 </p>
               </div>
 
-              <div className="pt-2 max-w-xs mx-auto">
+              <div className="pt-2 max-w-xs mx-auto w-full">
                 <button
                   type="button"
                   onClick={handleResetAndClose}
@@ -382,60 +382,60 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
             </div>
           ) : (
             /* Request Form */
-            <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-4">
+            <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-4 max-w-full overflow-x-hidden box-border">
               {/* Context banner showing leader and current case info */}
-              <div className="p-3.5 sm:p-4 bg-[#FFF7EF] border border-[#FFD3BF] rounded-2xl space-y-2">
-                <div className="flex items-center justify-between text-xs text-[#2D1B4E] font-bold">
-                  <div className="flex items-center gap-1.5">
-                    <UserCheck className="w-4 h-4 text-[#BF3A1B]" />
-                    <span>Solicitante: {currentUser.name}</span>
+              <div className="p-3 sm:p-4 bg-[#FFF7EF] border border-[#FFD3BF] rounded-2xl space-y-1.5 max-w-full overflow-hidden box-border">
+                <div className="flex flex-wrap items-center justify-between gap-1.5 text-xs text-[#2D1B4E] font-bold">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <UserCheck className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                    <span className="truncate">Solicitante: {currentUser.name}</span>
                   </div>
-                  <span className="text-[11px] text-[#BF3A1B] bg-[#FFD3BF]/60 px-2 py-0.5 rounded-full font-bold">
+                  <span className="text-[10px] sm:text-[11px] text-[#BF3A1B] bg-[#FFD3BF]/60 px-2 py-0.5 rounded-full font-bold shrink-0">
                     {currentStageMeta?.name || `Etapa ${currentStageNum}`}
                   </span>
                 </div>
-                <div className="text-xs text-[#4A3F55] leading-snug">
+                <div className="text-xs text-[#4A3F55] leading-snug break-words">
                   <span className="font-semibold text-[#2D1B4E]">Caso activo: </span>
                   {activeMentorship?.title || 'Acompañamiento en curso'}
                 </div>
               </div>
 
               {/* Priority Selector */}
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 max-w-full">
                 <label className="text-xs font-heading font-bold text-[#2D1B4E] block">
                   Nivel de urgencia:
                 </label>
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="grid grid-cols-2 gap-2 text-xs w-full max-w-full">
                   <button
                     type="button"
                     onClick={() => setPriority('normal')}
-                    className={`min-h-[42px] px-3 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    className={`w-full min-h-[42px] px-2 py-2 rounded-xl border text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 text-center box-border ${
                       priority === 'normal'
                         ? 'bg-[#2D1B4E] text-white border-[#2D1B4E] shadow-xs'
                         : 'bg-[#FFF7EF]/60 text-[#4A3F55] border-[#493447]/15 hover:border-[#BF3A1B]'
                     }`}
                   >
-                    <span>📅 Normal (Dudas o alineación)</span>
+                    <span className="truncate">📅 Normal (Dudas)</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setPriority('alta')}
-                    className={`min-h-[42px] px-3 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    className={`w-full min-h-[42px] px-2 py-2 rounded-xl border text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 text-center box-border ${
                       priority === 'alta'
                         ? 'bg-[#BF3A1B] text-white border-[#BF3A1B] shadow-xs ring-2 ring-[#BF3A1B]/30'
                         : 'bg-[#FFF7EF]/60 text-[#4A3F55] border-[#493447]/15 hover:border-[#BF3A1B]'
                     }`}
                   >
-                    <span>⚡ Alta (Bloqueo o urgencia)</span>
+                    <span className="truncate">⚡ Alta (Bloqueo)</span>
                   </button>
                 </div>
               </div>
 
               {/* Textarea for request reason */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-heading font-bold text-[#2D1B4E] flex items-center justify-between">
-                  <span>¿En qué situación o bloqueo específico necesitas apoyo? *</span>
-                  <span className="text-[11px] font-normal text-[#4A3F55]/70">Escribe o dicta por voz</span>
+              <div className="space-y-1.5 max-w-full">
+                <label className="text-xs font-heading font-bold text-[#2D1B4E] flex flex-wrap items-center justify-between gap-1">
+                  <span>¿En qué situación necesitas apoyo? *</span>
+                  <span className="text-[10px] sm:text-[11px] font-normal text-[#4A3F55]/70">Escribe o dicta por voz</span>
                 </label>
                 <textarea
                   value={reasonText}
@@ -447,15 +447,15 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                   rows={4}
                   required
                   disabled={isSubmitting}
-                  className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed"
+                  className="w-full max-w-full box-border p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed resize-y"
                 />
               </div>
 
               {/* Voice Recording Control (WhatsApp Style) */}
-              <div className="p-3 bg-[#FFF7EF]/60 border border-[#493447]/15 rounded-2xl space-y-2">
+              <div className="p-3 bg-[#FFF7EF]/60 border border-[#493447]/15 rounded-2xl space-y-2 max-w-full overflow-hidden box-border">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#2D1B4E] flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
+                    <Sparkles className="w-3.5 h-3.5 text-[#F7B538] shrink-0" />
                     <span>Opción: Explicar por nota de voz</span>
                   </span>
                 </div>
@@ -472,15 +472,15 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
               </div>
 
               {/* Confidentiality Notice */}
-              <div className="p-3 bg-neutral-50 rounded-xl border border-[#493447]/10 flex items-center gap-2 text-xs text-[#4A3F55]">
+              <div className="p-2.5 sm:p-3 bg-neutral-50 rounded-xl border border-[#493447]/10 flex items-center gap-2 text-xs text-[#4A3F55] max-w-full overflow-hidden box-border">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                <p className="leading-snug">
+                <p className="leading-snug text-[11px] sm:text-xs">
                   Tu solicitud será enviada de forma confidencial a la Directora de Mentoría.
                 </p>
               </div>
 
               {/* Actions Footer */}
-              <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 pt-2 border-t border-[#493447]/10">
+              <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2 pt-2 border-t border-[#493447]/10 w-full max-w-full box-border">
                 <button
                   type="button"
                   onClick={handleResetAndClose}
@@ -492,7 +492,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                 <button
                   type="submit"
                   disabled={!reasonText.trim() || isSubmitting}
-                  className="w-full sm:w-auto min-h-[44px] px-6 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:w-auto min-h-[44px] px-5 sm:px-6 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? (
                     <span className="flex items-center gap-2">
