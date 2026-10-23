@@ -312,11 +312,11 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center justify-between">
                     <h4 className="font-heading font-bold text-sm text-red-800">
-                      Alerta: El envío a Resend API no se pudo completar
+                      Aviso: No se pudo enviar la solicitud por correo
                     </h4>
                     {apiError.status && (
                       <span className="text-[10px] font-mono bg-red-200 text-red-800 px-2 py-0.5 rounded-full font-bold">
-                        HTTP {apiError.status}
+                        Código {apiError.status}
                       </span>
                     )}
                   </div>
@@ -340,7 +340,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                   className="flex-1 min-h-[38px] flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isSubmitting ? 'animate-spin' : ''}`} />
-                  <span>Reintentar envío a Resend</span>
+                  <span>Reintentar envío</span>
                 </button>
                 <button
                   type="button"
@@ -348,7 +348,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                   disabled={isSubmitting}
                   className="flex-1 min-h-[38px] flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white hover:bg-red-50 text-red-700 border border-red-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                 >
-                  <span>Continuar solo por WhatsApp y Panel</span>
+                  <span>Continuar y notificar en el Panel</span>
                 </button>
               </div>
             </div>
@@ -458,9 +458,6 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                     <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
                     <span>Opción: Explicar por nota de voz</span>
                   </span>
-                  <span className="text-[11px] text-[#BF3A1B] font-semibold">
-                    Grabación con Web Speech API
-                  </span>
                 </div>
 
                 <WhatsAppVoiceRecorder
@@ -474,11 +471,11 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                 />
               </div>
 
-              {/* Multichannel Notification Disclosure */}
-              <div className="p-3 bg-neutral-50 rounded-xl border border-[#493447]/10 flex items-start gap-2 text-[11px] text-[#4A3F55]">
-                <ShieldCheck className="w-4 h-4 text-[#BF3A1B] shrink-0 mt-0.5" />
+              {/* Confidentiality Notice */}
+              <div className="p-3 bg-neutral-50 rounded-xl border border-[#493447]/10 flex items-center gap-2 text-xs text-[#4A3F55]">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                 <p className="leading-snug">
-                  Al enviar esta solicitud, se notifica inmediatamente a <span className="font-semibold text-[#2D1B4E]">Tania Padierna</span> (Directora de Mentoría) por correo electrónico a <span className="font-semibold text-[#2D1B4E]">hola@taniapadierna.com</span> y en el Panel Directivo para coordinar tu sesión.
+                  Tu solicitud será enviada de forma confidencial a la Directora de Mentoría.
                 </p>
               </div>
 
@@ -500,7 +497,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                   {isSubmitting ? (
                     <span className="flex items-center gap-2">
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      Despachando a Resend...
+                      Enviando solicitud...
                     </span>
                   ) : (
                     <>
