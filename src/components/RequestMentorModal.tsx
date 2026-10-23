@@ -274,22 +274,22 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto overflow-x-hidden">
       <div
-        className="w-full max-w-lg mx-auto bg-white rounded-2xl shadow-xl overflow-hidden my-auto flex flex-col"
+        className="w-full max-w-md mx-auto box-border overflow-hidden overflow-x-hidden rounded-2xl bg-white shadow-xl my-auto flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 bg-[#2D1B4E] text-white flex items-center justify-between gap-3 w-full">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="p-4 sm:p-5 bg-[#2D1B4E] text-white flex items-center justify-between gap-3 w-full box-border overflow-hidden">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
             <div className="w-10 h-10 rounded-xl bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold shadow-md shrink-0">
               <UserCheck className="w-5 h-5 text-[#2D1B4E]" />
             </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="font-heading font-extrabold text-base sm:text-lg leading-tight truncate">
+            <div className="min-w-0 flex-1 break-words whitespace-normal">
+              <h2 className="font-heading font-extrabold text-base sm:text-lg leading-tight break-words whitespace-normal">
                 Asesoría 1:1 Directa
               </h2>
-              <p className="text-xs text-[#FFF7EF]/80 mt-0.5 truncate">
+              <p className="text-xs text-[#FFF7EF]/80 mt-0.5 break-words whitespace-normal leading-tight">
                 Acompañamiento personal directivo con Tania Padierna
               </p>
             </div>
@@ -304,7 +304,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 sm:p-6 space-y-4 overflow-y-auto max-h-[80vh] w-full">
+        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto overflow-x-hidden max-h-[80vh] w-full box-border break-words whitespace-normal">
           {/* VISIBLE ERROR BANNER: Shown if /api/send fails */}
           {apiError && (
             <div className="p-3.5 sm:p-4 bg-red-50 border border-red-300 rounded-xl text-left space-y-3 w-full box-border">
@@ -385,58 +385,58 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
             </div>
           ) : (
             /* Request Form */
-            <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-4 w-full">
+            <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-4 w-full max-w-full box-border overflow-x-hidden">
               {/* Context banner showing leader and current case info */}
-              <div className="p-3 sm:p-4 bg-[#FFF7EF] border border-[#FFD3BF] rounded-2xl space-y-1.5 w-full">
-                <div className="flex flex-wrap items-center justify-between gap-1.5 text-xs text-[#2D1B4E] font-bold">
+              <div className="p-3 sm:p-4 bg-[#FFF7EF] border border-[#FFD3BF] rounded-2xl space-y-1.5 w-full max-w-full box-border overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs text-[#2D1B4E] font-bold">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <UserCheck className="w-4 h-4 text-[#BF3A1B] shrink-0" />
-                    <span className="truncate">Solicitante: {currentUser.name}</span>
+                    <span className="break-words whitespace-normal">Solicitante: {currentUser.name}</span>
                   </div>
-                  <span className="text-[10px] sm:text-[11px] text-[#BF3A1B] bg-[#FFD3BF]/60 px-2 py-0.5 rounded-full font-bold shrink-0">
+                  <span className="text-[10px] sm:text-[11px] text-[#BF3A1B] bg-[#FFD3BF]/60 px-2 py-0.5 rounded-full font-bold self-start sm:self-auto shrink-0">
                     {currentStageMeta?.name || `Etapa ${currentStageNum}`}
                   </span>
                 </div>
-                <div className="text-xs text-[#4A3F55] leading-snug break-words">
+                <div className="text-xs text-[#4A3F55] leading-snug break-words whitespace-normal">
                   <span className="font-semibold text-[#2D1B4E]">Caso activo: </span>
                   {activeMentorship?.title || 'Acompañamiento en curso'}
                 </div>
               </div>
 
-              {/* Priority Selector */}
-              <div className="space-y-1.5 w-full">
-                <label className="text-xs font-heading font-bold text-[#2D1B4E] block">
+              {/* Priority Selector: 1 column on mobile, 2 columns on sm+ */}
+              <div className="space-y-1.5 w-full max-w-full box-border">
+                <label className="text-xs font-heading font-bold text-[#2D1B4E] block break-words whitespace-normal">
                   Nivel de urgencia:
                 </label>
-                <div className="grid grid-cols-2 gap-2 text-xs w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs w-full max-w-full box-border">
                   <button
                     type="button"
                     onClick={() => setPriority('normal')}
-                    className={`w-full min-h-[42px] px-2 py-2 rounded-xl border text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 text-center box-border ${
+                    className={`w-full min-h-[42px] px-3 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center box-border break-words whitespace-normal ${
                       priority === 'normal'
                         ? 'bg-[#2D1B4E] text-white border-[#2D1B4E] shadow-xs'
                         : 'bg-[#FFF7EF]/60 text-[#4A3F55] border-[#493447]/15 hover:border-[#BF3A1B]'
                     }`}
                   >
-                    <span className="truncate">📅 Normal (Dudas)</span>
+                    <span>📅 Normal (Dudas o alineación)</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setPriority('alta')}
-                    className={`w-full min-h-[42px] px-2 py-2 rounded-xl border text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 text-center box-border ${
+                    className={`w-full min-h-[42px] px-3 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center box-border break-words whitespace-normal ${
                       priority === 'alta'
                         ? 'bg-[#BF3A1B] text-white border-[#BF3A1B] shadow-xs ring-2 ring-[#BF3A1B]/30'
                         : 'bg-[#FFF7EF]/60 text-[#4A3F55] border-[#493447]/15 hover:border-[#BF3A1B]'
                     }`}
                   >
-                    <span className="truncate">⚡ Alta (Bloqueo)</span>
+                    <span>⚡ Alta (Bloqueo o urgencia)</span>
                   </button>
                 </div>
               </div>
 
               {/* Textarea for request reason */}
-              <div className="space-y-1.5 w-full">
-                <label className="text-xs font-heading font-bold text-[#2D1B4E] flex flex-wrap items-center justify-between gap-1">
+              <div className="space-y-1.5 w-full max-w-full box-border">
+                <label className="text-xs font-heading font-bold text-[#2D1B4E] flex flex-wrap items-center justify-between gap-1 break-words whitespace-normal">
                   <span>¿En qué situación necesitas apoyo? *</span>
                   <span className="text-[10px] sm:text-[11px] font-normal text-[#4A3F55]/70">Escribe o dicta por voz</span>
                 </label>
@@ -450,7 +450,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                   rows={4}
                   required
                   disabled={isSubmitting}
-                  className="w-full box-border p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed resize-y"
+                  className="w-full box-border max-w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed resize-y break-words whitespace-normal"
                 />
               </div>
 

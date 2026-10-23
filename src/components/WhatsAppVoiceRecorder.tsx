@@ -361,13 +361,13 @@ export const WhatsAppVoiceRecorder: React.FC<WhatsAppVoiceRecorderProps> = ({
       type="button"
       onClick={handleMicButtonClick}
       disabled={disabled || isSending}
-      className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl border border-[#BF3A1B]/30 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 hover:border-[#BF3A1B] text-xs font-heading font-bold text-[#2D1B4E] transition-all cursor-pointer select-none active:scale-95 shadow-2xs group max-w-full box-border"
+      className="w-full max-w-full min-h-[44px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-[#BF3A1B]/30 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 hover:border-[#BF3A1B] text-xs font-heading font-bold text-[#2D1B4E] transition-all cursor-pointer select-none active:scale-95 shadow-2xs group box-border whitespace-normal break-words"
       title="Hablar o dictar por voz estilo WhatsApp"
     >
       <div className="w-6 h-6 rounded-lg bg-[#BF3A1B] text-white flex items-center justify-center group-hover:scale-105 transition-transform shadow-xs shrink-0">
         <Mic className="w-3.5 h-3.5" />
       </div>
-      <span>Dictar o hablar por voz</span>
+      <span className="break-words whitespace-normal">Dictar o hablar por voz</span>
       <span className="text-[10px] font-semibold text-[#BF3A1B] bg-[#FFD3BF]/60 px-1.5 py-0.5 rounded shrink-0">
         Voz
       </span>
