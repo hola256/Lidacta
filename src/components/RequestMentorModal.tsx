@@ -5,14 +5,11 @@ import {
   X,
   Send,
   CheckCircle2,
-  Mail,
-  MessageSquare,
-  Sparkles,
-  ShieldCheck,
-  ExternalLink,
   AlertTriangle,
   RefreshCw,
   Info,
+  Sparkles,
+  ShieldCheck,
 } from 'lucide-react';
 import { WhatsAppVoiceRecorder } from './WhatsAppVoiceRecorder';
 import { STAGE_META } from './LeaderView';
@@ -37,7 +34,7 @@ interface ResendSuccessState {
 }
 
 export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, onClose }) => {
-  const { currentUser, activeMentorship, requestHumanMentor, openEmailDrawer, notifications } = useLidacta();
+  const { currentUser, activeMentorship, requestHumanMentor } = useLidacta();
 
   const [reasonText, setReasonText] = useState('');
   const [priority, setPriority] = useState<'normal' | 'alta'>('normal');
@@ -276,16 +273,6 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
     onClose();
   };
 
-  const handleViewGeneratedEmail = () => {
-    if (submittedData?.notificationId) {
-      const notif = notifications.find((n) => n.id === submittedData.notificationId);
-      openEmailDrawer(notif);
-    } else {
-      openEmailDrawer();
-    }
-    handleResetAndClose();
-  };
-
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[#2D1B4E]/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
       <div className="w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-[#493447]/20 overflow-hidden flex flex-col">
@@ -369,101 +356,29 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
 
           {submittedData?.success ? (
             /* Success confirmation screen */
-            <div className="text-center py-4 space-y-4 animate-in zoom-in-95">
-              <div className="w-14 h-14 bg-[#E2F7E1] text-[#246B2A] rounded-2xl mx-auto flex items-center justify-center shadow-sm">
-                <CheckCircle2 className="w-8 h-8" />
+            <div className="text-center py-6 sm:py-8 space-y-6 animate-in zoom-in-95">
+              <div className="w-16 h-16 bg-[#E2F7E1] text-[#246B2A] rounded-2xl mx-auto flex items-center justify-center shadow-sm">
+                <CheckCircle2 className="w-9 h-9" />
               </div>
 
-              <div className="space-y-1.5">
-                <h3 className="font-heading font-extrabold text-lg sm:text-xl text-[#2D1B4E]">
+              <div className="space-y-2.5 max-w-md mx-auto px-2">
+                <h3 className="font-heading font-extrabold text-xl sm:text-2xl text-[#2D1B4E]">
                   ¡Solicitud Enviada con Éxito!
                 </h3>
-                <p className="text-xs sm:text-sm text-[#4A3F55] max-w-md mx-auto leading-relaxed">
-                  Hemos notificado a <span className="font-bold text-[#2D1B4E]">Tania Padierna</span> (Directora de Mentoría) a través de los canales en vivo:
+                <p className="text-sm text-[#4A3F55] leading-relaxed">
+                  Hemos recibido tu solicitud. Tania Padierna (Directora de Mentoría) ha sido notificada y te contactará a la brevedad para coordinar la sesión.
                 </p>
               </div>
 
-              {/* Real Resend Email Confirmation Card */}
-              {submittedData.resendId ? (
-                <div className="p-3.5 bg-emerald-50 border-2 border-emerald-300 rounded-2xl text-left space-y-1.5 animate-in fade-in">
-                  <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
-                    <span className="flex items-center gap-1.5">
-                      <Mail className="w-4 h-4 text-emerald-600" />
-                      Correo Real Despachado por Resend API
-                    </span>
-                    <span className="text-[10px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full font-mono font-bold">
-                      200 OK
-                    </span>
-                  </div>
-                  <div className="text-xs text-emerald-900 leading-snug space-y-0.5">
-                    <p>
-                      <strong>Destinatario principal:</strong> {submittedData.recipient || 'hola@taniapadierna.com'}
-                    </p>
-                    <p className="font-mono text-[11px] text-emerald-700 truncate">
-                      <strong>Resend ID:</strong> {submittedData.resendId}
-                    </p>
-                    <p className="text-[11px] text-emerald-600">
-                      <strong>Remitente:</strong> Lidacta &lt;onboarding@resend.dev&gt;
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-left text-xs text-amber-800">
-                  <span className="font-bold">Nota de entrega:</span> Notificación registrada en el Panel de Administrador y enlace de WhatsApp listo.
-                </div>
-              )}
-
-              {/* Multichannel Delivery Confirmation Box */}
-              <div className="bg-[#FFF7EF] border border-[#FFD3BF] rounded-2xl p-4 text-left space-y-2.5 text-xs text-[#2D1B4E]">
-                <div className="flex items-center gap-2 font-bold text-[#BF3A1B]">
-                  <Sparkles className="w-4 h-4" />
-                  <span>Notificaciones multicanal entregadas:</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <div className="p-2.5 bg-white rounded-xl border border-[#493447]/10 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>Panel Admin (Alerta)</span>
-                  </div>
-                  <div className="p-2.5 bg-white rounded-xl border border-[#493447]/10 flex items-center gap-2">
-                    <Mail className="w-3.5 h-3.5 text-[#BF3A1B]" />
-                    <span className="truncate">Email Resend</span>
-                  </div>
-                  <div className="p-2.5 bg-white rounded-xl border border-[#493447]/10 flex items-center gap-2">
-                    <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>WhatsApp alerta</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
-                <a
-                  href={submittedData.whatsappUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 min-h-[44px] flex items-center justify-center gap-2 px-4 py-2.5 bg-[#25D366] hover:bg-[#20ba59] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  <span>Abrir mensaje en WhatsApp</span>
-                  <ExternalLink className="w-3 h-3 ml-0.5" />
-                </a>
-
+              <div className="pt-2 max-w-xs mx-auto">
                 <button
                   type="button"
-                  onClick={handleViewGeneratedEmail}
-                  className="flex-1 min-h-[44px] flex items-center justify-center gap-2 px-4 py-2.5 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 text-[#2D1B4E] border border-[#493447]/20 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                  onClick={handleResetAndClose}
+                  className="w-full min-h-[44px] px-6 py-2.5 bg-[#2D1B4E] hover:bg-[#493447] text-white text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer active:scale-95 shadow-sm"
                 >
-                  <Mail className="w-4 h-4 text-[#BF3A1B]" />
-                  <span>Ver formato de correo</span>
+                  Volver a mi acompañamiento
                 </button>
               </div>
-
-              <button
-                type="button"
-                onClick={handleResetAndClose}
-                className="w-full min-h-[44px] py-2.5 bg-[#2D1B4E] hover:bg-[#493447] text-white text-xs font-bold rounded-xl transition-colors cursor-pointer active:scale-95"
-              >
-                Volver a mi acompañamiento
-              </button>
             </div>
           ) : (
             /* Request Form */
@@ -563,7 +478,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
               <div className="p-3 bg-neutral-50 rounded-xl border border-[#493447]/10 flex items-start gap-2 text-[11px] text-[#4A3F55]">
                 <ShieldCheck className="w-4 h-4 text-[#BF3A1B] shrink-0 mt-0.5" />
                 <p className="leading-snug">
-                  Al enviar esta solicitud, el sistema realiza una llamada HTTP directa a <code className="bg-neutral-200 px-1 py-0.5 rounded text-[#2D1B4E] font-mono">/api/send</code> para despachar el correo inmediato a <span className="font-semibold text-[#2D1B4E]">hola@taniapadierna.com</span>, además de registrar la alerta en el Panel y habilitar el enlace directo a WhatsApp.
+                  Al enviar esta solicitud, se notifica inmediatamente a <span className="font-semibold text-[#2D1B4E]">Tania Padierna</span> (Directora de Mentoría) por correo electrónico a <span className="font-semibold text-[#2D1B4E]">hola@taniapadierna.com</span> y en el Panel Directivo para coordinar tu sesión.
                 </p>
               </div>
 
