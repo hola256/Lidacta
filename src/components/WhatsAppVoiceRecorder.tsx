@@ -315,7 +315,7 @@ export const WhatsAppVoiceRecorder: React.FC<WhatsAppVoiceRecorderProps> = ({
           <p className="truncate italic">
             {liveTranscript
               ? `Escuchando: "${liveTranscript}"`
-              : 'Micrófono activo · Capturando voz en tiempo real con Web Speech API...'}
+              : 'Micrófono activo · Puedes hablar ahora...'}
           </p>
         </div>
 
