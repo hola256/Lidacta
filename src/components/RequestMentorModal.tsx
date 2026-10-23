@@ -274,19 +274,19 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-[#2D1B4E]/60 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 animate-in fade-in">
-      <div className="w-[92vw] sm:w-full max-w-lg mx-auto bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-[#493447]/20 overflow-hidden flex flex-col max-w-full box-border">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto bg-[#2D1B4E]/60 backdrop-blur-xs animate-in fade-in">
+      <div className="w-full max-w-lg mx-auto overflow-hidden rounded-2xl bg-white shadow-2xl border border-[#493447]/20 flex flex-col my-auto">
         {/* Modal Header */}
-        <div className="p-3.5 sm:p-5 bg-[#2D1B4E] text-white flex items-center justify-between gap-2 max-w-full overflow-hidden">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold shadow-md shrink-0">
-              <UserCheck className="w-4 h-4 sm:w-5 sm:h-5 text-[#2D1B4E]" />
+        <div className="p-4 sm:p-5 bg-[#2D1B4E] text-white flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 rounded-xl bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold shadow-md shrink-0">
+              <UserCheck className="w-5 h-5 text-[#2D1B4E]" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="font-heading font-extrabold text-sm sm:text-lg leading-tight truncate">
+              <h2 className="font-heading font-extrabold text-base sm:text-lg leading-tight truncate">
                 Asesoría 1:1 Directa
               </h2>
-              <p className="text-[11px] sm:text-xs text-[#FFF7EF]/80 mt-0.5 line-clamp-2 leading-tight">
+              <p className="text-xs text-[#FFF7EF]/80 mt-0.5 line-clamp-2 leading-tight">
                 Acompañamiento personal directivo con Tania Padierna
               </p>
             </div>
@@ -301,7 +301,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
         </div>
 
         {/* Modal Body */}
-        <div className="p-3.5 sm:p-5 space-y-4 overflow-y-auto overflow-x-hidden max-h-[82vh] max-w-full box-border">
+        <div className="p-4 sm:p-6 space-y-4 overflow-y-auto max-h-[80vh]">
           {/* VISIBLE ERROR BANNER: Shown if /api/send fails */}
           {apiError && (
             <div className="p-3.5 sm:p-4 bg-red-50 border-2 border-red-300 rounded-2xl text-left space-y-3 animate-in fade-in slide-in-from-top-2 max-w-full overflow-hidden box-border">
@@ -382,9 +382,9 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
             </div>
           ) : (
             /* Request Form */
-            <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-4 max-w-full overflow-x-hidden box-border">
+            <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-4 w-full">
               {/* Context banner showing leader and current case info */}
-              <div className="p-3 sm:p-4 bg-[#FFF7EF] border border-[#FFD3BF] rounded-2xl space-y-1.5 max-w-full overflow-hidden box-border">
+              <div className="p-3 sm:p-4 bg-[#FFF7EF] border border-[#FFD3BF] rounded-2xl space-y-1.5 w-full">
                 <div className="flex flex-wrap items-center justify-between gap-1.5 text-xs text-[#2D1B4E] font-bold">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <UserCheck className="w-4 h-4 text-[#BF3A1B] shrink-0" />
@@ -401,11 +401,11 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
               </div>
 
               {/* Priority Selector */}
-              <div className="space-y-1.5 max-w-full">
+              <div className="space-y-1.5 w-full">
                 <label className="text-xs font-heading font-bold text-[#2D1B4E] block">
                   Nivel de urgencia:
                 </label>
-                <div className="grid grid-cols-2 gap-2 text-xs w-full max-w-full">
+                <div className="grid grid-cols-2 gap-2 text-xs w-full">
                   <button
                     type="button"
                     onClick={() => setPriority('normal')}
@@ -432,7 +432,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
               </div>
 
               {/* Textarea for request reason */}
-              <div className="space-y-1.5 max-w-full">
+              <div className="space-y-1.5 w-full">
                 <label className="text-xs font-heading font-bold text-[#2D1B4E] flex flex-wrap items-center justify-between gap-1">
                   <span>¿En qué situación necesitas apoyo? *</span>
                   <span className="text-[10px] sm:text-[11px] font-normal text-[#4A3F55]/70">Escribe o dicta por voz</span>
@@ -447,12 +447,12 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                   rows={4}
                   required
                   disabled={isSubmitting}
-                  className="w-full max-w-full box-border p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed resize-y"
+                  className="w-full box-border p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed resize-y"
                 />
               </div>
 
               {/* Voice Recording Control (WhatsApp Style) */}
-              <div className="p-3 bg-[#FFF7EF]/60 border border-[#493447]/15 rounded-2xl space-y-2 max-w-full overflow-hidden box-border">
+              <div className="p-3 bg-[#FFF7EF]/60 border border-[#493447]/15 rounded-2xl space-y-2 w-full">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#2D1B4E] flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-[#F7B538] shrink-0" />
