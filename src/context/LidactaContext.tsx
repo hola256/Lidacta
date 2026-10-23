@@ -12,6 +12,7 @@ import {
   INITIAL_MENTORSHIPS,
   INITIAL_NOTIFICATIONS,
   INITIAL_USERS,
+  DEFAULT_ADMIN_PROFILE,
 } from '../data/mockData';
 
 interface LidactaContextType {
@@ -44,7 +45,7 @@ interface LidactaContextType {
   updateUserProfile: (
     userId: string,
     updates: Partial<UserProfile>
-  ) => { success: boolean; message?: string };
+  ) => Promise<{ success: boolean; message?: string }>;
   registerOrSetPassword: (
     email: string,
     password: string,
@@ -96,11 +97,62 @@ const LidactaContext = createContext<LidactaContextType | undefined>(undefined);
 const STORAGE_KEY_PREFIX = 'lidacta_v2_';
 
 export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load from local storage or fallback to mock data
+  // Load from local storage or fallback to mock data, ensuring admin has valid default fields
   const [allUsers, setAllUsers] = useState<UserProfile[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}users`);
-    return saved ? JSON.parse(saved) : INITIAL_USERS;
+    if (saved) {
+      try {
+        const parsed: UserProfile[] = JSON.parse(saved);
+        return parsed.map((u) => {
+          if (u.role === 'admin' || u.id === 'user_admin_tania') {
+            return {
+              ...DEFAULT_ADMIN_PROFILE,
+              ...u,
+              email: u.email || DEFAULT_ADMIN_PROFILE.email,
+              whatsapp: u.whatsapp || DEFAULT_ADMIN_PROFILE.whatsapp,
+              name: u.name || DEFAULT_ADMIN_PROFILE.name,
+              position: u.position || DEFAULT_ADMIN_PROFILE.position,
+              companyName: u.companyName || DEFAULT_ADMIN_PROFILE.companyName,
+            };
+          }
+          return u;
+        });
+      } catch {
+        return INITIAL_USERS;
+      }
+    }
+    return INITIAL_USERS;
   });
+
+  // Fetch centralized admin profile from server on load to ensure cross-device consistency (Mobile <-> PC)
+  useEffect(() => {
+    fetch('/api/admin/profile')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.profile) {
+          const sAdmin = data.profile;
+          setAllUsers((prevUsers) => {
+            return prevUsers.map((u) => {
+              if (u.role === 'admin' || u.id === sAdmin.id) {
+                return {
+                  ...u,
+                  name: sAdmin.name || u.name,
+                  email: sAdmin.email || u.email,
+                  whatsapp: sAdmin.whatsapp || u.whatsapp,
+                  position: sAdmin.position || u.position,
+                  companyName: sAdmin.companyName || u.companyName,
+                  area: sAdmin.area || u.area,
+                };
+              }
+              return u;
+            });
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not sync admin profile from server, using local defaults:', err);
+      });
+  }, []);
 
   const [currentUserId, setCurrentUserId] = useState<string>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}current_user_id`);
@@ -1000,10 +1052,10 @@ El Equipo de Lidacta`;
     return { success: true };
   };
 
-  const updateUserProfile = (
+  const updateUserProfile = async (
     userId: string,
     updates: Partial<UserProfile>
-  ): { success: boolean; message?: string } => {
+  ): Promise<{ success: boolean; message?: string }> => {
     if (!updates.name || !updates.name.trim()) {
       return { success: false, message: 'El nombre completo es obligatorio.' };
     }
@@ -1011,15 +1063,19 @@ El Equipo de Lidacta`;
       return { success: false, message: 'El correo electrónico es obligatorio.' };
     }
 
+    const cleanName = updates.name.trim();
+    const cleanEmail = updates.email.trim().toLowerCase();
+    const cleanWhatsapp = updates.whatsapp !== undefined ? updates.whatsapp.trim() : '';
+
     setAllUsers((prev) =>
       prev.map((u) => {
         if (u.id === userId) {
           return {
             ...u,
             ...updates,
-            name: updates.name ? updates.name.trim() : u.name,
-            email: updates.email ? updates.email.trim().toLowerCase() : u.email,
-            whatsapp: updates.whatsapp !== undefined ? updates.whatsapp.trim() : u.whatsapp,
+            name: cleanName,
+            email: cleanEmail,
+            whatsapp: cleanWhatsapp || u.whatsapp,
             position: updates.position !== undefined ? updates.position.trim() : u.position,
             companyName: updates.companyName !== undefined ? updates.companyName.trim() : u.companyName,
           };
@@ -1028,7 +1084,28 @@ El Equipo de Lidacta`;
       })
     );
 
-    return { success: true, message: 'Perfil actualizado exitosamente.' };
+    // If updating admin, sync to centralized server memory so all devices/browsers reflect it immediately
+    const targetUser = allUsers.find((u) => u.id === userId);
+    if (userId === 'user_admin_tania' || updates.role === 'admin' || targetUser?.role === 'admin') {
+      try {
+        await fetch('/api/admin/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: cleanName,
+            email: cleanEmail,
+            whatsapp: cleanWhatsapp,
+            position: updates.position,
+            companyName: updates.companyName,
+            area: updates.area,
+          }),
+        });
+      } catch (err) {
+        console.warn('Failed to persist admin profile to server:', err);
+      }
+    }
+
+    return { success: true, message: 'Perfil actualizado y sincronizado centralmente.' };
   };
 
   const logout = () => {

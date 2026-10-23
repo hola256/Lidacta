@@ -353,6 +353,63 @@ function inferSkillsFromText(text: string): string[] {
   return list.slice(0, 3);
 }
 
+// Centralized Admin Profile State (Persists in server memory across all clients & devices)
+interface AdminProfileData {
+  id: string;
+  name: string;
+  email: string;
+  whatsapp: string;
+  position: string;
+  companyName: string;
+  area: string;
+  updatedAt: string;
+}
+
+let serverAdminProfile: AdminProfileData = {
+  id: 'user_admin_tania',
+  name: 'Tania Padierna',
+  email: 'hola@taniapadierna.com',
+  whatsapp: '+52 55 1234 5678',
+  position: 'Creadora de la Plataforma & Coach Sr.',
+  companyName: 'Lidacta Platform',
+  area: 'Dirección de Producto y Mentoría',
+  updatedAt: new Date().toISOString(),
+};
+
+// GET /api/admin/profile - Retrieve centralized admin profile for cross-device sync
+app.get('/api/admin/profile', (_req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    profile: serverAdminProfile,
+  });
+});
+
+// POST /api/admin/profile - Update centralized admin profile from any device
+app.post('/api/admin/profile', (req: Request, res: Response) => {
+  try {
+    const { name, email, whatsapp, position, companyName, area } = req.body;
+    serverAdminProfile = {
+      ...serverAdminProfile,
+      name: (name || serverAdminProfile.name).trim(),
+      email: (email || serverAdminProfile.email).trim().toLowerCase(),
+      whatsapp: whatsapp !== undefined ? whatsapp.trim() : serverAdminProfile.whatsapp,
+      position: position !== undefined ? position.trim() : serverAdminProfile.position,
+      companyName: companyName !== undefined ? companyName.trim() : serverAdminProfile.companyName,
+      area: area !== undefined ? area.trim() : serverAdminProfile.area,
+      updatedAt: new Date().toISOString(),
+    };
+    console.log('[LIDACTA PROFILE] Admin profile updated centrally:', serverAdminProfile);
+    return res.json({
+      success: true,
+      message: 'Perfil de administrador actualizado y sincronizado centralmente.',
+      profile: serverAdminProfile,
+    });
+  } catch (error: any) {
+    console.error('Error updating admin profile:', error);
+    return res.status(500).json({ success: false, message: error?.message || 'Error al actualizar perfil' });
+  }
+});
+
 // POST /api/mentor/request - Multichannel notifications for human mentor requests
 app.post('/api/mentor/request', async (req: Request, res: Response) => {
   try {
@@ -367,17 +424,26 @@ app.post('/api/mentor/request', async (req: Request, res: Response) => {
       caseTitle,
       reasonText,
       isVoiceAudio,
-      adminEmail = 'hola@taniapadierna.com',
-      adminWhatsapp = '+525512345678',
+      adminEmail,
+      adminWhatsapp,
     } = req.body;
+
+    // Use centralized serverAdminProfile as the primary truth if client sends default
+    const targetAdminEmail = adminEmail && adminEmail !== 'hola@taniapadierna.com'
+      ? adminEmail
+      : serverAdminProfile.email;
+    const targetAdminWhatsapp = adminWhatsapp && adminWhatsapp !== '+525512345678'
+      ? adminWhatsapp
+      : serverAdminProfile.whatsapp;
+    const targetAdminName = serverAdminProfile.name || 'Tania Padierna';
 
     const timestamp = new Date().toISOString();
     const requestId = `req_mentor_${Date.now()}`;
 
     // Clean whatsapp phone for wa.me link
-    const cleanPhone = (adminWhatsapp || '+525512345678').replace(/\D/g, '');
+    const cleanPhone = (targetAdminWhatsapp || '+525512345678').replace(/\D/g, '');
     const waText = encodeURIComponent(
-      `🚨 *LIDACTA: Solicitud de Mentoría*\n\n` +
+      `🚨 *LIDACTA: Solicitud de Asesoría 1:1*\n\n` +
       `*Líder:* ${leaderName}\n` +
       `*Puesto:* ${leaderPosition || 'Líder de Equipo'}\n` +
       `*Empresa:* ${companyName}\n` +
@@ -412,8 +478,9 @@ app.post('/api/mentor/request', async (req: Request, res: Response) => {
         isVoiceAudio: !!isVoiceAudio,
       },
       destination: {
-        adminEmail,
-        adminWhatsapp,
+        adminEmail: targetAdminEmail,
+        adminWhatsapp: targetAdminWhatsapp,
+        adminName: targetAdminName,
         whatsappUrl,
       },
     };
@@ -422,9 +489,9 @@ app.post('/api/mentor/request', async (req: Request, res: Response) => {
 
     // Simulated email template payload
     const simulatedEmail = {
-      to: adminEmail,
-      subject: `🚨 [URGENTE] Solicitud de Mentor Humano: ${leaderName} (${companyName} · Etapa ${currentStage})`,
-      bodyText: `Estimada Tania Padierna,\n\nEl líder ${leaderName} (${leaderPosition || 'Líder'}) de la empresa "${companyName}" ha solicitado hablar directamente con un mentor humano en Lidacta.\n\n` +
+      to: targetAdminEmail,
+      subject: `🚨 [URGENTE] Solicitud de Asesoría 1:1: ${leaderName} (${companyName} · Etapa ${currentStage})`,
+      bodyText: `Estimada ${targetAdminName},\n\nEl líder ${leaderName} (${leaderPosition || 'Líder'}) de la empresa "${companyName}" ha solicitado hablar directamente con un mentor humano en Lidacta.\n\n` +
         `• Reto actual: ${caseTitle}\n` +
         `• Etapa en curso: Etapa ${currentStage}\n` +
         `• Formato de solicitud: ${isVoiceAudio ? 'Nota de voz dictada / grabada' : 'Texto escrito'}\n\n` +

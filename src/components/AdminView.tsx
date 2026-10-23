@@ -1150,7 +1150,7 @@ export const AdminView: React.FC = () => {
                 const reqStatus = details?.status || 'pendiente';
                 const whatsappNumber = details?.leaderWhatsapp || '+52 55 4321 9876';
                 const cleanPhone = whatsappNumber.replace(/[^0-9]/g, '');
-                const whatsappMsg = `Hola ${details?.leaderName || 'Líder'}, soy Tania Padierna de Lidacta. Recibí tu solicitud de Asesoría 1:1 sobre tu reto "${details?.caseTitle || 'Liderazgo'}" (Etapa ${details?.currentStage || 1}). Me encantará apoyarte. ¿En qué horario podemos conectar?`;
+                const whatsappMsg = `Hola ${details?.leaderName || 'Líder'}, soy ${adminProfile.name || 'Tania Padierna'} de Lidacta. Recibí tu solicitud de Asesoría 1:1 sobre tu reto "${details?.caseTitle || 'Liderazgo'}" (Etapa ${details?.currentStage || 1}). Me encantará apoyarte. ¿En qué horario podemos conectar?`;
                 const whatsappLink = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(whatsappMsg)}`;
 
                 return (

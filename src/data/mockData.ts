@@ -50,20 +50,22 @@ export const INITIAL_COMPANIES: CompanyContext[] = [
   },
 ];
 
+export const DEFAULT_ADMIN_PROFILE: UserProfile = {
+  id: 'user_admin_tania',
+  name: 'Tania Padierna',
+  email: 'hola@taniapadierna.com',
+  role: 'admin',
+  companyId: 'comp_nexus',
+  companyName: 'Lidacta Platform',
+  position: 'Creadora de la Plataforma & Coach Sr.',
+  area: 'Dirección de Producto y Mentoría',
+  whatsapp: '+52 55 1234 5678',
+  isProfileCompleted: true,
+  createdAt: '2026-01-01',
+};
+
 export const INITIAL_USERS: UserProfile[] = [
-  {
-    id: 'user_admin_tania',
-    name: 'Tania Padierna',
-    email: 'hola@taniapadierna.com',
-    role: 'admin',
-    companyId: 'comp_nexus',
-    companyName: 'Lidacta Platform',
-    position: 'Creadora de la Plataforma & Coach Sr.',
-    area: 'Dirección de Producto y Mentoría',
-    whatsapp: '+52 55 1234 5678',
-    isProfileCompleted: true,
-    createdAt: '2026-01-01',
-  },
+  DEFAULT_ADMIN_PROFILE,
   {
     id: 'user_leader_roberto',
     name: 'Roberto Gómez',

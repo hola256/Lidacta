@@ -53,7 +53,7 @@ export const AdminProfileModal: React.FC = () => {
 
   const cleanPhone = whatsapp.replace(/[^0-9]/g, '');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
@@ -75,7 +75,7 @@ export const AdminProfileModal: React.FC = () => {
 
     setIsSaving(true);
 
-    const result = updateUserProfile(adminUser.id, {
+    const result = await updateUserProfile(adminUser.id, {
       name: name.trim(),
       email: email.trim().toLowerCase(),
       whatsapp: whatsapp.trim(),
