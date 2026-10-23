@@ -3,7 +3,7 @@ import { useLidacta } from '../context/LidactaContext';
 import { Sparkles, Mail, CheckCircle2 } from 'lucide-react';
 
 export const WelcomeModal: React.FC = () => {
-  const { welcomeModalData, closeWelcomeModal, openEmailDrawer } = useLidacta();
+  const { currentUser, welcomeModalData, closeWelcomeModal, openEmailDrawer } = useLidacta();
 
   if (!welcomeModalData) return null;
 
@@ -39,16 +39,18 @@ export const WelcomeModal: React.FC = () => {
         </div>
 
         <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3">
-          <button
-            onClick={() => {
-              closeWelcomeModal();
-              openEmailDrawer();
-            }}
-            className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 bg-[#FFF7EF] hover:bg-[#FFD3BF]/30 text-[#2D1B4E] border border-[#493447]/15 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-xs"
-          >
-            <Mail className="w-4 h-4 text-[#BF3A1B]" />
-            <span>Ver correo de bienvenida</span>
-          </button>
+          {currentUser?.role === 'admin' && (
+            <button
+              onClick={() => {
+                closeWelcomeModal();
+                openEmailDrawer();
+              }}
+              className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 bg-[#FFF7EF] hover:bg-[#FFD3BF]/30 text-[#2D1B4E] border border-[#493447]/15 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-xs"
+            >
+              <Mail className="w-4 h-4 text-[#BF3A1B]" />
+              <span>Ver correo de bienvenida</span>
+            </button>
+          )}
 
           <button
             onClick={closeWelcomeModal}

@@ -65,15 +65,17 @@ export const Navbar: React.FC = () => {
 
         {/* Zone 3: Actions & User Switcher */}
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-          {/* Email Simulator Button */}
-          <button
-            onClick={() => openEmailDrawer()}
-            title="Ver bandeja de correos transaccionales simulados"
-            className="min-h-[44px] flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl transition-colors whitespace-nowrap cursor-pointer shadow-xs active:scale-95"
-          >
-            <Mail className="w-4 h-4 text-[#F7B538] shrink-0" />
-            <span className="hidden sm:inline">Bandeja de Correos</span>
-          </button>
+          {/* Email Simulator Button: Visible strictly for Admin role only */}
+          {currentUser.role === 'admin' && (
+            <button
+              onClick={() => openEmailDrawer()}
+              title="Ver bandeja de correos transaccionales simulados"
+              className="min-h-[44px] flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl transition-colors whitespace-nowrap cursor-pointer shadow-xs active:scale-95"
+            >
+              <Mail className="w-4 h-4 text-[#F7B538] shrink-0" />
+              <span className="hidden sm:inline">Bandeja de Correos</span>
+            </button>
+          )}
 
           {/* Notifications Center */}
           <div className="relative">
@@ -107,7 +109,9 @@ export const Navbar: React.FC = () => {
                       <div
                         key={n.id}
                         onClick={() => {
-                          if (n.emailSimulated) openEmailDrawer(n);
+                          if (currentUser.role === 'admin' && n.emailSimulated) {
+                            openEmailDrawer(n);
+                          }
                           setShowNotificationsDropdown(false);
                         }}
                         className={`p-3 text-xs hover:bg-[#FFF7EF] cursor-pointer transition-colors ${
@@ -121,7 +125,7 @@ export const Navbar: React.FC = () => {
                           </span>
                         </div>
                         <p className="text-[#4A3F55] leading-relaxed">{n.message}</p>
-                        {n.emailSimulated && (
+                        {currentUser.role === 'admin' && n.emailSimulated && (
                           <div className="mt-1.5 flex items-center gap-1 text-[11px] text-[#BF3A1B] font-medium">
                             <Mail className="w-3 h-3" />
                             <span>Ver correo enviado</span>
