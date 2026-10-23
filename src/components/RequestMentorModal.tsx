@@ -275,29 +275,30 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
   };
 
   const modalContent = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-sm overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm overflow-y-auto overflow-x-hidden">
       <div
-        className="w-full max-w-md mx-auto my-auto bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col"
+        className="w-[92vw] sm:w-full sm:max-w-md mx-auto my-auto overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col box-border max-w-full"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 bg-[#2D1B4E] text-white flex items-center justify-between gap-3 w-full box-border overflow-hidden">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-            <div className="w-10 h-10 rounded-xl bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold shadow-md shrink-0">
-              <UserCheck className="w-5 h-5 text-[#2D1B4E]" />
+        <div className="relative p-3.5 sm:p-5 bg-[#2D1B4E] text-white w-full max-w-full box-border overflow-hidden">
+          <div className="flex items-start gap-2.5 sm:gap-3 w-full pr-10 overflow-hidden">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold shadow-md shrink-0 mt-0.5">
+              <UserCheck className="w-4 h-4 sm:w-5 sm:h-5 text-[#2D1B4E]" />
             </div>
-            <div className="min-w-0 flex-1 break-words whitespace-normal">
-              <h2 className="font-heading font-extrabold text-base sm:text-lg leading-tight break-words whitespace-normal">
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <h2 className="font-heading font-extrabold text-sm sm:text-lg leading-tight break-words whitespace-normal text-white">
                 Asesoría 1:1 Directa
               </h2>
-              <p className="text-xs text-[#FFF7EF]/80 mt-0.5 break-words whitespace-normal leading-tight">
+              <p className="text-[11px] sm:text-xs text-[#FFF7EF]/80 mt-1 break-words whitespace-normal leading-normal">
                 Acompañamiento personal directivo con Tania Padierna
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={handleResetAndClose}
-            className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+            className="absolute top-3 right-3 sm:top-4 sm:right-4 w-8 h-8 rounded-lg flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
             title="Cerrar ventana"
           >
             <X className="w-5 h-5" />
@@ -305,7 +306,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto overflow-x-hidden max-h-[80vh] w-full box-border break-words whitespace-normal">
+        <div className="p-3.5 sm:p-5 space-y-4 overflow-y-auto overflow-x-hidden max-h-[80vh] w-full max-w-full box-border break-words whitespace-normal">
           {/* VISIBLE ERROR BANNER: Shown if /api/send fails */}
           {apiError && (
             <div className="p-3.5 sm:p-4 bg-red-50 border border-red-300 rounded-xl text-left space-y-3 w-full box-border">
