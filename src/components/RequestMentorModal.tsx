@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLidacta } from '../context/LidactaContext';
 import {
   UserCheck,
@@ -273,10 +274,10 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto overflow-x-hidden">
+  const modalContent = (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-sm overflow-y-auto">
       <div
-        className="w-full max-w-md mx-auto box-border overflow-hidden overflow-x-hidden rounded-2xl bg-white shadow-xl my-auto flex flex-col"
+        className="w-full max-w-md mx-auto my-auto bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -516,4 +517,6 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 };
