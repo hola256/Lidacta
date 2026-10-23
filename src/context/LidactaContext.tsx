@@ -27,6 +27,7 @@ interface LidactaContextType {
   selectedEmailForPreview: NotificationItem | null;
   showNewUserModal: boolean;
   welcomeModalData: { user: UserProfile; emailText: string } | null;
+  isProfileModalOpen: boolean;
 
   // Authentication & Onboarding
   isAuthenticated: boolean;
@@ -40,6 +41,10 @@ interface LidactaContextType {
     directReports?: number;
     whatsapp: string;
   }) => { success: boolean; message?: string };
+  updateUserProfile: (
+    userId: string,
+    updates: Partial<UserProfile>
+  ) => { success: boolean; message?: string };
   registerOrSetPassword: (
     email: string,
     password: string,
@@ -54,6 +59,8 @@ interface LidactaContextType {
   createNewUser: (profile: Partial<UserProfile>) => UserProfile;
   setShowNewUserModal: (open: boolean) => void;
   closeWelcomeModal: () => void;
+  openProfileModal: () => void;
+  closeProfileModal: () => void;
   setActiveMentorshipId: (id: string | null) => void;
   startNewMentorship: (
     challengeText: string,
@@ -121,9 +128,13 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isEmailDrawerOpen, setIsEmailDrawerOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [selectedEmailForPreview, setSelectedEmailForPreview] = useState<NotificationItem | null>(null);
   const [showNewUserModal, setShowNewUserModal] = useState(false);
   const [welcomeModalData, setWelcomeModalData] = useState<{ user: UserProfile; emailText: string } | null>(null);
+
+  const openProfileModal = () => setIsProfileModalOpen(true);
+  const closeProfileModal = () => setIsProfileModalOpen(false);
 
   // App starts by default on the login screen
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -714,6 +725,8 @@ El Equipo de Lidacta`;
     isVoiceAudio: boolean = false
   ): Promise<{ success: boolean; message: string; notificationId: string; whatsappUrl: string }> => {
     const adminUser = allUsers.find((u) => u.role === 'admin') || {
+      id: 'user_admin_tania',
+      name: 'Tania Padierna',
       email: 'hola@taniapadierna.com',
       whatsapp: '+52 55 1234 5678',
     };
@@ -731,14 +744,15 @@ El Equipo de Lidacta`;
       7: 'Cierre & Retroalimentación',
     };
 
-    let serverWhatsappUrl = `https://wa.me/525512345678?text=${encodeURIComponent(
-      `🚨 *LIDACTA: Solicitud de Mentoría*\n*Líder:* ${currentUser.name}\n*Empresa:* ${currentUser.companyName}\n*Etapa:* ${currentStageNum} (${stageNames[currentStageNum]})\n*Motivo:* ${reasonText}`
+    const cleanAdminPhone = (adminUser.whatsapp || '+52 55 1234 5678').replace(/[^0-9]/g, '');
+    let serverWhatsappUrl = `https://wa.me/${cleanAdminPhone}?text=${encodeURIComponent(
+      `🚨 *LIDACTA: Solicitud de Asesoría 1:1*\n*Líder:* ${currentUser.name}\n*Empresa:* ${currentUser.companyName}\n*Etapa:* ${currentStageNum} (${stageNames[currentStageNum]})\n*Motivo:* ${reasonText}`
     )}`;
 
     let simulatedEmailObj = {
       to: adminUser.email || 'hola@taniapadierna.com',
-      subject: `🚨 [URGENTE] Solicitud de Mentor Humano: ${currentUser.name} (${currentUser.companyName} · Etapa ${currentStageNum})`,
-      bodyText: `Estimada Tania Padierna,\n\nEl líder ${currentUser.name} (${currentUser.position || 'Líder'}) de la empresa "${currentUser.companyName}" ha solicitado hablar directamente con un mentor humano en Lidacta.\n\n• Reto actual: ${currentCaseTitle}\n• Etapa en curso: Etapa ${currentStageNum} (${stageNames[currentStageNum]})\n• Formato: ${isVoiceAudio ? 'Nota de voz dictada / grabada' : 'Texto escrito'}\n\nMotivo expresado por el líder:\n"${reasonText}"\n\nDatos de contacto directo:\n• Email: ${currentUser.email}\n• WhatsApp: ${currentUser.whatsapp || 'No registrado'}\n• Fecha y hora: ${new Date().toLocaleString('es-MX')}\n\nAtentamente,\nSistema de Notificaciones Lidacta`,
+      subject: `🚨 [URGENTE] Solicitud de Asesoría 1:1: ${currentUser.name} (${currentUser.companyName} · Etapa ${currentStageNum})`,
+      bodyText: `Estimada ${adminUser.name || 'Tania Padierna'},\n\nEl líder ${currentUser.name} (${currentUser.position || 'Líder'}) de la empresa "${currentUser.companyName}" ha solicitado una sesión directa de Asesoría 1:1 en Lidacta.\n\n• Reto actual: ${currentCaseTitle}\n• Etapa en curso: Etapa ${currentStageNum} (${stageNames[currentStageNum]})\n• Formato: ${isVoiceAudio ? 'Nota de voz dictada / grabada' : 'Texto escrito'}\n\nMotivo expresado por el líder:\n"${reasonText}"\n\nDatos de contacto directo:\n• Email: ${currentUser.email}\n• WhatsApp: ${currentUser.whatsapp || 'No registrado'}\n• Fecha y hora: ${new Date().toLocaleString('es-MX')}\n\nAtentamente,\nSistema de Notificaciones Lidacta`,
     };
 
     try {
@@ -756,8 +770,8 @@ El Equipo de Lidacta`;
           caseTitle: currentCaseTitle,
           reasonText,
           isVoiceAudio,
-          adminEmail: adminUser.email,
-          adminWhatsapp: adminUser.whatsapp,
+          adminEmail: adminUser.email || 'hola@taniapadierna.com',
+          adminWhatsapp: adminUser.whatsapp || '+52 55 1234 5678',
         }),
       });
       const data = await resp.json();
@@ -772,10 +786,10 @@ El Equipo de Lidacta`;
     const newNotification: NotificationItem = {
       id: notifId,
       recipientRole: 'admin',
-      recipientUserId: 'user_admin_tania',
+      recipientUserId: adminUser.id || 'user_admin_tania',
       companyId: currentUser.companyId,
-      title: `🚨 Solicitud de Mentor: ${currentUser.name} (Etapa ${currentStageNum})`,
-      message: `${currentUser.name} (${currentUser.companyName}) ha solicitado hablar con un mentor para el caso "${currentCaseTitle}". Motivo: "${reasonText}"`,
+      title: `🚨 Solicitud de Asesoría 1:1: ${currentUser.name} (Etapa ${currentStageNum})`,
+      message: `${currentUser.name} (${currentUser.companyName}) ha solicitado hablar con ${adminUser.name || 'Tania Padierna'} para el caso "${currentCaseTitle}". Motivo: "${reasonText}"`,
       type: 'mentor_request',
       timestamp: new Date().toISOString(),
       read: false,
@@ -805,7 +819,7 @@ El Equipo de Lidacta`;
       const leaderNoteMsg = {
         id: `msg_${Date.now()}_lead_req`,
         sender: 'leader' as const,
-        text: `[Solicitud de Mentor Humano enviada a Tania Padierna]\nMotivo: "${reasonText}"`,
+        text: `[Solicitud de Asesoría 1:1 enviada a ${adminUser.name || 'Tania Padierna'}]\nMotivo: "${reasonText}"`,
         timestamp: new Date().toISOString(),
         stage: currentStageNum,
       };
@@ -813,7 +827,7 @@ El Equipo de Lidacta`;
       const lidactaConfirmMsg = {
         id: `msg_${Date.now()}_lid_confirm`,
         sender: 'lidacta' as const,
-        text: `He recibido tu solicitud para hablar con un mentor humano, ${currentUser.name}. Se ha notificado inmediatamente a Tania Padierna (Directora de Mentoría) por correo electrónico (hola@taniapadierna.com) y WhatsApp con tu contexto de la Etapa ${currentStageNum}. Nos pondremos en contacto contigo a la brevedad. Tu conversación sigue siendo 100% confidencial.`,
+        text: `He recibido tu solicitud para una Asesoría 1:1, ${currentUser.name}. Se ha notificado inmediatamente a ${adminUser.name || 'Tania Padierna'} (Dirección de Mentoría) por correo electrónico (${adminUser.email || 'hola@taniapadierna.com'}) y WhatsApp (${adminUser.whatsapp || '+52 55 1234 5678'}) con tu contexto de la Etapa ${currentStageNum}. Nos pondremos en contacto contigo a la brevedad. Tu conversación sigue siendo 100% confidencial.`,
         timestamp: new Date().toISOString(),
         stage: currentStageNum,
       };
@@ -986,6 +1000,37 @@ El Equipo de Lidacta`;
     return { success: true };
   };
 
+  const updateUserProfile = (
+    userId: string,
+    updates: Partial<UserProfile>
+  ): { success: boolean; message?: string } => {
+    if (!updates.name || !updates.name.trim()) {
+      return { success: false, message: 'El nombre completo es obligatorio.' };
+    }
+    if (!updates.email || !updates.email.trim()) {
+      return { success: false, message: 'El correo electrónico es obligatorio.' };
+    }
+
+    setAllUsers((prev) =>
+      prev.map((u) => {
+        if (u.id === userId) {
+          return {
+            ...u,
+            ...updates,
+            name: updates.name ? updates.name.trim() : u.name,
+            email: updates.email ? updates.email.trim().toLowerCase() : u.email,
+            whatsapp: updates.whatsapp !== undefined ? updates.whatsapp.trim() : u.whatsapp,
+            position: updates.position !== undefined ? updates.position.trim() : u.position,
+            companyName: updates.companyName !== undefined ? updates.companyName.trim() : u.companyName,
+          };
+        }
+        return u;
+      })
+    );
+
+    return { success: true, message: 'Perfil actualizado exitosamente.' };
+  };
+
   const logout = () => {
     setIsAuthenticated(false);
   };
@@ -1055,6 +1100,10 @@ El Equipo de Lidacta`;
         unreadNotificationsCount,
         isSendingMessage,
         isEmailDrawerOpen,
+        isProfileModalOpen,
+        openProfileModal,
+        closeProfileModal,
+        updateUserProfile,
         selectedEmailForPreview,
         showNewUserModal,
         welcomeModalData,

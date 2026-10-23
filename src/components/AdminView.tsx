@@ -37,10 +37,14 @@ export const AdminView: React.FC = () => {
     addCompany,
     mentorships,
     allUsers,
+    currentUser,
     notifications,
     openEmailDrawer,
+    openProfileModal,
     updateMentorRequestStatus,
   } = useLidacta();
+
+  const adminProfile = allUsers.find((u) => u.role === 'admin') || currentUser;
 
   const [activeTab, setActiveTab] = useState<
     'onboarding' | 'stages_monitoring' | 'analytics' | 'users' | 'mentor_requests'
@@ -233,8 +237,19 @@ export const AdminView: React.FC = () => {
             </p>
           </div>
 
-          {/* Tab Switcher */}
-          <div className="flex items-center gap-1.5 p-1 bg-[#FFF7EF] border border-[#493447]/10 rounded-xl overflow-x-auto max-w-full w-full lg:w-auto pb-1">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto">
+            {/* Direct Admin Profile Access Button */}
+            <button
+              onClick={openProfileModal}
+              title="Configurar mis datos personales y canales para Asesoría 1:1"
+              className="min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#FFF7EF] hover:bg-[#FFD3BF]/50 text-[#2D1B4E] border border-[#BF3A1B]/30 hover:border-[#BF3A1B] rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 shrink-0"
+            >
+              <UserCheck className="w-4 h-4 text-[#BF3A1B]" />
+              <span>Mi Perfil Directivo</span>
+            </button>
+
+            {/* Tab Switcher */}
+            <div className="flex items-center gap-1.5 p-1 bg-[#FFF7EF] border border-[#493447]/10 rounded-xl overflow-x-auto max-w-full w-full lg:w-auto pb-1">
             <button
               onClick={() => setActiveTab('onboarding')}
               className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center justify-center ${
@@ -293,6 +308,7 @@ export const AdminView: React.FC = () => {
             </button>
           </div>
         </div>
+      </div>
 
         {/* Urgent Notification Banner for Pending Mentor Requests */}
         {pendingRequestsCount > 0 && activeTab !== 'mentor_requests' && (
@@ -1024,7 +1040,7 @@ export const AdminView: React.FC = () => {
                   Atención Directiva Exclusiva
                 </span>
                 <span className="text-xs text-[#4A3F55]/60">·</span>
-                <span className="text-xs text-[#4A3F55]/80 font-medium">Tania Padierna (Directora Lidacta)</span>
+                <span className="text-xs text-[#4A3F55]/80 font-medium">{adminProfile.name} ({adminProfile.position || 'Directora Lidacta'})</span>
               </div>
               <h2 className="font-heading font-extrabold text-lg sm:text-xl text-[#2D1B4E]">
                 Bandeja de Acompañamiento Personal Directivo (Asesoría 1:1)
@@ -1035,18 +1051,27 @@ export const AdminView: React.FC = () => {
             </div>
 
             {/* Notification Channels Status Card */}
-            <div className="p-3 bg-[#FFF7EF] border border-[#FFD3BF] rounded-xl text-xs space-y-1.5 shrink-0 w-full md:w-auto">
-              <div className="text-[10px] font-bold uppercase text-[#BF3A1B] tracking-wider">
-                Canales de Alerta Activos
+            <div className="p-3.5 bg-[#FFF7EF] border border-[#FFD3BF] rounded-xl text-xs space-y-1.5 shrink-0 w-full md:w-auto shadow-xs">
+              <div className="flex items-center justify-between gap-3 text-[10px] font-bold uppercase text-[#BF3A1B] tracking-wider">
+                <span>Canales de Alerta Activos</span>
+                <span className="text-[9px] bg-[#BF3A1B]/10 px-1.5 py-0.2 rounded font-extrabold">Configurado</span>
               </div>
               <div className="flex items-center gap-2 text-[#2D1B4E]">
-                <Mail className="w-3.5 h-3.5 text-[#BF3A1B]" />
-                <span className="font-medium text-[11px]">hola@taniapadierna.com</span>
+                <Mail className="w-3.5 h-3.5 text-[#BF3A1B] shrink-0" />
+                <span className="font-medium text-[11px] truncate max-w-[220px]">{adminProfile.email || 'hola@taniapadierna.com'}</span>
               </div>
               <div className="flex items-center gap-2 text-[#2D1B4E]">
-                <MessageSquare className="w-3.5 h-3.5 text-[#246B2A]" />
-                <span className="font-medium text-[11px]">+52 55 1234 5678 (WhatsApp Directo)</span>
+                <MessageSquare className="w-3.5 h-3.5 text-[#246B2A] shrink-0" />
+                <span className="font-medium text-[11px] truncate max-w-[220px]">{adminProfile.whatsapp || '+52 55 1234 5678'} (WhatsApp Directo)</span>
               </div>
+              <button
+                type="button"
+                onClick={openProfileModal}
+                className="mt-1.5 w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-white hover:bg-[#FFD3BF]/50 text-[#BF3A1B] border border-[#BF3A1B]/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+              >
+                <Sliders className="w-3 h-3" />
+                <span>Editar mis datos y canales</span>
+              </button>
             </div>
           </div>
 

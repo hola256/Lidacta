@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Sparkles,
   LogOut,
+  UserCheck,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -21,6 +22,7 @@ export const Navbar: React.FC = () => {
     unreadNotificationsCount,
     markNotificationsAsRead,
     openEmailDrawer,
+    openProfileModal,
     logout,
   } = useLidacta();
 
@@ -133,6 +135,19 @@ export const Navbar: React.FC = () => {
             )}
           </div>
 
+          {/* Admin Profile Shortcut Button (Visible on Admin Role) */}
+          {currentUser.role === 'admin' && (
+            <button
+              onClick={openProfileModal}
+              title="Gestionar mi perfil directivo y canales de recepción de Asesoría 1:1"
+              className="min-h-[44px] flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-[#2D1B4E] bg-[#F7B538] hover:bg-[#F5A623] border border-[#F7B538] rounded-xl transition-all whitespace-nowrap cursor-pointer shadow-xs active:scale-95"
+            >
+              <UserCheck className="w-4 h-4 text-[#2D1B4E] shrink-0" />
+              <span className="hidden sm:inline">Mi Perfil</span>
+              <span className="sm:hidden">Perfil</span>
+            </button>
+          )}
+
           {/* User Switcher Dropdown */}
           <div className="relative">
             <button
@@ -162,9 +177,29 @@ export const Navbar: React.FC = () => {
               <ChevronDown className="w-3.5 h-3.5 text-white/80 shrink-0" />
             </button>
 
-
             {showUserDropdown && (
               <div className="fixed sm:absolute right-3 sm:right-0 top-16 sm:top-auto sm:mt-2 w-[calc(100vw-24px)] max-w-xs sm:w-72 bg-white border border-[#493447]/15 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                {currentUser.role === 'admin' && (
+                  <div className="p-2 border-b border-[#493447]/10 bg-[#FFF7EF]">
+                    <button
+                      onClick={() => {
+                        setShowUserDropdown(false);
+                        openProfileModal();
+                      }}
+                      className="w-full flex items-center gap-2.5 p-2 rounded-xl bg-white border border-[#BF3A1B]/30 hover:border-[#BF3A1B] text-[#BF3A1B] text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-[#FFD3BF]/40 text-[#BF3A1B] flex items-center justify-center shrink-0 font-bold">
+                        <UserCheck className="w-4 h-4 text-[#BF3A1B]" />
+                      </div>
+                      <div className="text-left flex-1 min-w-0">
+                        <div className="text-[#2D1B4E] font-extrabold truncate">Editar Mi Perfil</div>
+                        <div className="text-[10px] text-[#4A3F55]/70 font-normal truncate">
+                          Teléfono, WhatsApp y Correo de Alertas
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                )}
                 <div className="px-3 py-2 border-b border-[#493447]/10">
                   <p className="text-xs font-medium text-[#4A3F55]/70">Cambiar de perfil para probar:</p>
                 </div>

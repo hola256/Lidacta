@@ -9,6 +9,7 @@ import { CompleteProfileView } from './components/CompleteProfileView';
 import { EmailSimulatorDrawer } from './components/EmailSimulatorDrawer';
 import { NewUserModal } from './components/NewUserModal';
 import { WelcomeModal } from './components/WelcomeModal';
+import { AdminProfileModal } from './components/AdminProfileModal';
 
 const AppContent: React.FC = () => {
   const { currentUser, isAuthenticated, isProfileComplete } = useLidacta();
@@ -36,6 +37,7 @@ const AppContent: React.FC = () => {
       <EmailSimulatorDrawer />
       <NewUserModal />
       <WelcomeModal />
+      <AdminProfileModal />
     </div>
   );
 };
