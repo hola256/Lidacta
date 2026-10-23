@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
+import { Resend } from 'resend';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -14,6 +15,10 @@ const PORT = 3000;
 
 const app = express();
 app.use(express.json());
+
+// Initialize Resend client for real email delivery
+const resendApiKey = process.env.RESEND_API_KEY;
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
 // Initialize Google GenAI client
 let ai: GoogleGenAI | null = null;
@@ -376,6 +381,79 @@ let serverAdminProfile: AdminProfileData = {
   updatedAt: new Date().toISOString(),
 };
 
+// Centralized Server Notifications Store (Accessible across all connected devices & sessions)
+interface ServerNotificationItem {
+  id: string;
+  recipientRole: string;
+  recipientUserId?: string;
+  companyId?: string;
+  title: string;
+  message: string;
+  type: string;
+  timestamp: string;
+  read: boolean;
+  emailSimulated?: {
+    to: string;
+    subject: string;
+    bodyText: string;
+    realEmailSent?: boolean;
+    realEmailId?: string;
+  };
+  mentorRequestDetails?: {
+    leaderId: string;
+    leaderName: string;
+    leaderEmail: string;
+    leaderWhatsapp?: string;
+    leaderPosition?: string;
+    companyName: string;
+    currentStage: number;
+    stageName: string;
+    caseTitle: string;
+    reasonText: string;
+    isVoiceAudio?: boolean;
+    status: 'pendiente' | 'contactado' | 'atendido';
+    whatsappSent?: boolean;
+    emailSent?: boolean;
+    adminNotes?: string;
+  };
+}
+
+let serverNotifications: ServerNotificationItem[] = [
+  {
+    id: 'notif_mentor_sample',
+    recipientRole: 'admin',
+    recipientUserId: 'user_admin_tania',
+    companyId: 'comp_nexus',
+    title: 'Solicitud de Asesoría 1:1 Directa',
+    message: 'Roberto Gómez solicita acompañamiento personal directivo para su caso en Etapa 2 (Analizar).',
+    type: 'mentor_request',
+    timestamp: '2026-10-02T11:30:00Z',
+    read: false,
+    emailSimulated: {
+      to: 'hola@taniapadierna.com',
+      subject: 'Lidacta [Asesoría 1:1]: Roberto Gómez solicita acompañamiento directo',
+      bodyText: 'Hola Tania,\n\nEl líder Roberto Gómez (Líder de Línea de Ensamble y Calidad en Nexus Automotriz) ha solicitado una sesión de Asesoría 1:1 directa.\n\n• Caso: Resistencia al cambio en bitácora digital con técnico senior\n• Etapa actual: Etapa 2 (Analizar)\n• Razón: "Me gustaría revisar cómo abordar la resistencia de Ernesto sin que sienta que estoy devaluando sus 15 años en la planta, antes de pasar a la práctica."\n\nPuedes contactarlo directamente vía WhatsApp (+52 55 4321 9876) o agendar desde tu panel de administradora.',
+      realEmailSent: false,
+    },
+    mentorRequestDetails: {
+      leaderId: 'user_leader_roberto',
+      leaderName: 'Roberto Gómez',
+      leaderEmail: 'roberto.gomez@nexus-auto.com',
+      leaderWhatsapp: '+52 55 4321 9876',
+      leaderPosition: 'Líder de Línea de Ensamble y Calidad',
+      companyName: 'Industrias Nexus Automotriz',
+      currentStage: 2,
+      stageName: 'Analizar perspectivas & Habilidades',
+      caseTitle: 'Resistencia al cambio en bitácora digital con técnico senior',
+      reasonText: 'Me gustaría revisar cómo abordar la resistencia de Ernesto sin que sienta que estoy devaluando sus 15 años en la planta, antes de pasar a la práctica.',
+      isVoiceAudio: false,
+      status: 'pendiente',
+      whatsappSent: true,
+      emailSent: true,
+    },
+  },
+];
+
 // GET /api/admin/profile - Retrieve centralized admin profile for cross-device sync
 app.get('/api/admin/profile', (_req: Request, res: Response) => {
   return res.json({
@@ -410,7 +488,34 @@ app.post('/api/admin/profile', (req: Request, res: Response) => {
   }
 });
 
-// POST /api/mentor/request - Multichannel notifications for human mentor requests
+// GET /api/notifications - Centralized notifications sync across PC, Mobile, and Tablet
+app.get('/api/notifications', (_req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    notifications: serverNotifications,
+  });
+});
+
+// POST /api/notifications/status - Update mentor request status & admin notes centrally
+app.post('/api/notifications/status', (req: Request, res: Response) => {
+  const { notificationId, status, notes } = req.body;
+  serverNotifications = serverNotifications.map((n) => {
+    if (n.id === notificationId && n.mentorRequestDetails) {
+      return {
+        ...n,
+        mentorRequestDetails: {
+          ...n.mentorRequestDetails,
+          status: status || n.mentorRequestDetails.status,
+          adminNotes: notes !== undefined ? notes : n.mentorRequestDetails.adminNotes,
+        },
+      };
+    }
+    return n;
+  });
+  return res.json({ success: true, notifications: serverNotifications });
+});
+
+// POST /api/mentor/request - Multichannel notifications for human mentor requests (Real Email + Centralized DB)
 app.post('/api/mentor/request', async (req: Request, res: Response) => {
   try {
     const {
@@ -428,14 +533,23 @@ app.post('/api/mentor/request', async (req: Request, res: Response) => {
       adminWhatsapp,
     } = req.body;
 
-    // Use centralized serverAdminProfile as the primary truth if client sends default
-    const targetAdminEmail = adminEmail && adminEmail !== 'hola@taniapadierna.com'
-      ? adminEmail
-      : serverAdminProfile.email;
+    // The primary recipient is always guaranteed to be the official administrator email
+    const targetAdminEmail = 'hola@taniapadierna.com';
     const targetAdminWhatsapp = adminWhatsapp && adminWhatsapp !== '+525512345678'
       ? adminWhatsapp
       : serverAdminProfile.whatsapp;
     const targetAdminName = serverAdminProfile.name || 'Tania Padierna';
+
+    const stageNamesMap: Record<number, string> = {
+      1: 'Detectar qué sucede',
+      2: 'Analizar perspectivas & Habilidades',
+      3: 'Diseñar alternativas',
+      4: 'Practicar antes de actuar',
+      5: 'Actuar (Plan de Acción)',
+      6: 'Aprender y reflexionar',
+      7: 'Cierre & Retroalimentación',
+    };
+    const stageName = stageNamesMap[Number(currentStage)] || `Etapa ${currentStage}`;
 
     const timestamp = new Date().toISOString();
     const requestId = `req_mentor_${Date.now()}`;
@@ -446,8 +560,8 @@ app.post('/api/mentor/request', async (req: Request, res: Response) => {
       `🚨 *LIDACTA: Solicitud de Asesoría 1:1*\n\n` +
       `*Líder:* ${leaderName}\n` +
       `*Puesto:* ${leaderPosition || 'Líder de Equipo'}\n` +
-      `*Empresa:* ${companyName}\n` +
-      `*Etapa actual:* Etapa ${currentStage}\n` +
+      `*Empresa:* ${companyName || 'Empresa'}\n` +
+      `*Etapa actual:* Etapa ${currentStage} (${stageName})\n` +
       `*Reto/Caso:* ${caseTitle}\n` +
       `*Motivo:* "${reasonText}"\n` +
       `${isVoiceAudio ? '🎙️ [Nota de voz incluida]\n' : ''}` +
@@ -456,63 +570,195 @@ app.post('/api/mentor/request', async (req: Request, res: Response) => {
     );
     const whatsappUrl = `https://wa.me/${cleanPhone}?text=${waText}`;
 
-    // Structured Webhook Payload for external tools (Make, Zapier, Twilio, WhatsApp Cloud API)
-    const webhookPayload = {
-      event: 'leader.requested_human_mentor',
-      requestId,
+    const formattedDateTime = new Date(timestamp).toLocaleString('es-MX', {
+      timeZone: 'America/Mexico_City',
+      dateStyle: 'full',
+      timeStyle: 'medium',
+    });
+
+    const emailSubject = `🚨 [URGENTE] Solicitud de Asesoría 1:1: ${leaderName} (${companyName || 'Empresa'} · Etapa ${currentStage})`;
+
+    const emailTextBody =
+      `Estimada ${targetAdminName},\n\n` +
+      `El líder ${leaderName} (${leaderPosition || 'Líder'}) de la empresa "${companyName || 'Empresa'}" ha solicitado hablar directamente con un mentor humano en Lidacta.\n\n` +
+      `• Reto actual: ${caseTitle}\n` +
+      `• Etapa en curso: Etapa ${currentStage} (${stageName})\n` +
+      `• Formato de solicitud: ${isVoiceAudio ? 'Nota de voz dictada / grabada' : 'Texto redactado por el líder'}\n\n` +
+      `Motivo expresado por el líder:\n"${reasonText}"\n\n` +
+      `Datos de contacto directo:\n` +
+      `• Email: ${leaderEmail}\n` +
+      `• WhatsApp del líder: ${leaderWhatsapp || 'Sin número registrado'}\n` +
+      `• Fecha y hora: ${formattedDateTime}\n\n` +
+      `Acción recomendada:\n` +
+      `Puedes contactar al líder directamente por WhatsApp o agendar una sesión 1 a 1 de desbloqueo.\n\n` +
+      `Enlace directo de WhatsApp:\n${whatsappUrl}\n\n` +
+      `Atentamente,\nSistema de Notificaciones Lidacta`;
+
+    // Real Email Dispatch via Resend (when configured)
+    let realEmailSent = false;
+    let realEmailId: string | undefined;
+    let realEmailError: string | undefined;
+
+    const emailHtmlBody = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>${emailSubject}</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F8F6F4; margin: 0; padding: 24px; color: #2D1B4E;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; background: #FFFFFF; border-radius: 20px; overflow: hidden; border: 1px solid rgba(73, 52, 71, 0.15); box-shadow: 0 4px 20px rgba(45, 27, 78, 0.08);">
+    <tr>
+      <td style="background-color: #2D1B4E; padding: 28px 32px; text-align: left;">
+        <span style="font-size: 24px; font-weight: 800; color: #FFFFFF; letter-spacing: -0.5px;">Lidacta</span>
+        <span style="font-size: 11px; font-weight: 700; color: #F7B538; text-transform: uppercase; margin-left: 10px; background: rgba(247, 181, 56, 0.2); padding: 4px 8px; border-radius: 6px;">Asesoría 1:1</span>
+        <p style="margin: 6px 0 0 0; font-size: 13px; color: #FFF7EF; opacity: 0.9;">Desarrollo de Liderazgo en Acción · Alerta Directiva Inmediata</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 32px;">
+        <p style="font-size: 15px; line-height: 1.6; margin: 0 0 16px 0; color: #2D1B4E;">
+          Hola <strong>${targetAdminName}</strong>,
+        </p>
+        <p style="font-size: 14px; line-height: 1.6; margin: 0 0 24px 0; color: #4A3F55;">
+          Un líder ha solicitado una sesión directa de <strong>Asesoría 1:1 (Acompañamiento Personal Directivo)</strong> en Lidacta. A continuación se presentan los detalles del reto:
+        </p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="background: #FFF7EF; border: 1px solid #FFD3BF; border-radius: 14px; margin-bottom: 24px; padding: 18px;">
+          <tr>
+            <td style="padding: 6px 0; font-size: 13px; color: #4A3F55;"><strong>Líder:</strong></td>
+            <td style="padding: 6px 0; font-size: 14px; color: #2D1B4E; font-weight: 700;">${leaderName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-size: 13px; color: #4A3F55;"><strong>Puesto:</strong></td>
+            <td style="padding: 6px 0; font-size: 13px; color: #2D1B4E;">${leaderPosition || 'Líder Operativo'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-size: 13px; color: #4A3F55;"><strong>Empresa:</strong></td>
+            <td style="padding: 6px 0; font-size: 13px; color: #2D1B4E; font-weight: 600;">${companyName || 'Empresa'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-size: 13px; color: #4A3F55;"><strong>Etapa:</strong></td>
+            <td style="padding: 6px 0; font-size: 13px; color: #BF3A1B; font-weight: 700;">Etapa ${currentStage}: ${stageName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-size: 13px; color: #4A3F55;"><strong>Caso:</strong></td>
+            <td style="padding: 6px 0; font-size: 13px; color: #2D1B4E; font-weight: 600;">${caseTitle}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-size: 13px; color: #4A3F55;"><strong>Formato:</strong></td>
+            <td style="padding: 6px 0; font-size: 13px; color: #2D1B4E;">${isVoiceAudio ? '🎙️ Mensaje de voz dictado / transcrito' : '📝 Texto redactado por el líder'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-size: 13px; color: #4A3F55;"><strong>Fecha:</strong></td>
+            <td style="padding: 6px 0; font-size: 13px; color: #2D1B4E;">${formattedDateTime}</td>
+          </tr>
+        </table>
+        <div style="background: #FFFFFF; border-left: 4px solid #BF3A1B; border-top: 1px solid #EFEAE5; border-right: 1px solid #EFEAE5; border-bottom: 1px solid #EFEAE5; border-radius: 8px; padding: 18px; margin-bottom: 28px;">
+          <span style="display: block; font-size: 11px; font-weight: 700; color: #BF3A1B; text-transform: uppercase; margin-bottom: 8px;">
+            ${isVoiceAudio ? '🎙️ Transcripción de Nota de Voz del Líder:' : '📝 Motivo expresado por el líder:'}
+          </span>
+          <p style="font-size: 14px; font-style: italic; line-height: 1.6; color: #2D1B4E; margin: 0; white-space: pre-line;">
+            "${reasonText}"
+          </p>
+        </div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+          <tr>
+            <td style="text-align: center;">
+              <a href="${whatsappUrl}" style="display: inline-block; background-color: #25D366; color: #FFFFFF; font-size: 14px; font-weight: 700; text-decoration: none; padding: 14px 28px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);">
+                💬 Contactar por WhatsApp al Líder
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td style="text-align: center; font-size: 12px; color: #4A3F55;">
+              Email del líder: <a href="mailto:${leaderEmail}" style="color: #BF3A1B; text-decoration: underline;">${leaderEmail}</a> | WhatsApp: ${leaderWhatsapp || 'No registrado'}
+            </td>
+          </tr>
+        </table>
+        <hr style="border: none; border-top: 1px solid rgba(73, 52, 71, 0.1); margin: 24px 0;" />
+        <p style="font-size: 11px; color: #4A3F55; text-align: center; margin: 0;">
+          Correo generado automáticamente por Lidacta para la administradora principal <strong>${targetAdminName}</strong> (${targetAdminEmail}).
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+    if (resend) {
+      try {
+        const resendRes = await resend.emails.send({
+          from: 'Lidacta Alertas <onboarding@resend.dev>',
+          to: [targetAdminEmail],
+          subject: emailSubject,
+          html: emailHtmlBody,
+          text: emailTextBody,
+        });
+
+        if (resendRes.data?.id) {
+          realEmailSent = true;
+          realEmailId = resendRes.data.id;
+          console.log(`[LIDACTA RESEND] Real email dispatched to ${targetAdminEmail}. Resend ID: ${realEmailId}`);
+        } else if (resendRes.error) {
+          realEmailError = resendRes.error.message;
+          console.warn('[LIDACTA RESEND] Resend API reported error:', resendRes.error);
+        }
+      } catch (err: any) {
+        realEmailError = err?.message || 'Error sending via Resend';
+        console.warn('[LIDACTA RESEND] Exception sending email:', err);
+      }
+    } else {
+      console.log(`[LIDACTA EMAIL] RESEND_API_KEY not configured in env. Alert recorded in centralized database for ${targetAdminEmail}`);
+    }
+
+    // Insert into centralized server notifications store (so PC, Phone, Tablet instantly see it)
+    const newNotification: ServerNotificationItem = {
+      id: requestId,
+      recipientRole: 'admin',
+      recipientUserId: 'user_admin_tania',
+      companyId: req.body.companyId || 'comp_nexus',
+      title: `🚨 Solicitud de Asesoría 1:1: ${leaderName} (Etapa ${currentStage})`,
+      message: `${leaderName} (${companyName || 'Empresa'}) ha solicitado hablar con ${targetAdminName} para el caso "${caseTitle}". Motivo: "${reasonText}"`,
+      type: 'mentor_request',
       timestamp,
-      leader: {
-        id: leaderId,
-        name: leaderName,
-        email: leaderEmail,
-        whatsapp: leaderWhatsapp,
-        position: leaderPosition,
-        company: companyName,
+      read: false,
+      emailSimulated: {
+        to: targetAdminEmail,
+        subject: emailSubject,
+        bodyText: emailTextBody,
+        realEmailSent,
+        realEmailId,
       },
-      case: {
-        title: caseTitle,
-        currentStage,
-      },
-      request: {
-        reason: reasonText,
+      mentorRequestDetails: {
+        leaderId,
+        leaderName,
+        leaderEmail,
+        leaderWhatsapp: leaderWhatsapp || '',
+        leaderPosition: leaderPosition || 'Líder Operativo',
+        companyName: companyName || 'Empresa',
+        currentStage: Number(currentStage),
+        stageName,
+        caseTitle,
+        reasonText,
         isVoiceAudio: !!isVoiceAudio,
-      },
-      destination: {
-        adminEmail: targetAdminEmail,
-        adminWhatsapp: targetAdminWhatsapp,
-        adminName: targetAdminName,
-        whatsappUrl,
+        status: 'pendiente',
+        whatsappSent: true,
+        emailSent: true,
       },
     };
 
-    console.log(`[LIDACTA NOTIFICATION] Mentor Request received from ${leaderName}:`, JSON.stringify(webhookPayload, null, 2));
-
-    // Simulated email template payload
-    const simulatedEmail = {
-      to: targetAdminEmail,
-      subject: `🚨 [URGENTE] Solicitud de Asesoría 1:1: ${leaderName} (${companyName} · Etapa ${currentStage})`,
-      bodyText: `Estimada ${targetAdminName},\n\nEl líder ${leaderName} (${leaderPosition || 'Líder'}) de la empresa "${companyName}" ha solicitado hablar directamente con un mentor humano en Lidacta.\n\n` +
-        `• Reto actual: ${caseTitle}\n` +
-        `• Etapa en curso: Etapa ${currentStage}\n` +
-        `• Formato de solicitud: ${isVoiceAudio ? 'Nota de voz dictada / grabada' : 'Texto escrito'}\n\n` +
-        `Motivo expresado por el líder:\n"${reasonText}"\n\n` +
-        `Datos de contacto directo:\n` +
-        `• Email: ${leaderEmail}\n` +
-        `• WhatsApp del líder: ${leaderWhatsapp || 'Sin número registrado'}\n` +
-        `• Fecha y hora: ${new Date(timestamp).toLocaleString('es-MX')}\n\n` +
-        `Acción recomendada:\n` +
-        `Puedes contactar al líder directamente por WhatsApp o agendar una sesión 1 a 1 de desbloqueo.\n\n` +
-        `Enlace directo de WhatsApp:\n${whatsappUrl}\n\n` +
-        `Atentamente,\nSistema de Notificaciones Lidacta`,
-    };
+    serverNotifications.unshift(newNotification);
 
     return res.json({
       success: true,
-      message: 'Solicitud de mentoría enviada con éxito.',
+      message: 'Solicitud de mentoría registrada y despachada con éxito.',
       requestId,
       whatsappUrl,
-      simulatedEmail,
-      webhookPayload,
+      notification: newNotification,
+      simulatedEmail: newNotification.emailSimulated,
+      realEmailSent,
+      realEmailId,
+      realEmailError,
     });
   } catch (error: any) {
     console.error('Error handling mentor request:', error);

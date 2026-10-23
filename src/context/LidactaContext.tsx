@@ -154,6 +154,38 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
   }, []);
 
+  // Synchronize centralized notifications from server across all devices / browsers
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch('/api/notifications');
+        const data = await res.json();
+        if (isMounted && data.success && Array.isArray(data.notifications)) {
+          setNotifications((prevLocal) => {
+            const serverList = data.notifications as NotificationItem[];
+            const serverMap = new Map(serverList.map((n) => [n.id, n]));
+            // Merge with local non-mentor notifications
+            const localOnly = prevLocal.filter(
+              (n) => !serverMap.has(n.id) && n.type !== 'mentor_request'
+            );
+            return [...serverList, ...localOnly];
+          });
+        }
+      } catch (err) {
+        // Silent fallback if network glitch
+      }
+    };
+
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 4000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   const [currentUserId, setCurrentUserId] = useState<string>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}current_user_id`);
     return saved || 'user_leader_roberto';
@@ -830,41 +862,45 @@ El Equipo de Lidacta`;
       if (data.success) {
         if (data.whatsappUrl) serverWhatsappUrl = data.whatsappUrl;
         if (data.simulatedEmail) simulatedEmailObj = data.simulatedEmail;
+        if (data.notification) {
+          setNotifications((prev) => [
+            data.notification,
+            ...prev.filter((n) => n.id !== data.notification.id),
+          ]);
+        }
       }
     } catch (e) {
       console.warn('Backend call failed, using local simulated notification:', e);
+      const fallbackNotification: NotificationItem = {
+        id: notifId,
+        recipientRole: 'admin',
+        recipientUserId: adminUser.id || 'user_admin_tania',
+        companyId: currentUser.companyId,
+        title: `🚨 Solicitud de Asesoría 1:1: ${currentUser.name} (Etapa ${currentStageNum})`,
+        message: `${currentUser.name} (${currentUser.companyName}) ha solicitado hablar con ${adminUser.name || 'Tania Padierna'} para el caso "${currentCaseTitle}". Motivo: "${reasonText}"`,
+        type: 'mentor_request',
+        timestamp: new Date().toISOString(),
+        read: false,
+        emailSimulated: simulatedEmailObj,
+        mentorRequestDetails: {
+          leaderId: currentUser.id,
+          leaderName: currentUser.name,
+          leaderEmail: currentUser.email,
+          leaderWhatsapp: currentUser.whatsapp || '',
+          leaderPosition: currentUser.position,
+          companyName: currentUser.companyName,
+          currentStage: currentStageNum,
+          stageName: stageNames[currentStageNum] || `Etapa ${currentStageNum}`,
+          caseTitle: currentCaseTitle,
+          reasonText,
+          isVoiceAudio,
+          status: 'pendiente',
+          whatsappSent: true,
+          emailSent: true,
+        },
+      };
+      setNotifications((prev) => [fallbackNotification, ...prev]);
     }
-
-    const newNotification: NotificationItem = {
-      id: notifId,
-      recipientRole: 'admin',
-      recipientUserId: adminUser.id || 'user_admin_tania',
-      companyId: currentUser.companyId,
-      title: `🚨 Solicitud de Asesoría 1:1: ${currentUser.name} (Etapa ${currentStageNum})`,
-      message: `${currentUser.name} (${currentUser.companyName}) ha solicitado hablar con ${adminUser.name || 'Tania Padierna'} para el caso "${currentCaseTitle}". Motivo: "${reasonText}"`,
-      type: 'mentor_request',
-      timestamp: new Date().toISOString(),
-      read: false,
-      emailSimulated: simulatedEmailObj,
-      mentorRequestDetails: {
-        leaderId: currentUser.id,
-        leaderName: currentUser.name,
-        leaderEmail: currentUser.email,
-        leaderWhatsapp: currentUser.whatsapp || '',
-        leaderPosition: currentUser.position,
-        companyName: currentUser.companyName,
-        currentStage: currentStageNum,
-        stageName: stageNames[currentStageNum] || `Etapa ${currentStageNum}`,
-        caseTitle: currentCaseTitle,
-        reasonText,
-        isVoiceAudio,
-        status: 'pendiente',
-        whatsappSent: true,
-        emailSent: true,
-      },
-    };
-
-    setNotifications((prev) => [newNotification, ...prev]);
 
     // Also inject confirmation in the active session so the leader sees reassurance in chat
     if (activeMentorship) {
@@ -879,7 +915,7 @@ El Equipo de Lidacta`;
       const lidactaConfirmMsg = {
         id: `msg_${Date.now()}_lid_confirm`,
         sender: 'lidacta' as const,
-        text: `He recibido tu solicitud para una Asesoría 1:1, ${currentUser.name}. Se ha notificado inmediatamente a ${adminUser.name || 'Tania Padierna'} (Dirección de Mentoría) por correo electrónico (${adminUser.email || 'hola@taniapadierna.com'}) y WhatsApp (${adminUser.whatsapp || '+52 55 1234 5678'}) con tu contexto de la Etapa ${currentStageNum}. Nos pondremos en contacto contigo a la brevedad. Tu conversación sigue siendo 100% confidencial.`,
+        text: `He recibido tu solicitud para una Asesoría 1:1, ${currentUser.name}. Se ha notificado inmediatamente a ${adminUser.name || 'Tania Padierna'} (Dirección de Mentoría) por correo electrónico (hola@taniapadierna.com) y WhatsApp (${adminUser.whatsapp || '+52 55 1234 5678'}) con tu contexto de la Etapa ${currentStageNum}. Nos pondremos en contacto contigo a la brevedad. Tu conversación sigue siendo 100% confidencial.`,
         timestamp: new Date().toISOString(),
         stage: currentStageNum,
       };
@@ -899,7 +935,7 @@ El Equipo de Lidacta`;
 
     return {
       success: true,
-      message: 'Solicitud enviada exitosamente a la administradora.',
+      message: 'Solicitud enviada y notificada exitosamente.',
       notificationId: notifId,
       whatsappUrl: serverWhatsappUrl,
     };
@@ -924,6 +960,13 @@ El Equipo de Lidacta`;
           : n
       )
     );
+
+    // Sync status change to centralized server
+    fetch('/api/notifications/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notificationId, status, notes }),
+    }).catch((err) => console.warn('Could not sync status to server:', err));
   };
 
   const login = (email: string, _password?: string): { success: boolean; message?: string } => {
