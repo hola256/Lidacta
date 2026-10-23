@@ -515,6 +515,191 @@ app.post('/api/notifications/status', (req: Request, res: Response) => {
   return res.json({ success: true, notifications: serverNotifications });
 });
 
+// POST /api/send - Dedicated Resend email dispatch route
+app.post('/api/send', async (req: Request, res: Response) => {
+  try {
+    const {
+      leaderName,
+      message,
+      transcript,
+      date,
+      leaderEmail,
+      leaderPosition,
+      companyName,
+      currentStage,
+      caseTitle,
+      reasonText,
+      isVoiceAudio,
+    } = req.body || {};
+
+    const apiKey = process.env.RESEND_API_KEY;
+    const targetEmail = process.env.ADMIN_EMAIL || 'hola@taniapadierna.com';
+    const effectiveLeaderName = leaderName || 'Líder';
+    const effectiveMessage = transcript || message || reasonText || '(Sin mensaje especificado)';
+    const effectiveDate = date || new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
+    const effectiveStage = currentStage || 1;
+    const effectiveCaseTitle = caseTitle || 'Acompañamiento en curso';
+    const effectiveCompany = companyName || 'Empresa';
+
+    console.log('[API /api/send] 📩 Petición recibida:', {
+      leaderName: effectiveLeaderName,
+      targetEmail,
+      date: effectiveDate,
+      hasApiKey: !!apiKey,
+      isVoice: !!isVoiceAudio,
+    });
+
+    if (!apiKey) {
+      console.warn('[API /api/send] ⚠️ RESEND_API_KEY no encontrada en process.env. El correo no pudo enviarse a Resend.');
+      return res.status(500).json({
+        success: false,
+        error: 'RESEND_API_KEY no configurada en las variables de entorno',
+      });
+    }
+
+    const resendClient = new Resend(apiKey);
+    const emailSubject = `🚨 [Asesoría 1:1] Solicitud de ${effectiveLeaderName} - ${effectiveDate}`;
+
+    const emailHtmlBody = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>${emailSubject}</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F8F6F4; margin: 0; padding: 24px; color: #2D1B4E;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; background: #FFFFFF; border-radius: 20px; overflow: hidden; border: 1px solid rgba(73, 52, 71, 0.15); box-shadow: 0 4px 20px rgba(45, 27, 78, 0.08);">
+    <tr>
+      <td style="background-color: #2D1B4E; padding: 28px 32px; text-align: left;">
+        <span style="font-size: 24px; font-weight: 800; color: #FFFFFF; letter-spacing: -0.5px;">Lidacta</span>
+        <span style="font-size: 11px; font-weight: 700; color: #F7B538; text-transform: uppercase; margin-left: 10px; background: rgba(247, 181, 56, 0.2); padding: 4px 8px; border-radius: 6px;">Asesoría 1:1</span>
+        <p style="margin: 6px 0 0 0; font-size: 13px; color: #FFF7EF; opacity: 0.9;">Desarrollo de Liderazgo en Acción · Alerta Directiva Inmediata</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 32px;">
+        <p style="font-size: 15px; line-height: 1.6; margin: 0 0 16px 0; color: #2D1B4E;">
+          Hola <strong>Tania Padierna</strong>,
+        </p>
+        <p style="font-size: 14px; line-height: 1.6; margin: 0 0 24px 0; color: #4A3F55;">
+          El líder <strong>${effectiveLeaderName}</strong> ha enviado una solicitud urgente de <strong>Asesoría 1:1</strong> en Lidacta.
+        </p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="background: #FFF7EF; border: 1px solid #FFD3BF; border-radius: 14px; margin-bottom: 24px; padding: 18px;">
+          <tr>
+            <td style="padding: 6px 0; font-size: 13px; color: #4A3F55;"><strong>Líder:</strong></td>
+            <td style="padding: 6px 0; font-size: 14px; color: #2D1B4E; font-weight: 700;">${effectiveLeaderName}</td>
+          </tr>
+          ${leaderPosition ? `<tr><td style="padding: 6px 0; font-size: 13px; color: #4A3F55;"><strong>Puesto:</strong></td><td style="padding: 6px 0; font-size: 13px; color: #2D1B4E;">${leaderPosition}</td></tr>` : ''}
+          <tr>
+            <td style="padding: 6px 0; font-size: 13px; color: #4A3F55;"><strong>Empresa:</strong></td>
+            <td style="padding: 6px 0; font-size: 13px; color: #2D1B4E; font-weight: 600;">${effectiveCompany}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-size: 13px; color: #4A3F55;"><strong>Etapa actual:</strong></td>
+            <td style="padding: 6px 0; font-size: 13px; color: #BF3A1B; font-weight: 700;">Etapa ${effectiveStage}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-size: 13px; color: #4A3F55;"><strong>Caso:</strong></td>
+            <td style="padding: 6px 0; font-size: 13px; color: #2D1B4E; font-weight: 600;">${effectiveCaseTitle}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-size: 13px; color: #4A3F55;"><strong>Fecha:</strong></td>
+            <td style="padding: 6px 0; font-size: 13px; color: #2D1B4E;">${effectiveDate}</td>
+          </tr>
+        </table>
+        <div style="background: #FFFFFF; border-left: 4px solid #BF3A1B; border-top: 1px solid #EFEAE5; border-right: 1px solid #EFEAE5; border-bottom: 1px solid #EFEAE5; border-radius: 8px; padding: 18px; margin-bottom: 24px;">
+          <span style="display: block; font-size: 11px; font-weight: 700; color: #BF3A1B; text-transform: uppercase; margin-bottom: 8px;">
+            ${isVoiceAudio ? '🎙️ Mensaje / Transcripción de Nota de Voz:' : '📝 Mensaje / Motivo de la solicitud:'}
+          </span>
+          <p style="font-size: 14px; font-style: italic; line-height: 1.6; color: #2D1B4E; margin: 0; white-space: pre-line;">
+            "${effectiveMessage}"
+          </p>
+        </div>
+        <p style="font-size: 12px; color: #4A3F55; text-align: center; margin: 0;">
+          Correo enviado automáticamente desde <strong>Lidacta &lt;onboarding@resend.dev&gt;</strong> para <strong>${targetEmail}</strong>.
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `;
+
+    const emailTextBody = `🚨 Solicitud de Asesoría 1:1 en Lidacta\n\nLíder: ${effectiveLeaderName}\nFecha: ${effectiveDate}\nEmpresa: ${effectiveCompany}\nEtapa: ${effectiveStage}\nCaso: ${effectiveCaseTitle}\n\nMensaje/Transcripción:\n"${effectiveMessage}"\n\nDestinatario: ${targetEmail}`;
+
+    const resendResponse = await resendClient.emails.send({
+      from: 'Lidacta <onboarding@resend.dev>',
+      to: [targetEmail],
+      subject: emailSubject,
+      html: emailHtmlBody,
+      text: emailTextBody,
+    });
+
+    if (resendResponse.error) {
+      console.error('[API /api/send] ❌ Error devuelto por Resend API:', resendResponse.error);
+      return res.status(400).json({
+        success: false,
+        error: resendResponse.error.message || 'Error en Resend API',
+        details: resendResponse.error,
+      });
+    }
+
+    console.log('[API /api/send] ✅ Correo enviado exitosamente con Resend. ID:', resendResponse.data?.id);
+
+    // Also register in centralized serverNotifications for instant multi-device admin dashboard sync
+    const requestId = `req_send_${Date.now()}`;
+    const newNotification: ServerNotificationItem = {
+      id: requestId,
+      recipientRole: 'admin',
+      recipientUserId: 'user_admin_tania',
+      companyId: req.body.companyId || 'comp_nexus',
+      title: `🚨 Solicitud de Asesoría 1:1: ${effectiveLeaderName} (Etapa ${effectiveStage})`,
+      message: `${effectiveLeaderName} ha solicitado asesoría 1:1: "${effectiveMessage}"`,
+      type: 'mentor_request',
+      timestamp: new Date().toISOString(),
+      read: false,
+      emailSimulated: {
+        to: targetEmail,
+        subject: emailSubject,
+        bodyText: emailTextBody,
+        realEmailSent: true,
+        realEmailId: resendResponse.data?.id,
+      },
+      mentorRequestDetails: {
+        leaderId: req.body.leaderId || 'leader_user',
+        leaderName: effectiveLeaderName,
+        leaderEmail: leaderEmail || '',
+        leaderWhatsapp: req.body.leaderWhatsapp || '',
+        leaderPosition: leaderPosition || 'Líder Operativo',
+        companyName: effectiveCompany,
+        currentStage: Number(effectiveStage),
+        stageName: `Etapa ${effectiveStage}`,
+        caseTitle: effectiveCaseTitle,
+        reasonText: effectiveMessage,
+        isVoiceAudio: !!isVoiceAudio,
+        status: 'pendiente',
+        whatsappSent: true,
+        emailSent: true,
+      },
+    };
+    serverNotifications.unshift(newNotification);
+
+    return res.status(200).json({
+      success: true,
+      id: resendResponse.data?.id,
+      message: 'Correo de Asesoría 1:1 enviado exitosamente a través de Resend',
+      recipient: targetEmail,
+      notification: newNotification,
+    });
+  } catch (error: any) {
+    console.error('[API /api/send] ❌ Excepción no controlada al enviar correo:', error);
+    return res.status(500).json({
+      success: false,
+      error: error?.message || 'Error interno del servidor al enviar correo',
+    });
+  }
+});
+
 // POST /api/mentor/request - Multichannel notifications for human mentor requests (Real Email + Centralized DB)
 app.post('/api/mentor/request', async (req: Request, res: Response) => {
   try {
@@ -685,10 +870,12 @@ app.post('/api/mentor/request', async (req: Request, res: Response) => {
 </body>
 </html>`;
 
-    if (resend) {
+    const currentResendKey = process.env.RESEND_API_KEY;
+    if (currentResendKey) {
       try {
-        const resendRes = await resend.emails.send({
-          from: 'Lidacta Alertas <onboarding@resend.dev>',
+        const dynamicResend = new Resend(currentResendKey);
+        const resendRes = await dynamicResend.emails.send({
+          from: 'Lidacta <onboarding@resend.dev>',
           to: [targetAdminEmail],
           subject: emailSubject,
           html: emailHtmlBody,

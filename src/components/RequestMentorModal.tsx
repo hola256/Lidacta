@@ -49,6 +49,36 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
           ? `[ALTA PRIORIDAD] ${reasonText.trim()}`
           : reasonText.trim();
 
+      const formattedDate = new Date().toLocaleString('es-MX', {
+        timeZone: 'America/Mexico_City',
+        dateStyle: 'full',
+        timeStyle: 'medium',
+      });
+
+      console.log('[Asesoría 1:1] Despachando solicitud a /api/send...');
+      try {
+        const sendResponse = await fetch('/api/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            leaderName: currentUser.name,
+            message: fullReason,
+            transcript: '',
+            date: formattedDate,
+            leaderEmail: currentUser.email,
+            leaderPosition: currentUser.position,
+            companyName: currentUser.companyName,
+            currentStage: currentStageNum,
+            caseTitle: activeMentorship?.title || 'Acompañamiento en curso',
+            isVoiceAudio: false,
+          }),
+        });
+        const sendData = await sendResponse.json();
+        console.log('[Asesoría 1:1] Resultado /api/send:', sendData);
+      } catch (sendError) {
+        console.error('[Asesoría 1:1] Error al llamar a /api/send:', sendError);
+      }
+
       const result = await requestHumanMentor(fullReason, false);
       setSubmittedData({
         success: true,
@@ -74,6 +104,36 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
         priority === 'alta'
           ? `[ALTA PRIORIDAD] [Nota de Voz] ${text.trim()}`
           : `[Nota de Voz] ${text.trim()}`;
+
+      const formattedDate = new Date().toLocaleString('es-MX', {
+        timeZone: 'America/Mexico_City',
+        dateStyle: 'full',
+        timeStyle: 'medium',
+      });
+
+      console.log('[Asesoría 1:1] Despachando nota de voz a /api/send...');
+      try {
+        const sendResponse = await fetch('/api/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            leaderName: currentUser.name,
+            message: fullReason,
+            transcript: text.trim(),
+            date: formattedDate,
+            leaderEmail: currentUser.email,
+            leaderPosition: currentUser.position,
+            companyName: currentUser.companyName,
+            currentStage: currentStageNum,
+            caseTitle: activeMentorship?.title || 'Acompañamiento en curso',
+            isVoiceAudio: true,
+          }),
+        });
+        const sendData = await sendResponse.json();
+        console.log('[Asesoría 1:1] Resultado /api/send (voz):', sendData);
+      } catch (sendError) {
+        console.error('[Asesoría 1:1] Error al llamar a /api/send con voz:', sendError);
+      }
 
       const result = await requestHumanMentor(fullReason, true);
       setSubmittedData({
