@@ -112,14 +112,14 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
         <div className="p-4 sm:p-5 bg-[#2D1B4E] text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold shadow-md shrink-0">
-              <Headphones className="w-5 h-5 text-[#2D1B4E]" />
+              <UserCheck className="w-5 h-5 text-[#2D1B4E]" />
             </div>
             <div>
               <h2 className="font-heading font-extrabold text-base sm:text-lg leading-tight">
-                Hablar con un Mentor Humano
+                Asesoría 1:1 Directa
               </h2>
               <p className="text-xs text-[#FFF7EF]/80 mt-0.5">
-                Acompañamiento personalizado directo con la Dirección de Mentoría
+                Acompañamiento personal directivo con la Dirección de Mentoría (Tania Padierna)
               </p>
             </div>
           </div>
@@ -320,7 +320,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                     <span>Enviando notificación...</span>
                   ) : (
                     <>
-                      <span>Enviar Solicitud de Mentoría</span>
+                      <span>Enviar Solicitud de Asesoría 1:1</span>
                       <Send className="w-4 h-4 text-[#2D1B4E]" />
                     </>
                   )}

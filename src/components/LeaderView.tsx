@@ -1071,15 +1071,15 @@ export const LeaderView: React.FC = () => {
 
                 {/* Header Actions */}
                 <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-                  {/* Hablar con un Mentor Button */}
+                  {/* Asesoría 1:1 Button */}
                   <button
                     onClick={() => setIsMentorModalOpen(true)}
                     className="flex items-center gap-1.5 px-3 py-2 bg-[#FFF7EF] hover:bg-[#FFD3BF]/60 text-[#BF3A1B] border-2 border-[#BF3A1B]/40 hover:border-[#BF3A1B] text-xs font-heading font-extrabold rounded-xl shadow-xs transition-all cursor-pointer min-h-[44px] active:scale-95"
-                    title="Solicitar apoyo directo de un mentor humano (Notifica a Tania Padierna)"
+                    title="Solicitar Asesoría 1:1 directa (Acompañamiento personal directivo con Tania Padierna)"
                   >
-                    <Headphones className="w-4 h-4 text-[#BF3A1B]" />
-                    <span className="hidden sm:inline">Hablar con un Mentor</span>
-                    <span className="sm:hidden">Mentor</span>
+                    <UserCheck className="w-4 h-4 text-[#BF3A1B]" />
+                    <span className="hidden sm:inline">Asesoría 1:1</span>
+                    <span className="sm:hidden">Asesor 1:1</span>
                   </button>
 
                   <button
@@ -1837,22 +1837,22 @@ export const LeaderView: React.FC = () => {
         )}
       </main>
 
-      {/* Persistent Floating Shortcut: Hablar con un Mentor */}
+      {/* Persistent Floating Shortcut: Asesoría 1:1 */}
       <div className="fixed bottom-20 right-3 sm:right-6 z-30">
         <button
           type="button"
           onClick={() => setIsMentorModalOpen(true)}
           className="flex items-center gap-2 px-3.5 sm:px-4 py-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white rounded-2xl shadow-xl border-2 border-white cursor-pointer active:scale-95 transition-all group"
-          title="Hablar con un Mentor Humano (Notificación a Tania Padierna)"
+          title="Asesoría 1:1 Directa (Notificación a Tania Padierna)"
         >
           <div className="w-6 h-6 rounded-lg bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold shrink-0">
-            <Headphones className="w-3.5 h-3.5 text-[#2D1B4E]" />
+            <UserCheck className="w-3.5 h-3.5 text-[#2D1B4E]" />
           </div>
           <span className="font-heading font-extrabold text-xs tracking-wide hidden sm:inline">
-            Hablar con un Mentor
+            Asesoría 1:1
           </span>
           <span className="font-heading font-extrabold text-xs tracking-wide sm:hidden">
-            Mentor
+            Asesor 1:1
           </span>
         </button>
       </div>
