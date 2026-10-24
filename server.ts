@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import { Resend } from 'resend';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 dotenv.config();
@@ -400,7 +401,9 @@ export interface ServerUserProfile {
   createdAt: string;
 }
 
-let serverUsers: ServerUserProfile[] = [
+const USERS_DB_PATH = path.join(__dirname, 'server_users_db.json');
+
+const initialServerUsers: ServerUserProfile[] = [
   {
     id: 'user_admin_tania',
     name: 'Tania Padierna',
@@ -440,12 +443,12 @@ let serverUsers: ServerUserProfile[] = [
     companyId: 'comp_nova',
     companyName: 'Retail Nova Grupo Comercial',
     position: 'Gerente de Sucursal Centro',
-    area: '',
-    birthDate: '',
-    directReports: undefined,
-    whatsapp: '',
-    isProfileCompleted: false,
-    isProfileComplete: false,
+    area: 'Operaciones Comerciales y Tiendas',
+    birthDate: '1990-06-15',
+    directReports: 8,
+    whatsapp: '+52 55 9876 5432',
+    isProfileCompleted: true,
+    isProfileComplete: true,
     createdAt: '2026-09-15',
   },
   {
@@ -480,6 +483,36 @@ let serverUsers: ServerUserProfile[] = [
     createdAt: '2026-08-25',
   },
 ];
+
+function readPersistentUsers(): ServerUserProfile[] {
+  try {
+    if (fs.existsSync(USERS_DB_PATH)) {
+      const content = fs.readFileSync(USERS_DB_PATH, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.warn('[SERVER DB] Could not read server_users_db.json, using defaults:', err);
+  }
+  return initialServerUsers;
+}
+
+function writePersistentUsers(users: ServerUserProfile[]) {
+  try {
+    fs.writeFileSync(USERS_DB_PATH, JSON.stringify(users, null, 2), 'utf-8');
+    console.log('[SERVER DB] Successfully persisted users to disk:', USERS_DB_PATH);
+  } catch (err) {
+    console.error('[SERVER DB] Failed to persist users to disk:', err);
+  }
+}
+
+let serverUsers: ServerUserProfile[] = readPersistentUsers();
+// Ensure file exists on initial start
+if (!fs.existsSync(USERS_DB_PATH)) {
+  writePersistentUsers(serverUsers);
+}
 
 // Centralized Server Notifications Store (Accessible across all connected devices & sessions)
 interface ServerNotificationItem {
@@ -626,6 +659,7 @@ app.post('/api/user/complete-profile', (req: Request, res: Response) => {
         createdAt: new Date().toISOString(),
       };
       serverUsers.push(newUser);
+      writePersistentUsers(serverUsers);
       console.log(`[LIDACTA USERS] New user created and completed centrally: ${newUser.name} (${newUser.email})`);
       return res.json({
         success: true,
@@ -648,6 +682,7 @@ app.post('/api/user/complete-profile', (req: Request, res: Response) => {
     };
 
     serverUsers[targetIndex] = updatedUser;
+    writePersistentUsers(serverUsers);
     console.log(`[LIDACTA USERS] Profile completed centrally for: ${updatedUser.name} (${updatedUser.email}). isProfileComplete=true`);
 
     return res.json({
@@ -675,6 +710,7 @@ app.post('/api/users/update', (req: Request, res: Response) => {
       ...serverUsers[targetIndex],
       ...updates,
     };
+    writePersistentUsers(serverUsers);
 
     return res.json({
       success: true,

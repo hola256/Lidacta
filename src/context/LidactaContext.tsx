@@ -46,7 +46,7 @@ interface LidactaContextType {
     birthDate: string;
     directReports?: number;
     whatsapp: string;
-  }) => { success: boolean; message?: string };
+  }) => Promise<{ success: boolean; message?: string }>;
   updateUserProfile: (
     userId: string,
     updates: Partial<UserProfile>
@@ -129,38 +129,59 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return INITIAL_USERS;
   });
 
-  // Fetch centralized users and admin profile from server on load for cross-device consistency (Mobile <-> PC)
+  // Continuously sync centralized users and admin profile from server (Real-Time across all devices, windows, and incognito)
   useEffect(() => {
-    fetch('/api/users')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && Array.isArray(data.users)) {
+    let isMounted = true;
+
+    const syncUsersFromServer = async () => {
+      try {
+        const res = await fetch('/api/users');
+        const data = await res.json();
+        if (isMounted && data.success && Array.isArray(data.users)) {
           setAllUsers((prevUsers) => {
-            const serverMap = new Map(data.users.map((u: UserProfile) => [u.id, u]));
-            return prevUsers.map((localUser) => {
-              const serverUser = serverMap.get(localUser.id) as UserProfile | undefined;
-              if (serverUser) {
+            const serverUsers = data.users as UserProfile[];
+            const serverMap = new Map(serverUsers.map((u: UserProfile) => [u.id, u]));
+
+            let hasChanges = false;
+            const updated = prevUsers.map((localUser) => {
+              const serverUser = serverMap.get(localUser.id);
+              if (!serverUser) return localUser;
+
+              // Check if completion flags or crucial data differ
+              if (
+                serverUser.isProfileCompleted !== localUser.isProfileCompleted ||
+                serverUser.isProfileComplete !== localUser.isProfileComplete ||
+                serverUser.area !== localUser.area ||
+                serverUser.birthDate !== localUser.birthDate ||
+                serverUser.whatsapp !== localUser.whatsapp ||
+                serverUser.companyName !== localUser.companyName
+              ) {
+                hasChanges = true;
                 return {
                   ...localUser,
                   ...serverUser,
-                  // Ensure completion flags are maintained if completed on server
-                  isProfileCompleted: serverUser.isProfileCompleted ?? localUser.isProfileCompleted,
-                  isProfileComplete: serverUser.isProfileComplete ?? localUser.isProfileComplete,
                 };
               }
               return localUser;
             });
+
+            return hasChanges ? updated : prevUsers;
           });
         }
-      })
-      .catch((err) => {
-        console.warn('Could not sync users from server:', err);
-      });
+      } catch (err) {
+        // network resilience
+      }
+    };
 
+    // Initial fetch + continuous real-time polling every 2.5s
+    syncUsersFromServer();
+    const userPollInterval = setInterval(syncUsersFromServer, 2500);
+
+    // Initial admin profile fetch
     fetch('/api/admin/profile')
       .then((res) => res.json())
       .then((data) => {
-        if (data.success && data.profile) {
+        if (isMounted && data.success && data.profile) {
           const sAdmin = data.profile;
           setAllUsers((prevUsers) => {
             return prevUsers.map((u) => {
@@ -181,8 +202,27 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       })
       .catch((err) => {
-        console.warn('Could not sync admin profile from server, using local defaults:', err);
+        console.warn('Could not sync admin profile from server:', err);
       });
+
+    // Listen for storage events (Instant 0ms cross-tab synchronization in same browser)
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === `${STORAGE_KEY_PREFIX}users` && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && isMounted) {
+            setAllUsers(parsed);
+          }
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      isMounted = false;
+      clearInterval(userPollInterval);
+      window.removeEventListener('storage', handleStorage);
+    };
   }, []);
 
   // Synchronize centralized notifications from server across all devices / browsers
@@ -1077,13 +1117,13 @@ El Equipo de Lidacta`;
     return true;
   }, [currentUser]);
 
-  const completeUserProfile = (data: {
+  const completeUserProfile = async (data: {
     companyName: string;
     area?: string;
     birthDate: string;
     directReports?: number;
     whatsapp: string;
-  }): { success: boolean; message?: string } => {
+  }): Promise<{ success: boolean; message?: string }> => {
     const { companyName, area, birthDate, directReports, whatsapp } = data;
 
     if (!companyName || !companyName.trim()) {
@@ -1125,7 +1165,12 @@ El Equipo de Lidacta`;
         : {}),
     };
 
-    setAllUsers((prev) => prev.map((u) => (u.id === currentUser.id ? updatedUser : u)));
+    // Immediate reactive local update & immediate localStorage write
+    const nextUsers = allUsers.map((u) => (u.id === currentUser.id ? updatedUser : u));
+    setAllUsers(nextUsers);
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}users`, JSON.stringify(nextUsers));
+    } catch {}
 
     // Update companies list if company name changed
     setCompanies((prev) =>
@@ -1146,29 +1191,33 @@ El Equipo de Lidacta`;
     }
 
     // Persist to centralized server store for cross-device consistency (Mobile, PC, Incognito)
-    fetch('/api/user/complete-profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: currentUser.id,
-        email: currentUser.email,
-        name: currentUser.name,
-        role: currentUser.role,
-        position: currentUser.position,
-        companyName: companyName.trim(),
-        area: area?.trim(),
-        birthDate: birthDate.trim(),
-        directReports: directReports !== undefined ? Number(directReports) : undefined,
-        whatsapp: whatsapp.trim(),
-      }),
-    })
-      .then((res) => res.json())
-      .then((resData) => {
-        if (resData.success) {
-          console.log('[LIDACTA PROFILE] Successfully synced profile to central server');
-        }
-      })
-      .catch((err) => console.warn('Could not sync complete profile to server:', err));
+    try {
+      const res = await fetch('/api/user/complete-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          email: currentUser.email,
+          name: currentUser.name,
+          role: currentUser.role,
+          position: currentUser.position,
+          companyName: companyName.trim(),
+          area: area?.trim(),
+          birthDate: birthDate.trim(),
+          directReports: directReports !== undefined ? Number(directReports) : undefined,
+          whatsapp: whatsapp.trim(),
+        }),
+      });
+      const resData = await res.json();
+      if (resData.success && Array.isArray(resData.users)) {
+        setAllUsers(resData.users);
+        try {
+          localStorage.setItem(`${STORAGE_KEY_PREFIX}users`, JSON.stringify(resData.users));
+        } catch {}
+      }
+    } catch (err) {
+      console.warn('Could not sync complete profile to server immediately:', err);
+    }
 
     showToast('¡Información actualizada correctamente! Tu perfil de Líder ha quedado completado.', 'success');
 

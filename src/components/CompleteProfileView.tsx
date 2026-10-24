@@ -49,7 +49,7 @@ export const CompleteProfileView: React.FC = () => {
       !isNaN(Number(directReports)) &&
       Number(directReports) >= 0);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -90,8 +90,8 @@ export const CompleteProfileView: React.FC = () => {
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const result = completeUserProfile({
+    try {
+      const result = await completeUserProfile({
         companyName: companyName.trim(),
         birthDate: birthDate.trim(),
         whatsapp: whatsapp.trim(),
@@ -105,13 +105,14 @@ export const CompleteProfileView: React.FC = () => {
 
       if (result.success) {
         setIsSuccess(true);
-        // The context updates and isProfileComplete becomes true,
-        // triggering transition to the respective panel (HR or Leader).
       } else {
         setIsSubmitting(false);
         setErrorMessage(result.message || 'Error al guardar el perfil.');
       }
-    }, 400);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setErrorMessage(err?.message || 'Error al procesar la actualización del perfil.');
+    }
   };
 
   return (
