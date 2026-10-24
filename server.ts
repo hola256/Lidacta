@@ -381,6 +381,106 @@ let serverAdminProfile: AdminProfileData = {
   updatedAt: new Date().toISOString(),
 };
 
+// Centralized Server Users Store (Shared across Mobile, PC, Incognito, and multi-device sessions)
+export interface ServerUserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: 'leader' | 'hr' | 'admin';
+  companyId: string;
+  companyName: string;
+  position: string;
+  area?: string;
+  birthDate?: string;
+  directReports?: number;
+  whatsapp?: string;
+  avatarUrl?: string;
+  isProfileCompleted?: boolean;
+  isProfileComplete?: boolean;
+  createdAt: string;
+}
+
+let serverUsers: ServerUserProfile[] = [
+  {
+    id: 'user_admin_tania',
+    name: 'Tania Padierna',
+    email: 'hola@taniapadierna.com',
+    role: 'admin',
+    companyId: 'comp_nexus',
+    companyName: 'Lidacta Platform',
+    position: 'Creadora de la Plataforma & Coach Sr.',
+    area: 'Dirección de Producto y Mentoría',
+    whatsapp: '+52 55 1234 5678',
+    isProfileCompleted: true,
+    isProfileComplete: true,
+    createdAt: '2026-01-01',
+  },
+  {
+    id: 'user_leader_roberto',
+    name: 'Roberto Gómez',
+    email: 'roberto.gomez@nexus-auto.com',
+    role: 'leader',
+    companyId: 'comp_nexus',
+    companyName: 'Industrias Nexus Automotriz',
+    position: 'Líder de Línea de Ensamble y Calidad',
+    area: 'Operaciones de Manufactura',
+    birthDate: '1988-04-12',
+    directReports: 14,
+    whatsapp: '+52 55 4912 8841',
+    avatarUrl: '/src/assets/images/avatar_leader_roberto_1792074706592.jpg',
+    isProfileCompleted: true,
+    isProfileComplete: true,
+    createdAt: '2026-09-10',
+  },
+  {
+    id: 'user_leader_carlos',
+    name: 'Carlos Mendoza',
+    email: 'carlos.mendoza@novaretail.com',
+    role: 'leader',
+    companyId: 'comp_nova',
+    companyName: 'Retail Nova Grupo Comercial',
+    position: 'Gerente de Sucursal Centro',
+    area: '',
+    birthDate: '',
+    directReports: undefined,
+    whatsapp: '',
+    isProfileCompleted: false,
+    isProfileComplete: false,
+    createdAt: '2026-09-15',
+  },
+  {
+    id: 'user_hr_sofia',
+    name: 'Sofía Valenzuela',
+    email: 'sofia.valenzuela@nexus-auto.com',
+    role: 'hr',
+    companyId: 'comp_nexus',
+    companyName: 'Industrias Nexus Automotriz',
+    position: 'Directora de Recursos Humanos & Talento',
+    area: 'Gestión Humana y Cultura',
+    birthDate: '1985-08-19',
+    whatsapp: '+52 55 8820 1492',
+    avatarUrl: '/src/assets/images/avatar_hr_sofia_1792074705689.jpg',
+    isProfileCompleted: true,
+    isProfileComplete: true,
+    createdAt: '2026-08-20',
+  },
+  {
+    id: 'user_hr_mariana',
+    name: 'Mariana Castillo',
+    email: 'mariana.castillo@novaretail.com',
+    role: 'hr',
+    companyId: 'comp_nova',
+    companyName: 'Retail Nova Grupo Comercial',
+    position: 'Gerente de Desarrollo Organizacional',
+    area: 'Recursos Humanos',
+    birthDate: '',
+    whatsapp: '',
+    isProfileCompleted: false,
+    isProfileComplete: false,
+    createdAt: '2026-08-25',
+  },
+];
+
 // Centralized Server Notifications Store (Accessible across all connected devices & sessions)
 interface ServerNotificationItem {
   id: string;
@@ -485,6 +585,104 @@ app.post('/api/admin/profile', (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error updating admin profile:', error);
     return res.status(500).json({ success: false, message: error?.message || 'Error al actualizar perfil' });
+  }
+});
+
+// GET /api/users - Cross-device synchronized user list
+app.get('/api/users', (_req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    users: serverUsers,
+  });
+});
+
+// POST /api/user/complete-profile - Persistently mark profile as complete across PC, Mobile, Incognito
+app.post('/api/user/complete-profile', (req: Request, res: Response) => {
+  try {
+    const { userId, email, companyName, area, birthDate, directReports, whatsapp } = req.body;
+    let targetIndex = serverUsers.findIndex((u) => u.id === userId);
+    if (targetIndex === -1 && email) {
+      targetIndex = serverUsers.findIndex(
+        (u) => u.email.toLowerCase() === String(email).trim().toLowerCase()
+      );
+    }
+
+    if (targetIndex === -1) {
+      // If user not in initial list, add them as complete
+      const newUser: ServerUserProfile = {
+        id: userId || `user_${Date.now()}`,
+        name: req.body.name || 'Líder Lidacta',
+        email: (email || 'lider@empresa.com').trim().toLowerCase(),
+        role: req.body.role || 'leader',
+        companyId: req.body.companyId || 'comp_custom',
+        companyName: companyName ? String(companyName).trim() : 'Empresa Líder',
+        position: req.body.position || 'Líder de Equipo',
+        area: area !== undefined ? String(area).trim() : '',
+        birthDate: birthDate ? String(birthDate).trim() : '',
+        directReports: directReports !== undefined ? Number(directReports) : 5,
+        whatsapp: whatsapp ? String(whatsapp).trim() : '',
+        isProfileCompleted: true,
+        isProfileComplete: true,
+        createdAt: new Date().toISOString(),
+      };
+      serverUsers.push(newUser);
+      console.log(`[LIDACTA USERS] New user created and completed centrally: ${newUser.name} (${newUser.email})`);
+      return res.json({
+        success: true,
+        message: 'Perfil completado exitosamente y sincronizado en el servidor central.',
+        user: newUser,
+        users: serverUsers,
+      });
+    }
+
+    const current = serverUsers[targetIndex];
+    const updatedUser: ServerUserProfile = {
+      ...current,
+      companyName: companyName ? String(companyName).trim() : current.companyName,
+      area: area !== undefined ? String(area).trim() : current.area,
+      birthDate: birthDate ? String(birthDate).trim() : current.birthDate,
+      directReports: directReports !== undefined ? Number(directReports) : current.directReports,
+      whatsapp: whatsapp ? String(whatsapp).trim() : current.whatsapp,
+      isProfileCompleted: true,
+      isProfileComplete: true,
+    };
+
+    serverUsers[targetIndex] = updatedUser;
+    console.log(`[LIDACTA USERS] Profile completed centrally for: ${updatedUser.name} (${updatedUser.email}). isProfileComplete=true`);
+
+    return res.json({
+      success: true,
+      message: 'Perfil completado exitosamente y sincronizado en el servidor central.',
+      user: updatedUser,
+      users: serverUsers,
+    });
+  } catch (error: any) {
+    console.error('Error completing profile centrally:', error);
+    return res.status(500).json({ success: false, message: error?.message || 'Error al completar perfil' });
+  }
+});
+
+// POST /api/users/update - Central user profile updates
+app.post('/api/users/update', (req: Request, res: Response) => {
+  try {
+    const { userId, updates } = req.body;
+    const targetIndex = serverUsers.findIndex((u) => u.id === userId);
+    if (targetIndex === -1) {
+      return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+    }
+
+    serverUsers[targetIndex] = {
+      ...serverUsers[targetIndex],
+      ...updates,
+    };
+
+    return res.json({
+      success: true,
+      user: serverUsers[targetIndex],
+      users: serverUsers,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Error al actualizar usuario' });
   }
 });
 

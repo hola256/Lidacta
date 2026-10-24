@@ -30,6 +30,11 @@ interface LidactaContextType {
   welcomeModalData: { user: UserProfile; emailText: string } | null;
   isProfileModalOpen: boolean;
 
+  // Toast / System Notifications
+  toast: { id: string; message: string; type: 'success' | 'info' | 'warning' | 'error' } | null;
+  showToast: (message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
+  hideToast: () => void;
+
   // Authentication & Onboarding
   isAuthenticated: boolean;
   isProfileComplete: boolean;
@@ -124,8 +129,34 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return INITIAL_USERS;
   });
 
-  // Fetch centralized admin profile from server on load to ensure cross-device consistency (Mobile <-> PC)
+  // Fetch centralized users and admin profile from server on load for cross-device consistency (Mobile <-> PC)
   useEffect(() => {
+    fetch('/api/users')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.users)) {
+          setAllUsers((prevUsers) => {
+            const serverMap = new Map(data.users.map((u: UserProfile) => [u.id, u]));
+            return prevUsers.map((localUser) => {
+              const serverUser = serverMap.get(localUser.id) as UserProfile | undefined;
+              if (serverUser) {
+                return {
+                  ...localUser,
+                  ...serverUser,
+                  // Ensure completion flags are maintained if completed on server
+                  isProfileCompleted: serverUser.isProfileCompleted ?? localUser.isProfileCompleted,
+                  isProfileComplete: serverUser.isProfileComplete ?? localUser.isProfileComplete,
+                };
+              }
+              return localUser;
+            });
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not sync users from server:', err);
+      });
+
     fetch('/api/admin/profile')
       .then((res) => res.json())
       .then((data) => {
@@ -216,6 +247,26 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [selectedEmailForPreview, setSelectedEmailForPreview] = useState<NotificationItem | null>(null);
   const [showNewUserModal, setShowNewUserModal] = useState(false);
   const [welcomeModalData, setWelcomeModalData] = useState<{ user: UserProfile; emailText: string } | null>(null);
+
+  // Global Toast Notification State
+  const [toast, setToast] = useState<{
+    id: string;
+    message: string;
+    type: 'success' | 'info' | 'warning' | 'error';
+  } | null>(null);
+
+  const showToast = (
+    message: string,
+    type: 'success' | 'info' | 'warning' | 'error' = 'success'
+  ) => {
+    const id = `toast_${Date.now()}`;
+    setToast({ id, message, type });
+    setTimeout(() => {
+      setToast((curr) => (curr?.id === id ? null : curr));
+    }, 4500);
+  };
+
+  const hideToast = () => setToast(null);
 
   const openProfileModal = () => setIsProfileModalOpen(true);
   const closeProfileModal = () => setIsProfileModalOpen(false);
@@ -1002,14 +1053,15 @@ El Equipo de Lidacta`;
 
   const isProfileComplete = useMemo(() => {
     if (currentUser.role === 'admin') return true;
-    if (currentUser.isProfileCompleted === false) return false;
+    if (currentUser.isProfileCompleted === false && currentUser.isProfileComplete !== true) return false;
 
     const hasCompany = Boolean(currentUser.companyName && currentUser.companyName.trim());
     const hasBirthDate = Boolean(currentUser.birthDate && currentUser.birthDate.trim());
     const hasWhatsapp = Boolean(currentUser.whatsapp && currentUser.whatsapp.trim());
+    const isFlaggedComplete = Boolean(currentUser.isProfileCompleted || currentUser.isProfileComplete);
 
     if (currentUser.role === 'hr') {
-      return hasCompany && hasBirthDate && hasWhatsapp;
+      return isFlaggedComplete && hasCompany && hasBirthDate && hasWhatsapp;
     }
 
     if (currentUser.role === 'leader') {
@@ -1019,7 +1071,7 @@ El Equipo de Lidacta`;
         currentUser.directReports !== null &&
         !isNaN(Number(currentUser.directReports)) &&
         Number(currentUser.directReports) >= 0;
-      return hasCompany && hasArea && hasBirthDate && hasReports && hasWhatsapp;
+      return isFlaggedComplete && hasCompany && hasArea && hasBirthDate && hasReports && hasWhatsapp;
     }
 
     return true;
@@ -1064,6 +1116,7 @@ El Equipo de Lidacta`;
       birthDate: birthDate.trim(),
       whatsapp: whatsapp.trim(),
       isProfileCompleted: true,
+      isProfileComplete: true,
       ...(currentUser.role === 'leader'
         ? {
             area: area?.trim() || '',
@@ -1091,6 +1144,33 @@ El Equipo de Lidacta`;
         )
       );
     }
+
+    // Persist to centralized server store for cross-device consistency (Mobile, PC, Incognito)
+    fetch('/api/user/complete-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: currentUser.id,
+        email: currentUser.email,
+        name: currentUser.name,
+        role: currentUser.role,
+        position: currentUser.position,
+        companyName: companyName.trim(),
+        area: area?.trim(),
+        birthDate: birthDate.trim(),
+        directReports: directReports !== undefined ? Number(directReports) : undefined,
+        whatsapp: whatsapp.trim(),
+      }),
+    })
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.success) {
+          console.log('[LIDACTA PROFILE] Successfully synced profile to central server');
+        }
+      })
+      .catch((err) => console.warn('Could not sync complete profile to server:', err));
+
+    showToast('¡Información actualizada correctamente! Tu perfil de Líder ha quedado completado.', 'success');
 
     return { success: true };
   };
@@ -1227,6 +1307,9 @@ El Equipo de Lidacta`;
         selectedEmailForPreview,
         showNewUserModal,
         welcomeModalData,
+        toast,
+        showToast,
+        hideToast,
         isAuthenticated,
         isProfileComplete,
         login,

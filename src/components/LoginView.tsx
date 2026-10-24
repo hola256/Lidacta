@@ -32,6 +32,21 @@ export const LoginView: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Dynamic profile completion status for quick access cards
+  const carlosUser = allUsers.find(
+    (u) => u.id === 'user_leader_carlos' || u.email.toLowerCase() === 'carlos.mendoza@novaretail.com'
+  );
+  const isCarlosComplete = Boolean(
+    carlosUser && (carlosUser.isProfileCompleted || carlosUser.isProfileComplete)
+  );
+
+  const marianaUser = allUsers.find(
+    (u) => u.id === 'user_hr_mariana' || u.email.toLowerCase() === 'mariana.castillo@novaretail.com'
+  );
+  const isMarianaComplete = Boolean(
+    marianaUser && (marianaUser.isProfileCompleted || marianaUser.isProfileComplete)
+  );
+
   // Auto-fill profile helpers when typing recognizable emails
   const handleEmailChange = (val: string) => {
     setEmail(val);
@@ -361,34 +376,56 @@ export const LoginView: React.FC = () => {
               </button>
             </div>
 
-            {/* Dedicated Onboarding Test Section */}
+            {/* Dedicated Onboarding / User Test Section */}
             <div className="pt-2 border-t border-white/10">
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#FFD3BF] block mb-1.5">
-                Probar Flujo Obligatorio de Onboarding:
+                {isCarlosComplete && isMarianaComplete
+                  ? 'Líderes y RH Verificados (Onboarding Completado):'
+                  : 'Probar Flujo Obligatorio de Onboarding:'}
               </span>
               <div className="grid grid-cols-2 gap-2 text-[11px]">
                 <button
                   type="button"
                   onClick={handleQuickLoginPendingLeader}
-                  className="p-2.5 bg-[#BF3A1B]/15 hover:bg-[#BF3A1B]/25 border border-[#BF3A1B]/35 rounded-xl text-left cursor-pointer transition-colors group"
+                  className={`p-2.5 ${
+                    isCarlosComplete
+                      ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/40 text-emerald-200'
+                      : 'bg-[#BF3A1B]/15 hover:bg-[#BF3A1B]/25 border-[#BF3A1B]/35 text-[#FFD3BF]'
+                  } border rounded-xl text-left cursor-pointer transition-colors group`}
                 >
-                  <span className="font-bold text-[#FFD3BF] group-hover:text-white block">
-                    ⚡ Líder Incompleto
+                  <span
+                    className={`font-bold ${
+                      isCarlosComplete ? 'text-emerald-300' : 'text-[#FFD3BF]'
+                    } group-hover:text-white block truncate`}
+                  >
+                    {isCarlosComplete ? '✅ Líder Completo' : '⚡ Líder Incompleto'}
                   </span>
                   <span className="text-[10px] text-[#FFF7EF]/70 truncate block">
-                    Carlos Mendoza · Requiere datos
+                    {isCarlosComplete
+                      ? 'Carlos Mendoza · Perfil activo'
+                      : 'Carlos Mendoza · Requiere datos'}
                   </span>
                 </button>
                 <button
                   type="button"
                   onClick={handleQuickLoginPendingHR}
-                  className="p-2.5 bg-[#BF3A1B]/15 hover:bg-[#BF3A1B]/25 border border-[#BF3A1B]/35 rounded-xl text-left cursor-pointer transition-colors group"
+                  className={`p-2.5 ${
+                    isMarianaComplete
+                      ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/40 text-emerald-200'
+                      : 'bg-[#BF3A1B]/15 hover:bg-[#BF3A1B]/25 border-[#BF3A1B]/35 text-[#FFD3BF]'
+                  } border rounded-xl text-left cursor-pointer transition-colors group`}
                 >
-                  <span className="font-bold text-[#FFD3BF] group-hover:text-white block">
-                    ⚡ RH Incompleta
+                  <span
+                    className={`font-bold ${
+                      isMarianaComplete ? 'text-emerald-300' : 'text-[#FFD3BF]'
+                    } group-hover:text-white block truncate`}
+                  >
+                    {isMarianaComplete ? '✅ RH Completa' : '⚡ RH Incompleta'}
                   </span>
                   <span className="text-[10px] text-[#FFF7EF]/70 truncate block">
-                    Mariana Castillo · Requiere datos
+                    {isMarianaComplete
+                      ? 'Mariana Castillo · Perfil activo'
+                      : 'Mariana Castillo · Requiere datos'}
                   </span>
                 </button>
               </div>

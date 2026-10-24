@@ -10,22 +10,34 @@ import { EmailSimulatorDrawer } from './components/EmailSimulatorDrawer';
 import { NewUserModal } from './components/NewUserModal';
 import { WelcomeModal } from './components/WelcomeModal';
 import { AdminProfileModal } from './components/AdminProfileModal';
+import { GlobalToast } from './components/GlobalToast';
 
 const AppContent: React.FC = () => {
   const { currentUser, isAuthenticated, isProfileComplete } = useLidacta();
 
   // If user is not authenticated, show the login portal in Ciruela Noche (#2D1B4E)
   if (!isAuthenticated) {
-    return <LoginView />;
+    return (
+      <>
+        <GlobalToast />
+        <LoginView />
+      </>
+    );
   }
 
   // Mandatory Onboarding Flow: block access to panel if HR or Leader has not completed profile
   if ((currentUser.role === 'leader' || currentUser.role === 'hr') && !isProfileComplete) {
-    return <CompleteProfileView />;
+    return (
+      <>
+        <GlobalToast />
+        <CompleteProfileView />
+      </>
+    );
   }
 
   return (
     <div className="min-h-screen bg-[#FFF7EF] flex flex-col font-sans text-[#4A3F55] selection:bg-[#FFD3BF] selection:text-[#2D1B4E] animate-in fade-in duration-300">
+      <GlobalToast />
       <Navbar />
 
       <main className="flex-1 flex flex-col min-h-0 w-full overflow-hidden">

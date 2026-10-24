@@ -14,6 +14,7 @@ export interface UserProfile {
   whatsapp?: string;
   avatarUrl?: string;
   isProfileCompleted?: boolean;
+  isProfileComplete?: boolean;
   createdAt: string;
 }
 
