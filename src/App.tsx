@@ -10,6 +10,7 @@ import { EmailSimulatorDrawer } from './components/EmailSimulatorDrawer';
 import { NewUserModal } from './components/NewUserModal';
 import { WelcomeModal } from './components/WelcomeModal';
 import { AdminProfileModal } from './components/AdminProfileModal';
+import { LeaderProfileModal } from './components/LeaderProfileModal';
 import { GlobalToast } from './components/GlobalToast';
 
 const AppContent: React.FC = () => {
@@ -50,6 +51,7 @@ const AppContent: React.FC = () => {
       <NewUserModal />
       <WelcomeModal />
       <AdminProfileModal />
+      <LeaderProfileModal />
     </div>
   );
 };

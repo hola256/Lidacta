@@ -5,11 +5,14 @@ import {
   Mail,
   ShieldCheck,
   User,
-  UserPlus,
   ChevronDown,
   Sparkles,
   LogOut,
   UserCheck,
+  Building2,
+  Briefcase,
+  Phone,
+  Users,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -23,6 +26,7 @@ export const Navbar: React.FC = () => {
     markNotificationsAsRead,
     openEmailDrawer,
     openProfileModal,
+    openLeaderProfileModal,
     logout,
   } = useLidacta();
 
@@ -182,69 +186,130 @@ export const Navbar: React.FC = () => {
             </button>
 
             {showUserDropdown && (
-              <div className="fixed sm:absolute right-3 sm:right-0 top-16 sm:top-auto sm:mt-2 w-[calc(100vw-24px)] max-w-xs sm:w-72 bg-white border border-[#493447]/15 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2">
-                {currentUser.role === 'admin' && (
-                  <div className="p-2 border-b border-[#493447]/10 bg-[#FFF7EF]">
-                    <button
-                      onClick={() => {
-                        setShowUserDropdown(false);
-                        openProfileModal();
-                      }}
-                      className="w-full flex items-center gap-2.5 p-2 rounded-xl bg-white border border-[#BF3A1B]/30 hover:border-[#BF3A1B] text-[#BF3A1B] text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-[#FFD3BF]/40 text-[#BF3A1B] flex items-center justify-center shrink-0 font-bold">
-                        <UserCheck className="w-4 h-4 text-[#BF3A1B]" />
-                      </div>
-                      <div className="text-left flex-1 min-w-0">
-                        <div className="text-[#2D1B4E] font-extrabold truncate">Editar Mi Perfil</div>
-                        <div className="text-[10px] text-[#4A3F55]/70 font-normal truncate">
-                          Teléfono, WhatsApp y Correo de Alertas
-                        </div>
-                      </div>
-                    </button>
-                  </div>
-                )}
-                <div className="px-3 py-2 border-b border-[#493447]/10">
-                  <p className="text-xs font-medium text-[#4A3F55]/70">Cambiar de perfil para probar:</p>
-                </div>
-                <div className="max-h-60 overflow-y-auto py-1">
-                  {allUsers.map((u) => (
-                    <button
-                      key={u.id}
-                      onClick={() => {
-                        switchUser(u.id);
-                        setShowUserDropdown(false);
-                      }}
-                      className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-[#FFF7EF] transition-colors cursor-pointer ${
-                        u.id === currentUser.id ? 'bg-[#FFD3BF]/20 font-semibold' : ''
-                      }`}
-                    >
-                      <div className="flex flex-col truncate pr-2">
-                        <span className="text-[#2D1B4E] truncate font-medium">{u.name}</span>
-                        <span className="text-[10px] text-[#4A3F55]/70 truncate">
-                          {u.position} · {u.companyName}
+              <div className="fixed sm:absolute right-3 sm:right-0 top-16 sm:top-auto sm:mt-2 w-[calc(100vw-24px)] max-w-xs sm:w-80 bg-white border border-[#493447]/15 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                {/* Profile Information Card (Private & Isolated) */}
+                <div className="p-3.5 bg-gradient-to-b from-[#FFF7EF] to-white border-b border-[#493447]/10">
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-10 h-10 rounded-full bg-[#2D1B4E] border border-white/30 text-[#F7B538] flex items-center justify-center text-sm font-bold overflow-hidden shrink-0 shadow-xs">
+                      {currentUser.avatarUrl ? (
+                        <img
+                          src={currentUser.avatarUrl}
+                          alt={currentUser.name}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        currentUser.name.charAt(0)
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[#2D1B4E] font-extrabold text-sm truncate">
+                          {currentUser.name}
+                        </span>
+                        <span
+                          className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold shrink-0 ${
+                            roleBadges[currentUser.role]?.bg || 'bg-[#FFD3BF] text-[#BF3A1B]'
+                          }`}
+                        >
+                          {roleBadges[currentUser.role]?.text || 'Líder'}
                         </span>
                       </div>
-                      <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-bold shrink-0 ${
-                          roleBadges[u.role].bg
-                        }`}
-                      >
-                        {roleBadges[u.role].text}
+                      <p className="text-[11px] font-medium text-[#4A3F55] truncate">
+                        {currentUser.position || 'Líder'}
+                      </p>
+                      <p className="text-[10px] text-[#4A3F55]/70 truncate">
+                        {currentUser.companyName}
+                        {currentUser.area ? ` · ${currentUser.area}` : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Contact & Context Details */}
+                  <div className="mt-2.5 pt-2 border-t border-[#493447]/10 space-y-1 text-[11px]">
+                    <div className="flex items-center justify-between text-[#4A3F55]/80">
+                      <span className="text-[#4A3F55]/60 text-[10px]">Correo:</span>
+                      <span className="font-medium text-[#2D1B4E] truncate max-w-[170px]" title={currentUser.email}>
+                        {currentUser.email}
                       </span>
-                    </button>
-                  ))}
+                    </div>
+                    <div className="flex items-center justify-between text-[#4A3F55]/80">
+                      <span className="text-[#4A3F55]/60 text-[10px]">WhatsApp:</span>
+                      <span className="font-medium text-[#2D1B4E] truncate max-w-[170px]">
+                        {currentUser.whatsapp || 'No registrado'}
+                      </span>
+                    </div>
+                    {currentUser.role === 'leader' && currentUser.directReports !== undefined && (
+                      <div className="flex items-center justify-between text-[#4A3F55]/80">
+                        <span className="text-[#4A3F55]/60 text-[10px]">Personas a cargo:</span>
+                        <span className="font-medium text-[#2D1B4E]">
+                          {currentUser.directReports} colaboradores
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Confidentiality Guarantee */}
+                  <div className="mt-2.5 px-2 py-1 bg-white rounded-lg border border-[#493447]/10 flex items-center gap-1.5 text-[10px] text-[#2D1B4E]/80">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#F7B538] shrink-0" />
+                    <span className="truncate font-medium">Espacio 100% privado y confidencial</span>
+                  </div>
                 </div>
-                <div className="border-t border-[#493447]/10 pt-1 px-2 mt-1">
+
+                {/* Optional Developer Profile Testing Switcher: Strictly restricted to Admin only */}
+                {currentUser.role === 'admin' && (
+                  <div className="border-b border-[#493447]/10 py-1.5">
+                    <div className="px-3 py-1">
+                      <p className="text-[10px] font-bold text-[#4A3F55]/70 uppercase tracking-wider">
+                        Modo Pruebas (Solo Administrador):
+                      </p>
+                    </div>
+                    <div className="max-h-36 overflow-y-auto py-1">
+                      {allUsers.map((u) => (
+                        <button
+                          key={u.id}
+                          onClick={() => {
+                            switchUser(u.id);
+                            setShowUserDropdown(false);
+                          }}
+                          className={`w-full px-3 py-1.5 text-left text-xs flex items-center justify-between hover:bg-[#FFF7EF] transition-colors cursor-pointer ${
+                            u.id === currentUser.id ? 'bg-[#FFD3BF]/20 font-semibold' : ''
+                          }`}
+                        >
+                          <div className="flex flex-col truncate pr-2">
+                            <span className="text-[#2D1B4E] truncate font-medium text-[11px]">{u.name}</span>
+                            <span className="text-[9px] text-[#4A3F55]/70 truncate">
+                              {u.position} · {u.companyName}
+                            </span>
+                          </div>
+                          <span
+                            className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold shrink-0 ${
+                              roleBadges[u.role]?.bg || ''
+                            }`}
+                          >
+                            {roleBadges[u.role]?.text || ''}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Bottom Actions */}
+                <div className="border-t border-[#493447]/10 pt-1 px-2 mt-1 space-y-0.5">
                   <button
                     onClick={() => {
-                      setShowNewUserModal(true);
                       setShowUserDropdown(false);
+                      if (currentUser.role === 'admin') {
+                        openProfileModal();
+                      } else {
+                        openLeaderProfileModal();
+                      }
                     }}
                     className="w-full flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[#BF3A1B] hover:bg-[#FFD3BF]/30 rounded-lg transition-colors cursor-pointer"
                   >
-                    <UserPlus className="w-3.5 h-3.5" />
-                    <span>Registrar nuevo perfil</span>
+                    <UserCheck className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                    <span>Actualizar perfil</span>
                   </button>
                   <button
                     onClick={() => {

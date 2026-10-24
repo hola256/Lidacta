@@ -29,6 +29,7 @@ interface LidactaContextType {
   showNewUserModal: boolean;
   welcomeModalData: { user: UserProfile; emailText: string } | null;
   isProfileModalOpen: boolean;
+  isLeaderProfileModalOpen: boolean;
 
   // Toast / System Notifications
   toast: { id: string; message: string; type: 'success' | 'info' | 'warning' | 'error' } | null;
@@ -67,6 +68,8 @@ interface LidactaContextType {
   closeWelcomeModal: () => void;
   openProfileModal: () => void;
   closeProfileModal: () => void;
+  openLeaderProfileModal: () => void;
+  closeLeaderProfileModal: () => void;
   setActiveMentorshipId: (id: string | null) => void;
   startNewMentorship: (
     challengeText: string,
@@ -284,6 +287,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isEmailDrawerOpen, setIsEmailDrawerOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isLeaderProfileModalOpen, setIsLeaderProfileModalOpen] = useState(false);
   const [selectedEmailForPreview, setSelectedEmailForPreview] = useState<NotificationItem | null>(null);
   const [showNewUserModal, setShowNewUserModal] = useState(false);
   const [welcomeModalData, setWelcomeModalData] = useState<{ user: UserProfile; emailText: string } | null>(null);
@@ -310,6 +314,9 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const openProfileModal = () => setIsProfileModalOpen(true);
   const closeProfileModal = () => setIsProfileModalOpen(false);
+
+  const openLeaderProfileModal = () => setIsLeaderProfileModalOpen(true);
+  const closeLeaderProfileModal = () => setIsLeaderProfileModalOpen(false);
 
   // App starts by default on the login screen
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -1258,24 +1265,64 @@ El Equipo de Lidacta`;
     const cleanEmail = updates.email.trim().toLowerCase();
     const cleanWhatsapp = updates.whatsapp !== undefined ? updates.whatsapp.trim() : '';
 
-    setAllUsers((prev) =>
-      prev.map((u) => {
-        if (u.id === userId) {
-          return {
-            ...u,
-            ...updates,
-            name: cleanName,
-            email: cleanEmail,
-            whatsapp: cleanWhatsapp || u.whatsapp,
-            position: updates.position !== undefined ? updates.position.trim() : u.position,
-            companyName: updates.companyName !== undefined ? updates.companyName.trim() : u.companyName,
-          };
-        }
-        return u;
-      })
+    const nextUsers = allUsers.map((u) => {
+      if (u.id === userId) {
+        return {
+          ...u,
+          ...updates,
+          name: cleanName,
+          email: cleanEmail,
+          whatsapp: cleanWhatsapp || u.whatsapp,
+          position: updates.position !== undefined ? updates.position.trim() : u.position,
+          companyName: updates.companyName !== undefined ? updates.companyName.trim() : u.companyName,
+          area: updates.area !== undefined ? updates.area.trim() : u.area,
+          birthDate: updates.birthDate !== undefined ? updates.birthDate.trim() : u.birthDate,
+          directReports:
+            updates.directReports !== undefined ? Number(updates.directReports) : u.directReports,
+          isProfileCompleted: true,
+          isProfileComplete: true,
+        };
+      }
+      return u;
+    });
+
+    setAllUsers(nextUsers);
+
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}users`, JSON.stringify(nextUsers));
+      if (userId === 'user_leader_carlos' || cleanEmail.includes('carlos.mendoza')) {
+        localStorage.setItem('carlosProfileCompleted', 'true');
+        localStorage.setItem(`${STORAGE_KEY_PREFIX}carlosProfileCompleted`, 'true');
+        window.dispatchEvent(new Event('storage'));
+      }
+    } catch {}
+
+    // Update companies if name changed
+    if (updates.companyName) {
+      setCompanies((prev) =>
+        prev.map((c) =>
+          c.id === (updates.companyId || currentUser.companyId)
+            ? { ...c, name: updates.companyName!.trim() }
+            : c
+        )
+      );
+    }
+
+    // Update mentorship session if leader
+    setMentorships((prev) =>
+      prev.map((m) =>
+        m.leaderId === userId
+          ? {
+              ...m,
+              leaderName: cleanName,
+              companyName: updates.companyName?.trim() || m.companyName,
+              leaderArea: updates.area?.trim() || m.leaderArea,
+            }
+          : m
+      )
     );
 
-    // If updating admin, sync to centralized server memory so all devices/browsers reflect it immediately
+    // If updating admin, sync to centralized server memory
     const targetUser = allUsers.find((u) => u.id === userId);
     if (userId === 'user_admin_tania' || updates.role === 'admin' || targetUser?.role === 'admin') {
       try {
@@ -1295,6 +1342,25 @@ El Equipo de Lidacta`;
         console.warn('Failed to persist admin profile to server:', err);
       }
     }
+
+    // Also update server user list
+    try {
+      fetch('/api/users/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          updates: {
+            ...updates,
+            name: cleanName,
+            email: cleanEmail,
+            whatsapp: cleanWhatsapp,
+            isProfileCompleted: true,
+            isProfileComplete: true,
+          },
+        }),
+      }).catch(() => {});
+    } catch {}
 
     return { success: true, message: 'Perfil actualizado y sincronizado centralmente.' };
   };
@@ -1371,6 +1437,9 @@ El Equipo de Lidacta`;
         isProfileModalOpen,
         openProfileModal,
         closeProfileModal,
+        isLeaderProfileModalOpen,
+        openLeaderProfileModal,
+        closeLeaderProfileModal,
         updateUserProfile,
         selectedEmailForPreview,
         showNewUserModal,
