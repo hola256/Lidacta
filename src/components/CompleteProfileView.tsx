@@ -91,6 +91,18 @@ export const CompleteProfileView: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      // Explicitly register carlosProfileCompleted = true in global localStorage as required
+      if (
+        currentUser.id === 'user_leader_carlos' ||
+        currentUser.email.toLowerCase().includes('carlos.mendoza')
+      ) {
+        try {
+          localStorage.setItem('carlosProfileCompleted', 'true');
+          localStorage.setItem('lidacta_v2_carlosProfileCompleted', 'true');
+          window.dispatchEvent(new Event('storage'));
+        } catch {}
+      }
+
       const result = await completeUserProfile({
         companyName: companyName.trim(),
         birthDate: birthDate.trim(),
@@ -104,6 +116,17 @@ export const CompleteProfileView: React.FC = () => {
       });
 
       if (result.success) {
+        // Guarantee carlosProfileCompleted = true in global localStorage before redirecting
+        if (
+          currentUser.id === 'user_leader_carlos' ||
+          currentUser.email.toLowerCase().includes('carlos.mendoza')
+        ) {
+          try {
+            localStorage.setItem('carlosProfileCompleted', 'true');
+            localStorage.setItem('lidacta_v2_carlosProfileCompleted', 'true');
+            window.dispatchEvent(new Event('storage'));
+          } catch {}
+        }
         setIsSuccess(true);
       } else {
         setIsSubmitting(false);

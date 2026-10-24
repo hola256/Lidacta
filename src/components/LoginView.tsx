@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLidacta } from '../context/LidactaContext';
 import { UserRole } from '../types/lidacta';
 import {
@@ -32,13 +32,51 @@ export const LoginView: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Dynamic profile completion status for quick access cards
-  const carlosUser = allUsers.find(
-    (u) => u.id === 'user_leader_carlos' || u.email.toLowerCase() === 'carlos.mendoza@novaretail.com'
-  );
-  const isCarlosComplete = Boolean(
-    carlosUser && (carlosUser.isProfileCompleted || carlosUser.isProfileComplete)
-  );
+  // Dedicated dynamic state for Carlos Mendoza profile completion (bound to localStorage)
+  const [carlosProfileCompleted, setCarlosProfileCompleted] = useState<boolean>(() => {
+    try {
+      const explicit = localStorage.getItem('carlosProfileCompleted');
+      if (explicit !== null) return explicit === 'true';
+      const prefix = localStorage.getItem('lidacta_v2_carlosProfileCompleted');
+      if (prefix !== null) return prefix === 'true';
+    } catch {}
+    const carlos = allUsers.find(
+      (u) => u.id === 'user_leader_carlos' || u.email.toLowerCase() === 'carlos.mendoza@novaretail.com'
+    );
+    return Boolean(carlos && (carlos.isProfileCompleted || carlos.isProfileComplete));
+  });
+
+  // Listen for changes from localStorage and context in real-time
+  useEffect(() => {
+    const syncStatus = () => {
+      try {
+        const stored = localStorage.getItem('carlosProfileCompleted');
+        if (stored !== null) {
+          setCarlosProfileCompleted(stored === 'true');
+          return;
+        }
+        const prefixStored = localStorage.getItem('lidacta_v2_carlosProfileCompleted');
+        if (prefixStored !== null) {
+          setCarlosProfileCompleted(prefixStored === 'true');
+          return;
+        }
+      } catch {}
+      const carlos = allUsers.find(
+        (u) => u.id === 'user_leader_carlos' || u.email.toLowerCase() === 'carlos.mendoza@novaretail.com'
+      );
+      if (carlos && (carlos.isProfileCompleted || carlos.isProfileComplete)) {
+        setCarlosProfileCompleted(true);
+      }
+    };
+
+    syncStatus();
+    window.addEventListener('storage', syncStatus);
+    const interval = setInterval(syncStatus, 800);
+    return () => {
+      window.removeEventListener('storage', syncStatus);
+      clearInterval(interval);
+    };
+  }, [allUsers]);
 
   const marianaUser = allUsers.find(
     (u) => u.id === 'user_hr_mariana' || u.email.toLowerCase() === 'mariana.castillo@novaretail.com'
@@ -379,7 +417,7 @@ export const LoginView: React.FC = () => {
             {/* Dedicated Onboarding / User Test Section */}
             <div className="pt-2 border-t border-white/10">
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#FFD3BF] block mb-1.5">
-                {isCarlosComplete && isMarianaComplete
+                {carlosProfileCompleted && isMarianaComplete
                   ? 'Líderes y RH Verificados (Onboarding Completado):'
                   : 'Probar Flujo Obligatorio de Onboarding:'}
               </span>
@@ -388,20 +426,20 @@ export const LoginView: React.FC = () => {
                   type="button"
                   onClick={handleQuickLoginPendingLeader}
                   className={`p-2.5 ${
-                    isCarlosComplete
+                    carlosProfileCompleted
                       ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/40 text-emerald-200'
                       : 'bg-[#BF3A1B]/15 hover:bg-[#BF3A1B]/25 border-[#BF3A1B]/35 text-[#FFD3BF]'
                   } border rounded-xl text-left cursor-pointer transition-colors group`}
                 >
                   <span
                     className={`font-bold ${
-                      isCarlosComplete ? 'text-emerald-300' : 'text-[#FFD3BF]'
+                      carlosProfileCompleted ? 'text-emerald-300' : 'text-[#FFD3BF]'
                     } group-hover:text-white block truncate`}
                   >
-                    {isCarlosComplete ? '✅ Líder Completo' : '⚡ Líder Incompleto'}
+                    {carlosProfileCompleted ? '✅ Líder Completo' : '⚡ Líder Incompleto'}
                   </span>
                   <span className="text-[10px] text-[#FFF7EF]/70 truncate block">
-                    {isCarlosComplete
+                    {carlosProfileCompleted
                       ? 'Carlos Mendoza · Perfil activo'
                       : 'Carlos Mendoza · Requiere datos'}
                   </span>

@@ -67,13 +67,21 @@ describe('User Profile Completion & Persistence Logic', () => {
 
   it('should verify quick access badge logic in LoginView matches status', () => {
     // Before completion
-    let isCarlosComplete = false;
-    let label = isCarlosComplete ? '✅ Líder Completo' : '⚡ Líder Incompleto';
+    let carlosProfileCompleted = false;
+    let label = carlosProfileCompleted ? '✅ Líder Completo' : '⚡ Líder Incompleto';
+    let cardClass = carlosProfileCompleted
+      ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/40 text-emerald-200'
+      : 'bg-[#BF3A1B]/15 hover:bg-[#BF3A1B]/25 border-[#BF3A1B]/35 text-[#FFD3BF]';
     assert.equal(label, '⚡ Líder Incompleto');
+    assert.ok(cardClass.includes('#BF3A1B'));
 
-    // After completion
-    isCarlosComplete = true;
-    label = isCarlosComplete ? '✅ Líder Completo' : '⚡ Líder Incompleto';
+    // After completion via localStorage.setItem('carlosProfileCompleted', 'true')
+    carlosProfileCompleted = true;
+    label = carlosProfileCompleted ? '✅ Líder Completo' : '⚡ Líder Incompleto';
+    cardClass = carlosProfileCompleted
+      ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/40 text-emerald-200'
+      : 'bg-[#BF3A1B]/15 hover:bg-[#BF3A1B]/25 border-[#BF3A1B]/35 text-[#FFD3BF]';
     assert.equal(label, '✅ Líder Completo');
+    assert.ok(cardClass.includes('emerald-500'));
   });
 });
