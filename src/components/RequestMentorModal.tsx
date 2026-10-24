@@ -275,7 +275,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
   };
 
   const modalContent = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm overflow-y-auto overflow-x-hidden">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm overflow-y-auto overflow-x-hidden">
       <div
         className="w-[92vw] sm:w-full sm:max-w-md mx-auto my-auto overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col box-border max-w-full"
         onClick={(e) => e.stopPropagation()}

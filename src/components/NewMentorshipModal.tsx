@@ -78,7 +78,7 @@ export const NewMentorshipModal: React.FC<NewMentorshipModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#2D1B4E]/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[70] bg-[#2D1B4E]/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-in fade-in duration-200">
       <div
         className="w-full max-w-xl bg-white text-[#2D1B4E] rounded-3xl shadow-2xl border border-[#493447]/15 overflow-hidden animate-in zoom-in-95 duration-200 my-auto"
         onClick={(e) => e.stopPropagation()}

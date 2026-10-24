@@ -1838,21 +1838,18 @@ export const LeaderView: React.FC = () => {
       </main>
 
       {/* Persistent Floating Shortcut: Asesoría 1:1 */}
-      <div className="fixed bottom-20 right-3 sm:right-6 z-30">
+      <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-auto max-w-fit overflow-visible">
         <button
           type="button"
           onClick={() => setIsMentorModalOpen(true)}
-          className="flex items-center gap-2 px-3.5 sm:px-4 py-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white rounded-2xl shadow-xl border-2 border-white cursor-pointer active:scale-95 transition-all group"
+          className="w-auto min-w-fit flex items-center gap-2.5 px-4 py-3 bg-[#BF3A1B] hover:bg-[#a63014] text-white rounded-2xl shadow-xl hover:shadow-2xl border-2 border-white cursor-pointer active:scale-95 transition-all group overflow-visible select-none"
           title="Asesoría 1:1 Directa (Notificación a Tania Padierna)"
         >
-          <div className="w-6 h-6 rounded-lg bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold shrink-0">
-            <UserCheck className="w-3.5 h-3.5 text-[#2D1B4E]" />
+          <div className="w-6 h-6 rounded-lg bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold shrink-0 shadow-xs">
+            <UserCheck className="w-4 h-4 text-[#2D1B4E]" />
           </div>
-          <span className="font-heading font-extrabold text-xs tracking-wide hidden sm:inline">
+          <span className="font-heading font-extrabold text-xs sm:text-sm tracking-wide text-white whitespace-nowrap">
             Asesoría 1:1
-          </span>
-          <span className="font-heading font-extrabold text-xs tracking-wide sm:hidden">
-            Asesor 1:1
           </span>
         </button>
       </div>

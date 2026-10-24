@@ -168,7 +168,7 @@ export const LeaderProfileModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
       <div className="w-full max-w-lg mx-auto my-auto bg-white rounded-2xl shadow-2xl border border-[#493447]/15 overflow-hidden flex flex-col max-h-[92vh] max-w-full overflow-x-hidden">
         {/* Header */}
         <div className="px-5 py-4 bg-[#2D1B4E] text-white flex items-center justify-between shrink-0 border-b border-white/10">
