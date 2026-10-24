@@ -554,7 +554,7 @@ export const LeaderView: React.FC = () => {
   });
 
   return (
-    <div className="flex-1 flex overflow-hidden relative">
+    <div className="flex-1 flex overflow-hidden relative w-full max-w-full">
       {/* MOBILE DRAWER: Mis Acompañamientos */}
       {showMobileSidebar && (
         <div className="fixed inset-0 z-50 md:hidden bg-[#2D1B4E]/60 backdrop-blur-xs flex">
@@ -826,7 +826,7 @@ export const LeaderView: React.FC = () => {
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main ref={mainContainerRef} className="flex-1 flex flex-col bg-[#FFF7EF] overflow-y-auto min-w-0">
+      <main ref={mainContainerRef} className="flex-1 flex flex-col bg-[#FFF7EF] overflow-y-auto overflow-x-hidden min-w-0 w-full max-w-full">
         {/* If no active mentorship is selected, or "+ Nuevo Acompañamiento" was clicked: SHOW INITIAL HERO & PROMPT */}
         {!activeMentorship ? (
           <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6 sm:space-y-8 animate-in fade-in">
@@ -1838,15 +1838,15 @@ export const LeaderView: React.FC = () => {
       </main>
 
       {/* Persistent Floating Shortcut: Asesoría 1:1 */}
-      <div className="fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-50 w-auto max-w-none overflow-visible whitespace-nowrap">
+      <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 pointer-events-none select-none">
         <button
           type="button"
           onClick={() => setIsMentorModalOpen(true)}
-          className="w-auto max-w-none min-w-fit shrink-0 flex items-center gap-2 sm:gap-2.5 px-4 py-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white rounded-2xl shadow-xl hover:shadow-2xl border-2 border-white cursor-pointer active:scale-95 transition-all group overflow-visible select-none whitespace-nowrap"
+          className="pointer-events-auto w-auto max-w-none min-w-fit shrink-0 flex items-center gap-1.5 sm:gap-2.5 px-3 py-2 sm:px-4 sm:py-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white rounded-2xl shadow-xl hover:shadow-2xl border-2 border-white cursor-pointer active:scale-95 transition-all group overflow-visible select-none whitespace-nowrap"
           title="Asesoría 1:1 Directa (Notificación a Tania Padierna)"
         >
-          <div className="w-6 h-6 rounded-lg bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold shrink-0 shadow-xs">
-            <UserCheck className="w-4 h-4 text-[#2D1B4E]" />
+          <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold shrink-0 shadow-xs">
+            <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#2D1B4E]" />
           </div>
           <span className="font-heading font-extrabold text-xs sm:text-sm tracking-wide text-white whitespace-nowrap inline-block shrink-0">
             Asesoría 1:1

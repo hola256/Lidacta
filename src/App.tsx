@@ -37,11 +37,11 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#FFF7EF] flex flex-col font-sans text-[#4A3F55] selection:bg-[#FFD3BF] selection:text-[#2D1B4E] animate-in fade-in duration-300">
+    <div className="min-h-screen bg-[#FFF7EF] flex flex-col font-sans text-[#4A3F55] selection:bg-[#FFD3BF] selection:text-[#2D1B4E] animate-in fade-in duration-300 overflow-x-hidden w-full max-w-full relative">
       <GlobalToast />
       <Navbar />
 
-      <main className="flex-1 flex flex-col min-h-0 w-full overflow-hidden">
+      <main className="flex-1 flex flex-col min-h-0 w-full max-w-full overflow-x-hidden overflow-y-hidden">
         {currentUser.role === 'leader' && <LeaderView />}
         {currentUser.role === 'hr' && <HRView />}
         {currentUser.role === 'admin' && <AdminView />}
