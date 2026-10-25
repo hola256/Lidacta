@@ -1049,27 +1049,31 @@ export const LeaderView: React.FC = () => {
         ) : (
           /* ACTIVE MENTORSHIP VIEW */
           <div className="flex-1 flex flex-col h-full overflow-hidden">
-            {/* Top Bar of Active Mentorship: Single Row Action Buttons */}
+            {/* Top Bar of Active Mentorship: Balanced Desktop & Mobile Header */}
             <div className="p-3 sm:p-4 bg-white border-b border-[#493447]/10 shrink-0">
-              <div className="w-full max-w-screen-xl mx-auto flex items-center justify-between gap-3">
-                {/* Botón 'Casos' a la izquierda */}
-                <div className="flex items-center gap-2">
+              <div className="w-full max-w-screen-xl mx-auto flex items-center justify-between gap-4">
+                {/* Izquierda: Botón Casos (móvil) + Cuadro de leyenda confidencial expandido (flex-1) */}
+                <div className="flex-1 min-w-0 flex items-center gap-2.5">
                   <button
                     onClick={() => setShowMobileSidebar(true)}
-                    className="md:hidden min-h-[44px] flex items-center gap-1.5 px-3.5 py-2 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 border border-[#493447]/15 rounded-xl text-xs font-bold text-[#2D1B4E] cursor-pointer shrink-0 active:scale-95 shadow-xs transition-colors"
+                    className="md:hidden min-h-[44px] flex items-center gap-1.5 px-3 py-2 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 border border-[#493447]/15 rounded-xl text-xs font-bold text-[#2D1B4E] cursor-pointer shrink-0 active:scale-95 shadow-xs transition-colors"
                     title="Ver lista de acompañamientos"
                   >
                     <Menu className="w-4 h-4 text-[#BF3A1B]" />
                     <span>Casos</span>
                   </button>
-                  <div className="hidden md:flex items-center gap-2 text-xs font-heading font-extrabold text-[#2D1B4E]">
-                    <span className="text-[#BF3A1B]">Acompañamiento Activo</span>
+
+                  <div className="flex-1 min-w-0 flex items-center gap-2 px-3.5 py-2.5 bg-[#FFF7EF] border border-[#FFD3BF] rounded-xl text-xs sm:text-sm text-[#2D1B4E] font-medium leading-snug shadow-2xs">
+                    <ShieldCheck className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                    <span className="line-clamp-2 sm:line-clamp-none">
+                      Conversación 100% confidencial con tu mentor Lidacta. Recursos Humanos solo ve indicadores de desarrollo
+                    </span>
                   </div>
                 </div>
 
-                {/* Botones 'Asesor 1:1' y '+ Nuevo' juntos a la derecha en una sola línea */}
-                <div className="flex items-center gap-2 shrink-0">
-                  {/* Botón Asesor 1:1 - Estilo contorno claro de utilidad similar a Casos */}
+                {/* Derecha: Botones de Acción alineados a la derecha de esa misma fila */}
+                <div className="flex items-center gap-2.5 shrink-0">
+                  {/* Botón Asesoría 1:1 */}
                   <button
                     onClick={() => setIsMentorModalOpen(true)}
                     className="min-h-[44px] flex items-center gap-1.5 px-3 sm:px-3.5 py-2 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 border border-[#493447]/15 rounded-xl text-xs font-bold text-[#2D1B4E] cursor-pointer shrink-0 active:scale-95 shadow-xs transition-colors"
@@ -1080,19 +1084,19 @@ export const LeaderView: React.FC = () => {
                     <span className="sm:hidden">Asesor 1:1</span>
                   </button>
 
-                  {/* Botón + Nuevo - Estilo principal relleno amarillo que jerarquiza la acción */}
+                  {/* Botón + Nuevo acompañamiento */}
                   <button
                     onClick={() => setIsModalOpen(true)}
-                    className="min-h-[44px] flex items-center gap-1.5 px-3.5 py-2 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] text-xs font-heading font-extrabold rounded-xl shadow-xs transition-colors cursor-pointer shrink-0 active:scale-95"
+                    className="min-h-[44px] flex items-center gap-1.5 px-3 sm:px-3.5 py-2 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] text-xs font-heading font-extrabold rounded-xl shadow-xs transition-colors cursor-pointer shrink-0 active:scale-95"
                     title="Registrar nuevo caso o reto"
                   >
                     <Plus className="w-4 h-4 text-[#2D1B4E]" />
-                    <span className="hidden sm:inline">Nuevo acompañamiento</span>
+                    <span className="hidden sm:inline">+ Nuevo acompañamiento</span>
                     <span className="sm:hidden">+ Nuevo</span>
                   </button>
 
                   {activeMentorship.currentStage === 7 && (
-                    <span className="text-xs font-bold text-[#246B2A] bg-[#E2F7E1] px-3 py-2 rounded-xl flex items-center gap-1 min-h-[44px]">
+                    <span className="text-xs font-bold text-[#246B2A] bg-[#E2F7E1] px-3 py-2 rounded-xl flex items-center gap-1 min-h-[44px] shrink-0">
                       <CheckCircle2 className="w-4 h-4" />
                       <span className="hidden sm:inline">Proceso Concluido</span>
                     </span>
@@ -1111,14 +1115,6 @@ export const LeaderView: React.FC = () => {
                 <h2 className="text-xs sm:text-sm font-heading font-extrabold text-[#493447] tracking-wider uppercase">
                   Mentorías en Proceso ↓
                 </h2>
-              </div>
-
-              {/* Banner de Confidencialidad: Ocupa todo el ancho directamente por encima del historial de mentorías */}
-              <div className="w-full flex items-center gap-2.5 px-3.5 py-2.5 bg-[#FFF7EF] border border-[#FFD3BF] rounded-xl text-xs sm:text-sm text-[#2D1B4E] font-medium leading-snug shadow-2xs">
-                <ShieldCheck className="w-4 h-4 text-[#BF3A1B] shrink-0" />
-                <span>
-                  Conversación 100% confidencial con tu mentor Lidacta. Recursos Humanos solo ve indicadores de desarrollo
-                </span>
               </div>
 
               {/* Accordion Navigation Header */}
@@ -1726,21 +1722,12 @@ export const LeaderView: React.FC = () => {
                           {/* Stage Footer: Advance CTA or Status */}
                           <div className="pt-3 border-t border-[#493447]/10 flex flex-col sm:flex-row items-center justify-between gap-2.5">
                             {isCurrent && st < 7 && (
-                              <>
-                                <span className="text-[11px] text-[#4A3F55]/70 flex items-center gap-1">
+                              <div className="w-full flex items-center justify-between text-[11px] text-[#4A3F55]/80">
+                                <span className="flex items-center gap-1.5">
                                   <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
-                                  Al cumplir con el objetivo de esta etapa, puedes avanzar al siguiente paso.
+                                  Acompañamiento en curso con Lidacta para esta etapa del proceso.
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => advanceStage()}
-                                  disabled={isSendingMessage}
-                                  className="w-full sm:w-auto min-h-[40px] px-4 py-2 bg-[#BF3A1B] hover:bg-[#a63014] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50"
-                                >
-                                  <span>Avanzar a Etapa {st + 1}</span>
-                                  <ChevronRight className="w-3.5 h-3.5" />
-                                </button>
-                              </>
+                              </div>
                             )}
 
                             {isPassed && (
