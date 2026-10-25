@@ -1092,16 +1092,11 @@ export const LeaderView: React.FC = () => {
                     <span className="sm:hidden">Nuevo</span>
                   </button>
 
-                  {activeMentorship.currentStage < 7 && (
-                    <button
-                      onClick={() => advanceStage()}
-                      disabled={isSendingMessage}
-                      className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#BF3A1B] hover:bg-[#a63014] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50 active:scale-95"
-                    >
-                      <span>Avanzar a Etapa {activeMentorship.currentStage + 1}</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                  {/* Etiqueta descriptiva elegante (Solo vista móvil antes del historial/etapa actual) */}
+                  <span className="block md:hidden min-h-[44px] inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#FFF7EF] text-[#BF3A1B] border border-[#BF3A1B]/25 text-xs font-heading font-extrabold rounded-xl shadow-xs whitespace-nowrap">
+                    Mentorías en Proceso ↓
+                  </span>
+
                   {activeMentorship.currentStage === 7 && (
                     <span className="text-xs font-bold text-[#246B2A] bg-[#E2F7E1] px-3 py-2 rounded-xl flex items-center gap-1 min-h-[44px]">
                       <CheckCircle2 className="w-4 h-4" />
