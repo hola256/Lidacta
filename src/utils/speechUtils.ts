@@ -255,11 +255,12 @@ export async function speakText(
   try {
     let audioBlob: Blob | null = null;
 
-    let response = await fetch(ELEVENLABS_STREAM_URL, {
+    const response = await fetch(ELEVENLABS_STREAM_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'xi-api-key': ELEVENLABS_API_KEY,
+        'Content-Type': 'application/json',
+        'Accept': 'audio/mpeg',
       },
       body: JSON.stringify({
         text: cleanText,
@@ -271,26 +272,6 @@ export async function speakText(
       }),
     });
 
-    // If specific cloned voice ID is 404 on this account, try verified ElevenLabs multilingual voice stream
-    if (response.status === 404) {
-      console.warn(`[ElevenLabs TTS] Voice ${ELEVENLABS_VOICE_ID} not found, trying multilingual stream fallback...`);
-      response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/AZnzlk1XvdvUeBnXmlld/stream`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'xi-api-key': ELEVENLABS_API_KEY,
-        },
-        body: JSON.stringify({
-          text: cleanText,
-          model_id: 'eleven_multilingual_v2',
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-          },
-        }),
-      });
-    }
-
     if (response.ok) {
       const blob = await response.blob();
       if (blob && blob.size > 100) {
@@ -298,7 +279,10 @@ export async function speakText(
       }
     } else {
       const errText = await response.text();
-      console.warn(`[ElevenLabs TTS] Direct stream returned ${response.status}:`, errText);
+      console.error(
+        `[ElevenLabs TTS Error] Status: ${response.status} | Voice ID: ${ELEVENLABS_VOICE_ID} | Endpoint: ${ELEVENLABS_STREAM_URL} | Details:`,
+        errText
+      );
     }
 
     if (audioBlob) {

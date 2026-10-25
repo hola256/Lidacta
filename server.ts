@@ -1222,7 +1222,7 @@ app.post('/api/tts', async (req: Request, res: Response) => {
 
     console.log(`[ElevenLabs TTS] Generating audio for voice "${targetVoiceId}" (${cleanText.length} chars)`);
 
-    let response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoiceId}`, {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoiceId}/stream`, {
       method: 'POST',
       headers: {
         'xi-api-key': apiKey,
@@ -1232,25 +1232,12 @@ app.post('/api/tts', async (req: Request, res: Response) => {
       body: JSON.stringify({
         text: cleanText,
         model_id: 'eleven_multilingual_v2',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+        },
       }),
     });
-
-    // If specific cloned voice ID is not found on account (404), seamlessly fallback to ElevenLabs verified multilingual voice
-    if (response.status === 404 && targetVoiceId !== 'AZnzlk1XvdvUeBnXmlld') {
-      console.warn(`[ElevenLabs TTS] Voice ${targetVoiceId} not found, using ElevenLabs multilingual voice fallback...`);
-      response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/AZnzlk1XvdvUeBnXmlld`, {
-        method: 'POST',
-        headers: {
-          'xi-api-key': apiKey,
-          'Content-Type': 'application/json',
-          'Accept': 'audio/mpeg',
-        },
-        body: JSON.stringify({
-          text: cleanText,
-          model_id: 'eleven_multilingual_v2',
-        }),
-      });
-    }
 
     if (!response.ok) {
       const errorText = await response.text();
