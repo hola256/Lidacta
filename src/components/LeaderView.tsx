@@ -169,46 +169,18 @@ export const LeaderView: React.FC = () => {
     7: false,
   });
 
-  // Keep active stage open by default when switching session or advancing stage (only for active cases)
+  // Todas las etapas inician cerradas / colapsadas por defecto al cargar o seleccionar caso
   useEffect(() => {
-    if (activeMentorship) {
-      const isCompleted =
-        activeMentorship.status === 'completed' ||
-        (activeMentorship.status as string) === 'closed' ||
-        (activeMentorship.status as string) === 'concluido' ||
-        !!activeMentorship.completedAt ||
-        activeMentorship.currentStage === 7;
-
-      if (isCompleted) {
-        // Closed / completed case: all 7 stages stay compressed (closed) by default
-        setOpenStages({
-          1: false,
-          2: false,
-          3: false,
-          4: false,
-          5: false,
-          6: false,
-          7: false,
-        });
-      } else {
-        const stage = activeMentorship.currentStage || 1;
-        setOpenStages({
-          1: stage === 1,
-          2: stage === 2,
-          3: stage === 3,
-          4: stage === 4,
-          5: stage === 5,
-          6: stage === 6,
-          7: stage === 7,
-        });
-      }
-    }
-  }, [
-    activeMentorship?.id,
-    activeMentorship?.currentStage,
-    activeMentorship?.status,
-    activeMentorship?.completedAt,
-  ]);
+    setOpenStages({
+      1: false,
+      2: false,
+      3: false,
+      4: false,
+      5: false,
+      6: false,
+      7: false,
+    });
+  }, [activeMentorship?.id]);
 
   const toggleStage = (st: StageNumber) => {
     setOpenStages((prev) => ({
