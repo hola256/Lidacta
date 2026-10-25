@@ -1,135 +1,3 @@
-// Global voice cache and subscription to speechSynthesis.onvoiceschanged
-let cachedVoices: SpeechSynthesisVoice[] = [];
-
-export function loadAvailableVoices(): SpeechSynthesisVoice[] {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-    return [];
-  }
-  const voices = window.speechSynthesis.getVoices();
-  if (voices && voices.length > 0) {
-    cachedVoices = voices;
-  }
-  return cachedVoices;
-}
-
-// Subscribe immediately to onvoiceschanged for proactive voice discovery
-if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-  loadAvailableVoices();
-  window.speechSynthesis.addEventListener('voiceschanged', () => {
-    loadAvailableVoices();
-  });
-}
-
-/**
- * Ensures voices are loaded asynchronously before playback
- */
-export function ensureVoicesLoaded(): Promise<SpeechSynthesisVoice[]> {
-  return new Promise((resolve) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      resolve([]);
-      return;
-    }
-    const current = window.speechSynthesis.getVoices();
-    if (current && current.length > 0) {
-      cachedVoices = current;
-      resolve(current);
-      return;
-    }
-    let resolved = false;
-    const handler = () => {
-      if (resolved) return;
-      resolved = true;
-      const v = window.speechSynthesis.getVoices();
-      if (v.length > 0) cachedVoices = v;
-      resolve(cachedVoices);
-    };
-    window.speechSynthesis.addEventListener('voiceschanged', handler, { once: true });
-    setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        const v = window.speechSynthesis.getVoices();
-        if (v.length > 0) cachedVoices = v;
-        resolve(cachedVoices);
-      }
-    }, 300);
-  });
-}
-
-/**
- * Intelligent voice selection prioritizing neural/natural high-definition voices in Spanish (Mexico / Latin America)
- */
-export function getBestNaturalSpanishVoice(): SpeechSynthesisVoice | null {
-  const voices = loadAvailableVoices();
-  if (!voices || voices.length === 0) return null;
-
-  // 1. Voces 'Natural' o 'Neural' en es-MX (ej. Microsoft Dalia Online (Natural), Jorge Online (Natural))
-  const esMxNatural = voices.find(
-    (v) =>
-      /^es[-_]MX/i.test(v.lang) &&
-      (v.name.toLowerCase().includes('natural') ||
-        v.name.toLowerCase().includes('neural') ||
-        v.name.toLowerCase().includes('dalia') ||
-        v.name.toLowerCase().includes('jorge'))
-  );
-  if (esMxNatural) return esMxNatural;
-
-  // 2. Google español de México o Google español latino
-  const googleEsMx = voices.find(
-    (v) =>
-      (/^es[-_]MX/i.test(v.lang) && v.name.toLowerCase().includes('google')) ||
-      (v.lang.startsWith('es') &&
-        v.name.toLowerCase().includes('google') &&
-        (v.name.toLowerCase().includes('m\u00e9xico') ||
-          v.name.toLowerCase().includes('mexico') ||
-          v.name.toLowerCase().includes('estados unidos') ||
-          v.lang.includes('US')))
-  );
-  if (googleEsMx) return googleEsMx;
-
-  // 3. Voces 'Natural' o 'Neural' en cualquier variante de español (es-US, es-419, es-LA, es-ES)
-  const anyEsNatural = voices.find(
-    (v) =>
-      v.lang.startsWith('es') &&
-      (v.name.toLowerCase().includes('natural') ||
-        v.name.toLowerCase().includes('neural') ||
-        v.name.toLowerCase().includes('online'))
-  );
-  if (anyEsNatural) return anyEsNatural;
-
-  // 4. Voces Google en cualquier variante de español (ej. 'Google español')
-  const googleEs = voices.find(
-    (v) => v.lang.startsWith('es') && v.name.toLowerCase().includes('google')
-  );
-  if (googleEs) return googleEs;
-
-  // 5. Voces Microsoft o Apple/Siri de alta calidad en español
-  const highQualityEs = voices.find(
-    (v) =>
-      v.lang.startsWith('es') &&
-      (v.name.toLowerCase().includes('microsoft') ||
-        v.name.toLowerCase().includes('apple') ||
-        v.name.toLowerCase().includes('siri') ||
-        v.name.toLowerCase().includes('paulina') ||
-        v.name.toLowerCase().includes('sabina') ||
-        v.name.toLowerCase().includes('monica'))
-  );
-  if (highQualityEs) return highQualityEs;
-
-  // 6. Cualquier voz específica en es-MX
-  const anyEsMx = voices.find((v) => /^es[-_]MX/i.test(v.lang));
-  if (anyEsMx) return anyEsMx;
-
-  // 7. Cualquier voz en español latino (es-US, es-419, es-AR, es-CO, etc.)
-  const anyEsLatin = voices.find((v) => /^es[-_](US|419|AR|CO|CL|PE)/i.test(v.lang));
-  if (anyEsLatin) return anyEsLatin;
-
-  // 8. Cualquier voz en español disponible
-  const anyEs = voices.find((v) => v.lang.startsWith('es'));
-  if (anyEs) return anyEs;
-
-  return null;
-}
-
 /**
  * Cleans markdown formatting, symbols, and stage tags for natural human cadence
  */
@@ -156,15 +24,6 @@ let currentAudioElement: HTMLAudioElement | null = null;
 let currentAudioBlobUrl: string | null = null;
 
 export function stopSpeaking() {
-  // Cancel Web Speech API synthesis
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    try {
-      window.speechSynthesis.cancel();
-    } catch {
-      // ignore
-    }
-  }
-
   // Stop HTML5 Audio Element if playing
   if (currentAudioElement) {
     try {
@@ -188,51 +47,12 @@ export function stopSpeaking() {
 }
 
 /**
- * Fallback to Web Speech API (es-MX) if ElevenLabs is unavailable or quota is exceeded
- */
-function executeWebSpeech(
-  cleanText: string,
-  onEnd?: () => void,
-  onStart?: () => void
-) {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-    if (onEnd) onEnd();
-    return;
-  }
-
-  window.speechSynthesis.cancel();
-
-  const utterance = new SpeechSynthesisUtterance(cleanText);
-  utterance.lang = 'es-MX';
-  utterance.rate = 0.96;
-  utterance.pitch = 0.99;
-
-  const bestVoice = getBestNaturalSpanishVoice();
-  if (bestVoice) {
-    utterance.voice = bestVoice;
-    utterance.lang = bestVoice.lang;
-  }
-
-  utterance.onstart = () => {
-    if (onStart) onStart();
-  };
-
-  utterance.onend = () => {
-    if (onEnd) onEnd();
-  };
-
-  utterance.onerror = () => {
-    if (onEnd) onEnd();
-  };
-
-  window.speechSynthesis.speak(utterance);
-}
-
-/**
  * Main Text-to-Speech function
- * Directly calls ElevenLabs official streaming route from client:
+ * Directly and exclusively calls ElevenLabs official streaming route for cloned voice 'Lidacta Mentora':
  * https://api.elevenlabs.io/v1/text-to-speech/4pxgXWex1CwQ1I4uyCVG/stream
- * Falls back gracefully to local Web Speech API (es-MX) if unavailable.
+ *
+ * NOTE: window.speechSynthesis and native browser voices are strictly removed.
+ * If the API key is missing or the request fails, it produces no audio and logs the error in the console.
  */
 export async function speakText(
   text: string,
@@ -242,113 +62,91 @@ export async function speakText(
 ): Promise<void> {
   const cleanText = cleanTextForSpeech(text);
   if (!cleanText) {
+    if (onLoading) onLoading(false);
     if (onEnd) onEnd();
     return;
   }
 
-  // Stop any current audio
+  // Stop any currently playing audio
   stopSpeaking();
 
   if (onLoading) onLoading(true);
 
-  try {
-    let audioBlob: Blob | null = null;
-
-    // 1. Direct ElevenLabs streaming call if client environment key is available
-    if (ELEVENLABS_API_KEY) {
-      try {
-        const response = await fetch(ELEVENLABS_STREAM_URL, {
-          method: 'POST',
-          headers: {
-            'xi-api-key': ELEVENLABS_API_KEY,
-            'Content-Type': 'application/json',
-            'Accept': 'audio/mpeg',
-          },
-          body: JSON.stringify({
-            text: cleanText,
-            model_id: 'eleven_multilingual_v2',
-            voice_settings: {
-              stability: 0.5,
-              similarity_boost: 0.75,
-            },
-          }),
-        });
-
-        if (response.ok) {
-          const blob = await response.blob();
-          if (blob && blob.size > 100) {
-            audioBlob = blob;
-          }
-        } else {
-          const errText = await response.text();
-          console.error(
-            `[ElevenLabs TTS Error] Status: ${response.status} | Voice ID: ${ELEVENLABS_VOICE_ID} | Details:`,
-            errText
-          );
-        }
-      } catch (clientErr) {
-        console.warn('[ElevenLabs TTS] Direct client request failed:', clientErr);
-      }
-    }
-
-    // 2. If no client key or direct call didn't yield blob, try internal server proxy /api/tts
-    if (!audioBlob) {
-      try {
-        const proxyResponse = await fetch('/api/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: cleanText, voiceId: ELEVENLABS_VOICE_ID }),
-        });
-        if (proxyResponse.ok) {
-          const blob = await proxyResponse.blob();
-          if (blob && blob.size > 100) {
-            audioBlob = blob;
-          }
-        }
-      } catch {
-        // Internal proxy not available or static host
-      }
-    }
-
-    if (audioBlob) {
-      const blobUrl = URL.createObjectURL(audioBlob);
-      currentAudioBlobUrl = blobUrl;
-      const audio = new Audio(blobUrl);
-      currentAudioElement = audio;
-
-      audio.onplay = () => {
-        if (onLoading) onLoading(false);
-        if (onStart) onStart();
-      };
-
-      audio.onended = () => {
-        if (onLoading) onLoading(false);
-        stopSpeaking();
-        if (onEnd) onEnd();
-      };
-
-      audio.onerror = () => {
-        console.warn('[ElevenLabs TTS] Audio playback error on blob, falling back to Web Speech API');
-        if (onLoading) onLoading(false);
-        stopSpeaking();
-        executeWebSpeech(cleanText, onEnd, onStart);
-      };
-
-      await audio.play();
-      return;
-    }
-  } catch (elevenLabsError) {
-    console.warn('[ElevenLabs TTS] Direct streaming request failed, falling back to Web Speech API:', elevenLabsError);
+  if (!ELEVENLABS_API_KEY) {
+    console.error(
+      '[ElevenLabs TTS Error] API Key no configurada (VITE_ELEVENLABS_API_KEY o NEXT_PUBLIC_ELEVENLABS_API_KEY ausente). No se reproduce audio.'
+    );
+    if (onLoading) onLoading(false);
+    if (onEnd) onEnd();
+    return;
   }
 
-  // Graceful Fallback: Local Web Speech API (es-MX)
-  if (onLoading) onLoading(false);
-  if (cachedVoices.length === 0) {
-    ensureVoicesLoaded().then(() => {
-      executeWebSpeech(cleanText, onEnd, onStart);
+  try {
+    const response = await fetch(ELEVENLABS_STREAM_URL, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': ELEVENLABS_API_KEY,
+        'Content-Type': 'application/json',
+        'Accept': 'audio/mpeg',
+      },
+      body: JSON.stringify({
+        text: cleanText,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+        },
+      }),
     });
-  } else {
-    executeWebSpeech(cleanText, onEnd, onStart);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(
+        `[ElevenLabs TTS Error] Status: ${response.status} | Voice ID: ${ELEVENLABS_VOICE_ID} | Endpoint: ${ELEVENLABS_STREAM_URL} | Detalle:`,
+        errText
+      );
+      if (onLoading) onLoading(false);
+      if (onEnd) onEnd();
+      return;
+    }
+
+    const blob = await response.blob();
+    if (!blob || blob.size === 0) {
+      console.error('[ElevenLabs TTS Error] Respuesta de audio vacía.');
+      if (onLoading) onLoading(false);
+      if (onEnd) onEnd();
+      return;
+    }
+
+    const blobUrl = URL.createObjectURL(blob);
+    currentAudioBlobUrl = blobUrl;
+    const audio = new Audio(blobUrl);
+    currentAudioElement = audio;
+
+    audio.onplay = () => {
+      if (onLoading) onLoading(false);
+      if (onStart) onStart();
+    };
+
+    audio.onended = () => {
+      if (onLoading) onLoading(false);
+      stopSpeaking();
+      if (onEnd) onEnd();
+    };
+
+    audio.onerror = (e) => {
+      console.error('[ElevenLabs TTS Error] Error al reproducir el archivo de audio:', e);
+      if (onLoading) onLoading(false);
+      stopSpeaking();
+      if (onEnd) onEnd();
+    };
+
+    await audio.play();
+  } catch (error) {
+    console.error('[ElevenLabs TTS Error] Error de conexión con la API de ElevenLabs:', error);
+    if (onLoading) onLoading(false);
+    stopSpeaking();
+    if (onEnd) onEnd();
   }
 }
 
