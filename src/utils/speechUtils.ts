@@ -147,10 +147,10 @@ function cleanTextForSpeech(text: string): string {
 
 export const ELEVENLABS_VOICE_ID = '4pxgXWex1CwQ1I4uyCVG';
 export const ELEVENLABS_STREAM_URL = `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream`;
-export const ELEVENLABS_API_KEY =
-  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_ELEVENLABS_API_KEY) ||
+export const ELEVENLABS_API_KEY: string =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_ELEVENLABS_API_KEY) ||
-  'sk_f1522d73b2c5a237197337c9b0adacd87302c5f64d4806d9';
+  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_ELEVENLABS_API_KEY) ||
+  '';
 
 let currentAudioElement: HTMLAudioElement | null = null;
 let currentAudioBlobUrl: string | null = null;
@@ -251,38 +251,63 @@ export async function speakText(
 
   if (onLoading) onLoading(true);
 
-  // Direct ElevenLabs API streaming call from client (no /api/tts proxy)
   try {
     let audioBlob: Blob | null = null;
 
-    const response = await fetch(ELEVENLABS_STREAM_URL, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': ELEVENLABS_API_KEY,
-        'Content-Type': 'application/json',
-        'Accept': 'audio/mpeg',
-      },
-      body: JSON.stringify({
-        text: cleanText,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-        },
-      }),
-    });
+    // 1. Direct ElevenLabs streaming call if client environment key is available
+    if (ELEVENLABS_API_KEY) {
+      try {
+        const response = await fetch(ELEVENLABS_STREAM_URL, {
+          method: 'POST',
+          headers: {
+            'xi-api-key': ELEVENLABS_API_KEY,
+            'Content-Type': 'application/json',
+            'Accept': 'audio/mpeg',
+          },
+          body: JSON.stringify({
+            text: cleanText,
+            model_id: 'eleven_multilingual_v2',
+            voice_settings: {
+              stability: 0.5,
+              similarity_boost: 0.75,
+            },
+          }),
+        });
 
-    if (response.ok) {
-      const blob = await response.blob();
-      if (blob && blob.size > 100) {
-        audioBlob = blob;
+        if (response.ok) {
+          const blob = await response.blob();
+          if (blob && blob.size > 100) {
+            audioBlob = blob;
+          }
+        } else {
+          const errText = await response.text();
+          console.error(
+            `[ElevenLabs TTS Error] Status: ${response.status} | Voice ID: ${ELEVENLABS_VOICE_ID} | Details:`,
+            errText
+          );
+        }
+      } catch (clientErr) {
+        console.warn('[ElevenLabs TTS] Direct client request failed:', clientErr);
       }
-    } else {
-      const errText = await response.text();
-      console.error(
-        `[ElevenLabs TTS Error] Status: ${response.status} | Voice ID: ${ELEVENLABS_VOICE_ID} | Endpoint: ${ELEVENLABS_STREAM_URL} | Details:`,
-        errText
-      );
+    }
+
+    // 2. If no client key or direct call didn't yield blob, try internal server proxy /api/tts
+    if (!audioBlob) {
+      try {
+        const proxyResponse = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: cleanText, voiceId: ELEVENLABS_VOICE_ID }),
+        });
+        if (proxyResponse.ok) {
+          const blob = await proxyResponse.blob();
+          if (blob && blob.size > 100) {
+            audioBlob = blob;
+          }
+        }
+      } catch {
+        // Internal proxy not available or static host
+      }
     }
 
     if (audioBlob) {

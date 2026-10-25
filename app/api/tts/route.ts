@@ -16,7 +16,15 @@ export async function POST(req: Request) {
     const apiKey =
       process.env.ELEVENLABS_API_KEY ||
       process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY ||
-      'sk_f1522d73b2c5a237197337c9b0adacd87302c5f64d4806d9';
+      process.env.VITE_ELEVENLABS_API_KEY ||
+      '';
+
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: 'ELEVENLABS_API_KEY not configured' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     const voiceId = process.env.ELEVENLABS_VOICE_ID || '4pxgXWex1CwQ1I4uyCVG';
 

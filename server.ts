@@ -1196,10 +1196,15 @@ app.post('/api/tts', async (req: Request, res: Response) => {
     }
 
     const apiKey =
-      process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY ||
       process.env.ELEVENLABS_API_KEY ||
+      process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY ||
       process.env.VITE_ELEVENLABS_API_KEY ||
-      'sk_f1522d73b2c5a237197337c9b0adacd87302c5f64d4806d9';
+      '';
+
+    if (!apiKey) {
+      console.warn('[ElevenLabs TTS] No ELEVENLABS_API_KEY configured in environment');
+      return res.status(500).json({ success: false, error: 'ELEVENLABS_API_KEY not configured' });
+    }
 
     const targetVoiceId =
       voiceId ||
