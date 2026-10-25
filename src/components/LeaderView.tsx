@@ -1049,32 +1049,30 @@ export const LeaderView: React.FC = () => {
         ) : (
           /* ACTIVE MENTORSHIP VIEW */
           <div className="flex-1 flex flex-col h-full overflow-hidden">
-            {/* Top Bar of Active Mentorship */}
+            {/* Top Bar of Active Mentorship: Single Row Action Buttons */}
             <div className="p-3 sm:p-4 bg-white border-b border-[#493447]/10 shrink-0">
-              <div className="w-full max-w-screen-xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div className="w-full max-w-screen-xl mx-auto flex items-center justify-between gap-3">
+                {/* Botón 'Casos' a la izquierda */}
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowMobileSidebar(true)}
-                    className="md:hidden min-h-[44px] flex items-center gap-1.5 px-3 py-2 bg-[#FFF7EF] border border-[#493447]/15 rounded-xl text-xs font-bold text-[#2D1B4E] cursor-pointer shrink-0 active:scale-95"
+                    className="md:hidden min-h-[44px] flex items-center gap-1.5 px-3.5 py-2 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 border border-[#493447]/15 rounded-xl text-xs font-bold text-[#2D1B4E] cursor-pointer shrink-0 active:scale-95 shadow-xs transition-colors"
                     title="Ver lista de acompañamientos"
                   >
                     <Menu className="w-4 h-4 text-[#BF3A1B]" />
                     <span>Casos</span>
                   </button>
-                  <div className="flex items-center gap-2 px-3 py-2 bg-[#FFF7EF] border border-[#FFD3BF] rounded-xl text-xs sm:text-sm text-[#2D1B4E] font-medium leading-snug">
-                    <ShieldCheck className="w-4 h-4 text-[#BF3A1B] shrink-0" />
-                    <span>
-                      Conversación 100% confidencial con tu mentor Lidacta. Recursos Humanos solo ve indicadores de desarrollo
-                    </span>
+                  <div className="hidden md:flex items-center gap-2 text-xs font-heading font-extrabold text-[#2D1B4E]">
+                    <span className="text-[#BF3A1B]">Acompañamiento Activo</span>
                   </div>
                 </div>
 
-                {/* Header Actions */}
-                <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-                  {/* Asesoría 1:1 Button */}
+                {/* Botones 'Asesor 1:1' y '+ Nuevo' juntos a la derecha en una sola línea */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Botón Asesor 1:1 - Estilo contorno claro de utilidad similar a Casos */}
                   <button
                     onClick={() => setIsMentorModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-[#FFF7EF] hover:bg-[#FFD3BF]/60 text-[#BF3A1B] border-2 border-[#BF3A1B]/40 hover:border-[#BF3A1B] text-xs font-heading font-extrabold rounded-xl shadow-xs transition-all cursor-pointer min-h-[44px] active:scale-95"
+                    className="min-h-[44px] flex items-center gap-1.5 px-3 sm:px-3.5 py-2 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 border border-[#493447]/15 rounded-xl text-xs font-bold text-[#2D1B4E] cursor-pointer shrink-0 active:scale-95 shadow-xs transition-colors"
                     title="Solicitar Asesoría 1:1 directa (Acompañamiento personal directivo con Tania Padierna)"
                   >
                     <UserCheck className="w-4 h-4 text-[#BF3A1B]" />
@@ -1082,30 +1080,25 @@ export const LeaderView: React.FC = () => {
                     <span className="sm:hidden">Asesor 1:1</span>
                   </button>
 
+                  {/* Botón + Nuevo - Estilo principal relleno amarillo que jerarquiza la acción */}
                   <button
                     onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] text-xs font-heading font-extrabold rounded-xl shadow-xs transition-colors cursor-pointer min-h-[44px] active:scale-95"
+                    className="min-h-[44px] flex items-center gap-1.5 px-3.5 py-2 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] text-xs font-heading font-extrabold rounded-xl shadow-xs transition-colors cursor-pointer shrink-0 active:scale-95"
                     title="Registrar nuevo caso o reto"
                   >
                     <Plus className="w-4 h-4 text-[#2D1B4E]" />
                     <span className="hidden sm:inline">Nuevo acompañamiento</span>
-                    <span className="sm:hidden">Nuevo</span>
+                    <span className="sm:hidden">+ Nuevo</span>
                   </button>
-
-                  {/* Etiqueta descriptiva elegante (Solo vista móvil antes del historial/etapa actual) */}
-                  <span className="block md:hidden min-h-[44px] inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#FFF7EF] text-[#BF3A1B] border border-[#BF3A1B]/25 text-xs font-heading font-extrabold rounded-xl shadow-xs whitespace-nowrap">
-                    Mentorías en Proceso ↓
-                  </span>
 
                   {activeMentorship.currentStage === 7 && (
                     <span className="text-xs font-bold text-[#246B2A] bg-[#E2F7E1] px-3 py-2 rounded-xl flex items-center gap-1 min-h-[44px]">
                       <CheckCircle2 className="w-4 h-4" />
-                      Proceso Concluido
+                      <span className="hidden sm:inline">Proceso Concluido</span>
                     </span>
                   )}
                 </div>
               </div>
-
             </div>
 
             {/* Active Mentorship Body: Vertical Adaptive Accordion (7 Etapas) */}
@@ -1113,6 +1106,20 @@ export const LeaderView: React.FC = () => {
               ref={activeScrollContainerRef}
               className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-5 w-full max-w-screen-xl mx-auto"
             >
+              {/* Texto Descriptivo: Encabezado de sección por debajo de los botones de acción y por encima del historial (simple, color marrón, sin contorno ni fondo) */}
+              <div className="pt-0.5">
+                <h2 className="text-xs sm:text-sm font-heading font-extrabold text-[#493447] tracking-wider uppercase">
+                  Mentorías en Proceso ↓
+                </h2>
+              </div>
+
+              {/* Banner de Confidencialidad: Ocupa todo el ancho directamente por encima del historial de mentorías */}
+              <div className="w-full flex items-center gap-2.5 px-3.5 py-2.5 bg-[#FFF7EF] border border-[#FFD3BF] rounded-xl text-xs sm:text-sm text-[#2D1B4E] font-medium leading-snug shadow-2xs">
+                <ShieldCheck className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                <span>
+                  Conversación 100% confidencial con tu mentor Lidacta. Recursos Humanos solo ve indicadores de desarrollo
+                </span>
+              </div>
 
               {/* Accordion Navigation Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
