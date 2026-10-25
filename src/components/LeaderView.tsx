@@ -41,6 +41,7 @@ import {
   ArrowLeft,
   AlertTriangle,
   Headphones,
+  Loader2,
 } from 'lucide-react';
 import { NewMentorshipModal } from './NewMentorshipModal';
 import { WhatsAppVoiceRecorder } from './WhatsAppVoiceRecorder';
@@ -135,6 +136,10 @@ export const LeaderView: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMentorModalOpen, setIsMentorModalOpen] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [audioState, setAudioState] = useState<{ id: string | null; status: 'idle' | 'loading' | 'playing' }>({
+    id: null,
+    status: 'idle',
+  });
   const [isListeningMic, setIsListeningMic] = useState(false);
   const [speechRecognizer, setSpeechRecognizer] = useState<{ start: () => void; stop: () => void } | null>(null);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
@@ -345,13 +350,33 @@ export const LeaderView: React.FC = () => {
     }, 150);
   };
 
-  const toggleVoicePlayback = (text: string) => {
-    if (isPlayingAudio) {
+  const toggleVoicePlayback = (text: string, messageId?: string) => {
+    const targetId = messageId || text.slice(0, 30);
+    if (audioState.id === targetId && audioState.status !== 'idle') {
       stopSpeaking();
       setIsPlayingAudio(false);
+      setAudioState({ id: null, status: 'idle' });
     } else {
+      stopSpeaking();
       setIsPlayingAudio(true);
-      speakText(text, () => setIsPlayingAudio(false));
+      setAudioState({ id: targetId, status: 'loading' });
+
+      speakText(
+        text,
+        () => {
+          setIsPlayingAudio(false);
+          setAudioState({ id: null, status: 'idle' });
+        },
+        () => {
+          setIsPlayingAudio(true);
+          setAudioState({ id: targetId, status: 'playing' });
+        },
+        (loading) => {
+          if (loading) {
+            setAudioState({ id: targetId, status: 'loading' });
+          }
+        }
+      );
     }
   };
 
@@ -465,24 +490,31 @@ export const LeaderView: React.FC = () => {
                 Lidacta · Mentora Sr.
               </span>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => toggleVoicePlayback(msg.text)}
-                  title="Escuchar intervención de Lidacta con voz"
-                  className="text-[#BF3A1B] hover:text-[#2D1B4E] text-xs flex items-center gap-1 cursor-pointer min-h-[32px] px-2 py-0.5 rounded-lg hover:bg-[#FFD3BF]/20 transition-colors"
-                >
-                  {isPlayingAudio ? (
-                    <>
-                      <VolumeX className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Pausar</span>
-                    </>
-                  ) : (
-                    <>
-                      <Volume2 className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Escuchar</span>
-                    </>
-                  )}
-                </button>
+                {audioState.id === msg.id && audioState.status === 'loading' ? (
+                  <div className="flex items-center gap-1.5 text-xs text-[#BF3A1B] font-medium min-h-[32px] px-2 py-0.5 bg-[#FFD3BF]/30 rounded-lg animate-pulse">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#BF3A1B]" />
+                    <span className="text-[11px] font-semibold">Cargando audio...</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => toggleVoicePlayback(msg.text, msg.id)}
+                    title="Escuchar intervención con la voz clonada de Lidacta Mentora"
+                    className="text-[#BF3A1B] hover:text-[#2D1B4E] text-xs flex items-center gap-1 cursor-pointer min-h-[32px] px-2 py-0.5 rounded-lg hover:bg-[#FFD3BF]/20 transition-colors"
+                  >
+                    {audioState.id === msg.id && audioState.status === 'playing' ? (
+                      <>
+                        <VolumeX className="w-3.5 h-3.5 text-[#BF3A1B] animate-pulse" />
+                        <span className="hidden sm:inline font-bold">Pausar</span>
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Escuchar</span>
+                      </>
+                    )}
+                  </button>
+                )}
                 <span className="text-[10px] text-[#4A3F55]/60 tabular-nums">
                   {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
@@ -1303,15 +1335,36 @@ export const LeaderView: React.FC = () => {
                                     </span>
                                   </div>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleVoicePlayback(getStageTriggerQuestion(st, activeMentorship))}
-                                  title="Escuchar pregunta detonadora con voz"
-                                  className="text-[#BF3A1B] hover:text-[#2D1B4E] text-xs flex items-center gap-1 cursor-pointer px-2.5 py-1 rounded-lg hover:bg-[#FFD3BF]/30 transition-colors"
-                                >
-                                  <Volume2 className="w-3.5 h-3.5" />
-                                  <span className="hidden sm:inline">Escuchar</span>
-                                </button>
+                                {audioState.id === `trigger-${st}` && audioState.status === 'loading' ? (
+                                  <div className="flex items-center gap-1.5 text-xs text-[#BF3A1B] font-medium px-2.5 py-1 bg-[#FFD3BF]/30 rounded-lg animate-pulse">
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#BF3A1B]" />
+                                    <span className="text-[11px] font-semibold">Cargando audio...</span>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      toggleVoicePlayback(
+                                        getStageTriggerQuestion(st, activeMentorship),
+                                        `trigger-${st}`
+                                      )
+                                    }
+                                    title="Escuchar pregunta detonadora con la voz clonada de Lidacta Mentora"
+                                    className="text-[#BF3A1B] hover:text-[#2D1B4E] text-xs flex items-center gap-1 cursor-pointer px-2.5 py-1 rounded-lg hover:bg-[#FFD3BF]/30 transition-colors"
+                                  >
+                                    {audioState.id === `trigger-${st}` && audioState.status === 'playing' ? (
+                                      <>
+                                        <VolumeX className="w-3.5 h-3.5 text-[#BF3A1B] animate-pulse" />
+                                        <span className="hidden sm:inline font-bold">Pausar</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Volume2 className="w-3.5 h-3.5" />
+                                        <span className="hidden sm:inline">Escuchar</span>
+                                      </>
+                                    )}
+                                  </button>
+                                )}
                               </div>
 
                               <p className="text-xs sm:text-sm text-[#2D1B4E] font-medium leading-relaxed whitespace-pre-line">
@@ -1611,16 +1664,49 @@ export const LeaderView: React.FC = () => {
                           {/* Stage 7: Comprehensive Feedback Report */}
                           {st === 7 && activeMentorship.finalFeedbackReport && (
                             <div className="p-4 sm:p-6 bg-white border-2 border-[#2D1B4E] rounded-2xl shadow-md space-y-5 print:border-none">
-                              <div className="border-b border-[#493447]/15 pb-4">
-                                <div className="flex items-center gap-2">
-                                  <Award className="w-5 h-5 text-[#BF3A1B] shrink-0" />
-                                  <h3 className="font-heading font-extrabold text-base sm:text-lg text-[#2D1B4E]">
-                                    Reporte de Retroalimentación de Liderazgo y Autonomía
-                                  </h3>
+                              <div className="border-b border-[#493447]/15 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <Award className="w-5 h-5 text-[#BF3A1B] shrink-0" />
+                                    <h3 className="font-heading font-extrabold text-base sm:text-lg text-[#2D1B4E]">
+                                      Reporte de Retroalimentación de Liderazgo y Autonomía
+                                    </h3>
+                                  </div>
+                                  <p className="text-xs text-[#4A3F55]/80 mt-0.5">
+                                    Lidacta · Desarrollo de Liderazgo en acción · {currentUser.companyName}
+                                  </p>
                                 </div>
-                                <p className="text-xs text-[#4A3F55]/80 mt-0.5">
-                                  Lidacta · Desarrollo de Liderazgo en acción · {currentUser.companyName}
-                                </p>
+
+                                {audioState.id === 'report-summary' && audioState.status === 'loading' ? (
+                                  <div className="flex items-center gap-1.5 text-xs text-[#BF3A1B] font-medium px-3 py-1.5 bg-[#FFD3BF]/30 rounded-xl border border-[#FFD3BF] animate-pulse">
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#BF3A1B]" />
+                                    <span className="text-xs font-semibold">Cargando audio...</span>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const report = activeMentorship.finalFeedbackReport;
+                                      if (!report) return;
+                                      const summarySpeech = `Hola ${currentUser.name.split(' ')[0]}. Este es tu reporte de cierre de mentoría Lidacta. Entre tus fortalezas detectadas destacan: ${report.detectedStrengths.join(', ')}. Las habilidades clave que pusiste en juego fueron: ${report.stageTwoSkills.join(', ')}. Y tus principales recomendaciones para continuar fortaleciendo tu autonomía son: ${report.recommendationsForAutonomy.join(', ')}. ¡Felicidades por completar tu proceso!`;
+                                      toggleVoicePlayback(summarySpeech, 'report-summary');
+                                    }}
+                                    title="Escuchar resumen del reporte con la voz clonada de Lidacta Mentora"
+                                    className="text-[#BF3A1B] hover:text-[#2D1B4E] text-xs font-bold flex items-center gap-1.5 cursor-pointer px-3 py-1.5 rounded-xl bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 border border-[#493447]/15 shadow-xs transition-colors shrink-0"
+                                  >
+                                    {audioState.id === 'report-summary' && audioState.status === 'playing' ? (
+                                      <>
+                                        <VolumeX className="w-3.5 h-3.5 text-[#BF3A1B] animate-pulse" />
+                                        <span>Pausar reporte</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Volume2 className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                                        <span>Escuchar reporte</span>
+                                      </>
+                                    )}
+                                  </button>
+                                )}
                               </div>
 
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">

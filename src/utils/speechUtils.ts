@@ -145,24 +145,75 @@ function cleanTextForSpeech(text: string): string {
     .trim();
 }
 
-function executeSpeak(text: string, onEnd?: () => void) {
-  const cleanText = cleanTextForSpeech(text);
-  if (!cleanText) {
+export const ELEVENLABS_VOICE_ID = '4pxgXWex1CwQ1I4uyCVG';
+export const ELEVENLABS_API_KEY =
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_ELEVENLABS_API_KEY) ||
+  'sk_f1522d73b2c5a237197337c9b0adacd87302c5f64d4806d9';
+
+let currentAudioElement: HTMLAudioElement | null = null;
+let currentAudioBlobUrl: string | null = null;
+
+export function stopSpeaking() {
+  // Cancel Web Speech API synthesis
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch {
+      // ignore
+    }
+  }
+
+  // Stop HTML5 Audio Element if playing
+  if (currentAudioElement) {
+    try {
+      currentAudioElement.pause();
+      currentAudioElement.currentTime = 0;
+    } catch {
+      // ignore
+    }
+    currentAudioElement = null;
+  }
+
+  // Clean up object URL
+  if (currentAudioBlobUrl) {
+    try {
+      URL.revokeObjectURL(currentAudioBlobUrl);
+    } catch {
+      // ignore
+    }
+    currentAudioBlobUrl = null;
+  }
+}
+
+/**
+ * Fallback to Web Speech API (es-MX) if ElevenLabs is unavailable or quota is exceeded
+ */
+function executeWebSpeech(
+  cleanText: string,
+  onEnd?: () => void,
+  onStart?: () => void
+) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
     if (onEnd) onEnd();
     return;
   }
 
+  window.speechSynthesis.cancel();
+
   const utterance = new SpeechSynthesisUtterance(cleanText);
   utterance.lang = 'es-MX';
-  // Parámetros acústicos optimizados para máxima naturalidad humana
-  utterance.rate = 0.96; // Ritmo pausado (0.95 - 0.98) para evitar aceleración sintética
-  utterance.pitch = 0.99; // Tono natural y cálido
+  utterance.rate = 0.96;
+  utterance.pitch = 0.99;
 
   const bestVoice = getBestNaturalSpanishVoice();
   if (bestVoice) {
     utterance.voice = bestVoice;
     utterance.lang = bestVoice.lang;
   }
+
+  utterance.onstart = () => {
+    if (onStart) onStart();
+  };
 
   utterance.onend = () => {
     if (onEnd) onEnd();
@@ -175,34 +226,123 @@ function executeSpeak(text: string, onEnd?: () => void) {
   window.speechSynthesis.speak(utterance);
 }
 
-export function speakText(text: string, onEnd?: () => void) {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+/**
+ * Main Text-to-Speech function
+ * Tries ElevenLabs (Lidacta Mentora voice) first, falling back automatically to local SpeechSynthesis
+ */
+export async function speakText(
+  text: string,
+  onEnd?: () => void,
+  onStart?: () => void,
+  onLoading?: (isLoading: boolean) => void
+): Promise<void> {
+  const cleanText = cleanTextForSpeech(text);
+  if (!cleanText) {
     if (onEnd) onEnd();
     return;
   }
 
-  // Cancel any ongoing speech
-  window.speechSynthesis.cancel();
+  // Stop any current audio
+  stopSpeaking();
 
-  // Ensure voices are populated before speaking
-  if (cachedVoices.length === 0) {
-    const immediate = window.speechSynthesis.getVoices();
-    if (immediate && immediate.length > 0) {
-      cachedVoices = immediate;
-      executeSpeak(text, onEnd);
-    } else {
-      ensureVoicesLoaded().then(() => {
-        executeSpeak(text, onEnd);
+  if (onLoading) onLoading(true);
+
+  // 1. Attempt ElevenLabs via backend proxy or direct API
+  try {
+    let audioBlob: Blob | null = null;
+
+    // Try backend proxy /api/tts first (avoids CORS issues, secure headers)
+    try {
+      const serverResponse = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: cleanText,
+          voiceId: ELEVENLABS_VOICE_ID,
+        }),
       });
-    }
-  } else {
-    executeSpeak(text, onEnd);
-  }
-}
 
-export function stopSpeaking() {
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
+      if (serverResponse.ok) {
+        const blob = await serverResponse.blob();
+        if (blob && blob.size > 200) {
+          audioBlob = blob;
+        }
+      } else {
+        console.warn(`[TTS] /api/tts returned ${serverResponse.status}, attempting direct ElevenLabs endpoint...`);
+      }
+    } catch (proxyErr) {
+      console.warn('[TTS] /api/tts proxy unreachable, trying direct ElevenLabs endpoint:', proxyErr);
+    }
+
+    // Direct ElevenLabs call as backup if proxy failed
+    if (!audioBlob) {
+      const directResponse = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'xi-api-key': ELEVENLABS_API_KEY,
+            'Accept': 'audio/mpeg',
+          },
+          body: JSON.stringify({
+            text: cleanText,
+            model_id: 'eleven_multilingual_v2',
+            voice_settings: {
+              stability: 0.5,
+              similarity_boost: 0.85,
+            },
+          }),
+        }
+      );
+
+      if (directResponse.ok) {
+        const blob = await directResponse.blob();
+        if (blob && blob.size > 200) {
+          audioBlob = blob;
+        }
+      }
+    }
+
+    if (audioBlob) {
+      const blobUrl = URL.createObjectURL(audioBlob);
+      currentAudioBlobUrl = blobUrl;
+      const audio = new Audio(blobUrl);
+      currentAudioElement = audio;
+
+      audio.onplay = () => {
+        if (onLoading) onLoading(false);
+        if (onStart) onStart();
+      };
+
+      audio.onended = () => {
+        if (onLoading) onLoading(false);
+        stopSpeaking();
+        if (onEnd) onEnd();
+      };
+
+      audio.onerror = () => {
+        console.warn('[TTS] Audio playback error on blob, falling back to Web Speech API');
+        if (onLoading) onLoading(false);
+        stopSpeaking();
+        executeWebSpeech(cleanText, onEnd, onStart);
+      };
+
+      await audio.play();
+      return;
+    }
+  } catch (elevenLabsError) {
+    console.warn('[TTS] ElevenLabs request failed, falling back to Web Speech API:', elevenLabsError);
+  }
+
+  // 2. Fallback: Local Web Speech API (es-MX)
+  if (onLoading) onLoading(false);
+  if (cachedVoices.length === 0) {
+    ensureVoicesLoaded().then(() => {
+      executeWebSpeech(cleanText, onEnd, onStart);
+    });
+  } else {
+    executeWebSpeech(cleanText, onEnd, onStart);
   }
 }
 

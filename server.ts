@@ -1187,6 +1187,110 @@ app.post('/api/mentor/request', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/tts - ElevenLabs Text-to-Speech proxy for 'Lidacta Mentora' cloned voice
+app.post('/api/tts', async (req: Request, res: Response) => {
+  try {
+    const { text, voiceId } = req.body;
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ success: false, error: 'Texto requerido para síntesis' });
+    }
+
+    const apiKey =
+      process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY ||
+      process.env.ELEVENLABS_API_KEY ||
+      process.env.VITE_ELEVENLABS_API_KEY ||
+      'sk_f1522d73b2c5a237197337c9b0adacd87302c5f64d4806d9';
+
+    const targetVoiceId =
+      voiceId ||
+      process.env.ELEVENLABS_VOICE_ID ||
+      '4pxgXWex1CwQ1I4uyCVG';
+
+    const cleanText = text
+      .replace(/\[.*?\]/g, '')
+      .replace(/#{1,6}\s+/g, '')
+      .replace(/\*{1,3}(.*?)\*{1,3}/g, '$1')
+      .replace(/_{1,3}(.*?)_{1,3}/g, '$1')
+      .replace(/`{1,3}.*?`{1,3}/g, '')
+      .replace(/^\s*[-*•]\s+/gm, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!cleanText) {
+      return res.status(400).json({ success: false, error: 'Texto limpio vacío' });
+    }
+
+    console.log(`[ElevenLabs TTS] Generating audio for voice "${targetVoiceId}" (${cleanText.length} chars)`);
+
+    let response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoiceId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'xi-api-key': apiKey,
+        'Accept': 'audio/mpeg',
+      },
+      body: JSON.stringify({
+        text: cleanText,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.85,
+          style: 0.0,
+          use_speaker_boost: true,
+        },
+      }),
+    });
+
+    // If specific cloned voice ID is not found on account (404), seamlessly fallback to ElevenLabs verified multilingual voice
+    if (response.status === 404 && targetVoiceId !== 'AZnzlk1XvdvUeBnXmlld') {
+      console.warn(`[ElevenLabs TTS] Voice ${targetVoiceId} not found, using ElevenLabs multilingual voice fallback...`);
+      response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/AZnzlk1XvdvUeBnXmlld`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'xi-api-key': apiKey,
+          'Accept': 'audio/mpeg',
+        },
+        body: JSON.stringify({
+          text: cleanText,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.85,
+            style: 0.0,
+            use_speaker_boost: true,
+          },
+        }),
+      });
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn(`[ElevenLabs TTS] Upstream error (${response.status}):`, errorText);
+      return res.status(response.status).json({
+        success: false,
+        error: `ElevenLabs API error: ${response.status}`,
+        details: errorText,
+      });
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Length', buffer.length.toString());
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.end(buffer);
+  } catch (error: any) {
+    console.error('[ElevenLabs TTS] Unexpected error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Error interno en síntesis de voz',
+      details: error?.message,
+    });
+  }
+});
+
 // Vite middleware in dev or static files in production
 async function startServer() {
   app.use(express.static(path.join(__dirname, 'public')));
