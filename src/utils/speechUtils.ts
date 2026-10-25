@@ -1,31 +1,167 @@
-export function speakText(text: string, onEnd?: () => void) {
+// Global voice cache and subscription to speechSynthesis.onvoiceschanged
+let cachedVoices: SpeechSynthesisVoice[] = [];
+
+export function loadAvailableVoices(): SpeechSynthesisVoice[] {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    return [];
+  }
+  const voices = window.speechSynthesis.getVoices();
+  if (voices && voices.length > 0) {
+    cachedVoices = voices;
+  }
+  return cachedVoices;
+}
+
+// Subscribe immediately to onvoiceschanged for proactive voice discovery
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  loadAvailableVoices();
+  window.speechSynthesis.addEventListener('voiceschanged', () => {
+    loadAvailableVoices();
+  });
+}
+
+/**
+ * Ensures voices are loaded asynchronously before playback
+ */
+export function ensureVoicesLoaded(): Promise<SpeechSynthesisVoice[]> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      resolve([]);
+      return;
+    }
+    const current = window.speechSynthesis.getVoices();
+    if (current && current.length > 0) {
+      cachedVoices = current;
+      resolve(current);
+      return;
+    }
+    let resolved = false;
+    const handler = () => {
+      if (resolved) return;
+      resolved = true;
+      const v = window.speechSynthesis.getVoices();
+      if (v.length > 0) cachedVoices = v;
+      resolve(cachedVoices);
+    };
+    window.speechSynthesis.addEventListener('voiceschanged', handler, { once: true });
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        const v = window.speechSynthesis.getVoices();
+        if (v.length > 0) cachedVoices = v;
+        resolve(cachedVoices);
+      }
+    }, 300);
+  });
+}
+
+/**
+ * Intelligent voice selection prioritizing neural/natural high-definition voices in Spanish (Mexico / Latin America)
+ */
+export function getBestNaturalSpanishVoice(): SpeechSynthesisVoice | null {
+  const voices = loadAvailableVoices();
+  if (!voices || voices.length === 0) return null;
+
+  // 1. Voces 'Natural' o 'Neural' en es-MX (ej. Microsoft Dalia Online (Natural), Jorge Online (Natural))
+  const esMxNatural = voices.find(
+    (v) =>
+      /^es[-_]MX/i.test(v.lang) &&
+      (v.name.toLowerCase().includes('natural') ||
+        v.name.toLowerCase().includes('neural') ||
+        v.name.toLowerCase().includes('dalia') ||
+        v.name.toLowerCase().includes('jorge'))
+  );
+  if (esMxNatural) return esMxNatural;
+
+  // 2. Google español de México o Google español latino
+  const googleEsMx = voices.find(
+    (v) =>
+      (/^es[-_]MX/i.test(v.lang) && v.name.toLowerCase().includes('google')) ||
+      (v.lang.startsWith('es') &&
+        v.name.toLowerCase().includes('google') &&
+        (v.name.toLowerCase().includes('m\u00e9xico') ||
+          v.name.toLowerCase().includes('mexico') ||
+          v.name.toLowerCase().includes('estados unidos') ||
+          v.lang.includes('US')))
+  );
+  if (googleEsMx) return googleEsMx;
+
+  // 3. Voces 'Natural' o 'Neural' en cualquier variante de español (es-US, es-419, es-LA, es-ES)
+  const anyEsNatural = voices.find(
+    (v) =>
+      v.lang.startsWith('es') &&
+      (v.name.toLowerCase().includes('natural') ||
+        v.name.toLowerCase().includes('neural') ||
+        v.name.toLowerCase().includes('online'))
+  );
+  if (anyEsNatural) return anyEsNatural;
+
+  // 4. Voces Google en cualquier variante de español (ej. 'Google español')
+  const googleEs = voices.find(
+    (v) => v.lang.startsWith('es') && v.name.toLowerCase().includes('google')
+  );
+  if (googleEs) return googleEs;
+
+  // 5. Voces Microsoft o Apple/Siri de alta calidad en español
+  const highQualityEs = voices.find(
+    (v) =>
+      v.lang.startsWith('es') &&
+      (v.name.toLowerCase().includes('microsoft') ||
+        v.name.toLowerCase().includes('apple') ||
+        v.name.toLowerCase().includes('siri') ||
+        v.name.toLowerCase().includes('paulina') ||
+        v.name.toLowerCase().includes('sabina') ||
+        v.name.toLowerCase().includes('monica'))
+  );
+  if (highQualityEs) return highQualityEs;
+
+  // 6. Cualquier voz específica en es-MX
+  const anyEsMx = voices.find((v) => /^es[-_]MX/i.test(v.lang));
+  if (anyEsMx) return anyEsMx;
+
+  // 7. Cualquier voz en español latino (es-US, es-419, es-AR, es-CO, etc.)
+  const anyEsLatin = voices.find((v) => /^es[-_](US|419|AR|CO|CL|PE)/i.test(v.lang));
+  if (anyEsLatin) return anyEsLatin;
+
+  // 8. Cualquier voz en español disponible
+  const anyEs = voices.find((v) => v.lang.startsWith('es'));
+  if (anyEs) return anyEs;
+
+  return null;
+}
+
+/**
+ * Cleans markdown formatting, symbols, and stage tags for natural human cadence
+ */
+function cleanTextForSpeech(text: string): string {
+  return text
+    .replace(/\[.*?\]/g, '') // Eliminar etiquetas como [Etapa 1]
+    .replace(/#{1,6}\s+/g, '') // Encabezados markdown
+    .replace(/\*{1,3}(.*?)\*{1,3}/g, '$1') // Asteriscos de negrita/cursiva
+    .replace(/_{1,3}(.*?)_{1,3}/g, '$1') // Guiones bajos
+    .replace(/`{1,3}.*?`{1,3}/g, '') // Código
+    .replace(/^\s*[-*•]\s+/gm, '') // Viñetas
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function executeSpeak(text: string, onEnd?: () => void) {
+  const cleanText = cleanTextForSpeech(text);
+  if (!cleanText) {
     if (onEnd) onEnd();
     return;
   }
 
-  // Cancel any ongoing speech
-  window.speechSynthesis.cancel();
-
-  // Strip stage tags or brackets for cleaner natural voice
-  const cleanText = text
-    .replace(/\[.*?\]/g, '')
-    .replace(/\*\*/g, '')
-    .trim();
-
   const utterance = new SpeechSynthesisUtterance(cleanText);
   utterance.lang = 'es-MX';
-  utterance.rate = 1.0;
-  utterance.pitch = 1.0;
+  // Parámetros acústicos optimizados para máxima naturalidad humana
+  utterance.rate = 0.96; // Ritmo pausado (0.95 - 0.98) para evitar aceleración sintética
+  utterance.pitch = 0.99; // Tono natural y cálido
 
-  // Prefer natural Spanish voices if available
-  const voices = window.speechSynthesis.getVoices();
-  const esVoice =
-    voices.find((v) => v.lang.startsWith('es') && (v.name.includes('Natural') || v.name.includes('Sabina') || v.name.includes('Paulina'))) ||
-    voices.find((v) => v.lang.startsWith('es'));
-
-  if (esVoice) {
-    utterance.voice = esVoice;
+  const bestVoice = getBestNaturalSpanishVoice();
+  if (bestVoice) {
+    utterance.voice = bestVoice;
+    utterance.lang = bestVoice.lang;
   }
 
   utterance.onend = () => {
@@ -37,6 +173,31 @@ export function speakText(text: string, onEnd?: () => void) {
   };
 
   window.speechSynthesis.speak(utterance);
+}
+
+export function speakText(text: string, onEnd?: () => void) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    if (onEnd) onEnd();
+    return;
+  }
+
+  // Cancel any ongoing speech
+  window.speechSynthesis.cancel();
+
+  // Ensure voices are populated before speaking
+  if (cachedVoices.length === 0) {
+    const immediate = window.speechSynthesis.getVoices();
+    if (immediate && immediate.length > 0) {
+      cachedVoices = immediate;
+      executeSpeak(text, onEnd);
+    } else {
+      ensureVoicesLoaded().then(() => {
+        executeSpeak(text, onEnd);
+      });
+    }
+  } else {
+    executeSpeak(text, onEnd);
+  }
 }
 
 export function stopSpeaking() {
