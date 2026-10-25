@@ -251,14 +251,13 @@ export async function speakText(
   try {
     let audioBlob: Blob | null = null;
 
-    // Try backend proxy /api/tts first (avoids CORS issues, secure headers)
+    // Try backend proxy /api/tts first (avoids CORS issues, secure server-side headers)
     try {
       const serverResponse = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: cleanText,
-          voiceId: ELEVENLABS_VOICE_ID,
         }),
       });
 
@@ -274,7 +273,7 @@ export async function speakText(
       console.warn('[TTS] /api/tts proxy unreachable, trying direct ElevenLabs endpoint:', proxyErr);
     }
 
-    // Direct ElevenLabs call as backup if proxy failed
+    // Direct ElevenLabs call as backup if proxy failed: https://api.elevenlabs.io/v1/text-to-speech/4pxgXWex1CwQ1I4uyCVG
     if (!audioBlob) {
       const directResponse = await fetch(
         `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
@@ -288,10 +287,6 @@ export async function speakText(
           body: JSON.stringify({
             text: cleanText,
             model_id: 'eleven_multilingual_v2',
-            voice_settings: {
-              stability: 0.5,
-              similarity_boost: 0.85,
-            },
           }),
         }
       );
