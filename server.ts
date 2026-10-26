@@ -396,9 +396,12 @@ export interface ServerUserProfile {
   directReports?: number;
   whatsapp?: string;
   avatarUrl?: string;
+  status?: 'active' | 'inactive';
+  password?: string;
   isProfileCompleted?: boolean;
   isProfileComplete?: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 const USERS_DB_PATH = path.join(__dirname, 'server_users_db.json');
@@ -414,6 +417,7 @@ const initialServerUsers: ServerUserProfile[] = [
     position: 'Creadora de la Plataforma & Coach Sr.',
     area: 'Dirección de Producto y Mentoría',
     whatsapp: '+52 55 1234 5678',
+    status: 'active',
     isProfileCompleted: true,
     isProfileComplete: true,
     createdAt: '2026-01-01',
@@ -431,6 +435,7 @@ const initialServerUsers: ServerUserProfile[] = [
     directReports: 14,
     whatsapp: '+52 55 4912 8841',
     avatarUrl: '/src/assets/images/avatar_leader_roberto_1792074706592.jpg',
+    status: 'active',
     isProfileCompleted: true,
     isProfileComplete: true,
     createdAt: '2026-09-10',
@@ -447,6 +452,7 @@ const initialServerUsers: ServerUserProfile[] = [
     birthDate: '1990-06-15',
     directReports: 8,
     whatsapp: '+52 55 9876 5432',
+    status: 'active',
     isProfileCompleted: true,
     isProfileComplete: true,
     createdAt: '2026-09-15',
@@ -463,6 +469,7 @@ const initialServerUsers: ServerUserProfile[] = [
     birthDate: '1985-08-19',
     whatsapp: '+52 55 8820 1492',
     avatarUrl: '/src/assets/images/avatar_hr_sofia_1792074705689.jpg',
+    status: 'active',
     isProfileCompleted: true,
     isProfileComplete: true,
     createdAt: '2026-08-20',
@@ -478,6 +485,7 @@ const initialServerUsers: ServerUserProfile[] = [
     area: 'Recursos Humanos',
     birthDate: '',
     whatsapp: '',
+    status: 'active',
     isProfileCompleted: false,
     isProfileComplete: false,
     createdAt: '2026-08-25',
@@ -490,7 +498,10 @@ function readPersistentUsers(): ServerUserProfile[] {
       const content = fs.readFileSync(USERS_DB_PATH, 'utf-8');
       const parsed = JSON.parse(content);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        return parsed.map((u: any) => ({
+          ...u,
+          status: u.status || 'active',
+        }));
       }
     }
   } catch (err) {
@@ -697,6 +708,238 @@ app.post('/api/user/complete-profile', (req: Request, res: Response) => {
   }
 });
 
+// POST /api/users - Create new user with backend persistence
+app.post('/api/users', (req: Request, res: Response) => {
+  try {
+    const {
+      name,
+      email,
+      role,
+      companyId,
+      companyName,
+      position,
+      area,
+      birthDate,
+      directReports,
+      whatsapp,
+      status,
+      password,
+    } = req.body;
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ success: false, message: 'El nombre completo es obligatorio.' });
+    }
+    if (!email || !String(email).trim()) {
+      return res.status(400).json({ success: false, message: 'El correo electrónico es obligatorio.' });
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const existingIndex = serverUsers.findIndex((u) => u.email.toLowerCase() === cleanEmail);
+    if (existingIndex !== -1) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ya existe una cuenta registrada con este correo electrónico.',
+      });
+    }
+
+    const validRole = (role === 'admin' || role === 'hr' || role === 'leader') ? role : 'leader';
+    const effectiveCompanyId = companyId || 'comp_nexus';
+    const effectiveCompanyName = companyName || 'Industrias Nexus Automotriz';
+
+    const newUser: ServerUserProfile = {
+      id: `user_${Date.now()}`,
+      name: String(name).trim(),
+      email: cleanEmail,
+      role: validRole,
+      companyId: effectiveCompanyId,
+      companyName: effectiveCompanyName,
+      position: position ? String(position).trim() : (validRole === 'leader' ? 'Líder de Equipo' : validRole === 'hr' ? 'Gestión Humana' : 'Administrador'),
+      area: area ? String(area).trim() : (validRole === 'leader' ? 'Operaciones' : ''),
+      birthDate: birthDate ? String(birthDate).trim() : '',
+      directReports: directReports !== undefined ? Number(directReports) : (validRole === 'leader' ? 5 : 0),
+      whatsapp: whatsapp ? String(whatsapp).trim() : '',
+      status: (status === 'inactive' ? 'inactive' : 'active'),
+      password: password ? String(password).trim() : '',
+      isProfileCompleted: true,
+      isProfileComplete: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    serverUsers.unshift(newUser);
+    writePersistentUsers(serverUsers);
+    console.log(`[SERVER DB] New user created: ${newUser.name} (${newUser.email}) - Role: ${newUser.role} - Status: ${newUser.status}`);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Usuario creado exitosamente y sincronizado en la base de datos.',
+      user: newUser,
+      users: serverUsers,
+    });
+  } catch (error: any) {
+    console.error('Error creating user:', error);
+    return res.status(500).json({ success: false, message: error?.message || 'Error al crear usuario' });
+  }
+});
+
+// PUT /api/users/:id - Update user details, role, status and password
+app.put('/api/users/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      email,
+      role,
+      companyId,
+      companyName,
+      position,
+      area,
+      birthDate,
+      directReports,
+      whatsapp,
+      status,
+      password,
+    } = req.body;
+
+    const targetIndex = serverUsers.findIndex((u) => u.id === id);
+    if (targetIndex === -1) {
+      return res.status(404).json({ success: false, message: 'Usuario no encontrado.' });
+    }
+
+    const current = serverUsers[targetIndex];
+
+    // Check email uniqueness if email changed
+    if (email) {
+      const cleanEmail = String(email).trim().toLowerCase();
+      const duplicateIndex = serverUsers.findIndex((u) => u.id !== id && u.email.toLowerCase() === cleanEmail);
+      if (duplicateIndex !== -1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Otro usuario ya está utilizando este correo electrónico.',
+        });
+      }
+    }
+
+    const updatedUser: ServerUserProfile = {
+      ...current,
+      name: name !== undefined ? String(name).trim() : current.name,
+      email: email !== undefined ? String(email).trim().toLowerCase() : current.email,
+      role: (role === 'admin' || role === 'hr' || role === 'leader') ? role : current.role,
+      companyId: companyId !== undefined ? String(companyId).trim() : current.companyId,
+      companyName: companyName !== undefined ? String(companyName).trim() : current.companyName,
+      position: position !== undefined ? String(position).trim() : current.position,
+      area: area !== undefined ? String(area).trim() : current.area,
+      birthDate: birthDate !== undefined ? String(birthDate).trim() : current.birthDate,
+      directReports: directReports !== undefined ? Number(directReports) : current.directReports,
+      whatsapp: whatsapp !== undefined ? String(whatsapp).trim() : current.whatsapp,
+      status: status !== undefined ? (status === 'inactive' ? 'inactive' : 'active') : (current.status || 'active'),
+      password: (password && String(password).trim().length > 0) ? String(password).trim() : current.password,
+      updatedAt: new Date().toISOString(),
+    };
+
+    serverUsers[targetIndex] = updatedUser;
+    writePersistentUsers(serverUsers);
+
+    // If updating Tania or an admin, keep serverAdminProfile aligned
+    if (id === 'user_admin_tania' || updatedUser.role === 'admin') {
+      serverAdminProfile = {
+        ...serverAdminProfile,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        whatsapp: updatedUser.whatsapp || serverAdminProfile.whatsapp,
+        position: updatedUser.position || serverAdminProfile.position,
+        companyName: updatedUser.companyName || serverAdminProfile.companyName,
+        area: updatedUser.area || serverAdminProfile.area,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    console.log(`[SERVER DB] User updated: ${updatedUser.name} (${updatedUser.id}) - Status: ${updatedUser.status}`);
+
+    return res.json({
+      success: true,
+      message: 'Usuario actualizado exitosamente.',
+      user: updatedUser,
+      users: serverUsers,
+    });
+  } catch (error: any) {
+    console.error('Error updating user:', error);
+    return res.status(500).json({ success: false, message: error?.message || 'Error al actualizar usuario' });
+  }
+});
+
+// DELETE /api/users/:id - Delete user with backend persistence
+app.delete('/api/users/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (id === 'user_admin_tania') {
+      return res.status(400).json({
+        success: false,
+        message: 'No se puede eliminar la cuenta principal de administración (Tania Padierna).',
+      });
+    }
+
+    const targetIndex = serverUsers.findIndex((u) => u.id === id);
+    if (targetIndex === -1) {
+      return res.status(404).json({ success: false, message: 'Usuario no encontrado.' });
+    }
+
+    const deletedUser = serverUsers[targetIndex];
+    serverUsers.splice(targetIndex, 1);
+    writePersistentUsers(serverUsers);
+
+    console.log(`[SERVER DB] User deleted: ${deletedUser.name} (${deletedUser.email})`);
+
+    return res.json({
+      success: true,
+      message: `Usuario ${deletedUser.name} eliminado exitosamente del sistema.`,
+      deletedId: id,
+      users: serverUsers,
+    });
+  } catch (error: any) {
+    console.error('Error deleting user:', error);
+    return res.status(500).json({ success: false, message: error?.message || 'Error al eliminar usuario' });
+  }
+});
+
+// POST /api/users/delete - Alternative POST endpoint for deleting a user
+app.post('/api/users/delete', (req: Request, res: Response) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'ID de usuario requerido.' });
+    }
+
+    if (userId === 'user_admin_tania') {
+      return res.status(400).json({
+        success: false,
+        message: 'No se puede eliminar la cuenta principal de administración (Tania Padierna).',
+      });
+    }
+
+    const targetIndex = serverUsers.findIndex((u) => u.id === userId);
+    if (targetIndex === -1) {
+      return res.status(404).json({ success: false, message: 'Usuario no encontrado.' });
+    }
+
+    const deletedUser = serverUsers[targetIndex];
+    serverUsers.splice(targetIndex, 1);
+    writePersistentUsers(serverUsers);
+
+    console.log(`[SERVER DB] User deleted via POST: ${deletedUser.name} (${deletedUser.email})`);
+
+    return res.json({
+      success: true,
+      message: `Usuario ${deletedUser.name} eliminado exitosamente del sistema.`,
+      deletedId: userId,
+      users: serverUsers,
+    });
+  } catch (error: any) {
+    console.error('Error deleting user:', error);
+    return res.status(500).json({ success: false, message: error?.message || 'Error al eliminar usuario' });
+  }
+});
+
 // POST /api/users/update - Central user profile updates
 app.post('/api/users/update', (req: Request, res: Response) => {
   try {
@@ -709,6 +952,7 @@ app.post('/api/users/update', (req: Request, res: Response) => {
     serverUsers[targetIndex] = {
       ...serverUsers[targetIndex],
       ...updates,
+      updatedAt: new Date().toISOString(),
     };
     writePersistentUsers(serverUsers);
 

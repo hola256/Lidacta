@@ -15,7 +15,10 @@ export interface UserProfile {
   avatarUrl?: string;
   isProfileCompleted?: boolean;
   isProfileComplete?: boolean;
+  status?: 'active' | 'inactive';
+  password?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface CompanyContext {

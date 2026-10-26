@@ -64,6 +64,25 @@ interface LidactaContextType {
   // Actions
   switchUser: (userId: string) => void;
   createNewUser: (profile: Partial<UserProfile>) => UserProfile;
+  createUser: (userData: {
+    name: string;
+    email: string;
+    role: UserRole;
+    companyId?: string;
+    companyName?: string;
+    position?: string;
+    area?: string;
+    birthDate?: string;
+    directReports?: number;
+    whatsapp?: string;
+    status?: 'active' | 'inactive';
+    password?: string;
+  }) => Promise<{ success: boolean; message?: string; user?: UserProfile }>;
+  updateUser: (
+    userId: string,
+    updates: Partial<UserProfile>
+  ) => Promise<{ success: boolean; message?: string; user?: UserProfile }>;
+  deleteUser: (userId: string) => Promise<{ success: boolean; message?: string }>;
   setShowNewUserModal: (open: boolean) => void;
   closeWelcomeModal: () => void;
   openProfileModal: () => void;
@@ -1085,6 +1104,20 @@ El Equipo de Lidacta`;
       };
     }
 
+    if (user.status === 'inactive') {
+      return {
+        success: false,
+        message: 'Esta cuenta se encuentra inactiva. Por favor, contacta a la administración de Lidacta para reactivar tu acceso.',
+      };
+    }
+
+    if (user.password && _password && user.password !== _password) {
+      return {
+        success: false,
+        message: 'La contraseña ingresada no es correcta. Verifica e intenta nuevamente.',
+      };
+    }
+
     setCurrentUserId(user.id);
     setIsAuthenticated(true);
 
@@ -1422,6 +1455,188 @@ El Equipo de Lidacta`;
     return { success: true };
   };
 
+  const createUser = async (userData: {
+    name: string;
+    email: string;
+    role: UserRole;
+    companyId?: string;
+    companyName?: string;
+    position?: string;
+    area?: string;
+    birthDate?: string;
+    directReports?: number;
+    whatsapp?: string;
+    status?: 'active' | 'inactive';
+    password?: string;
+  }): Promise<{ success: boolean; message?: string; user?: UserProfile }> => {
+    const cleanName = userData.name.trim();
+    const cleanEmail = userData.email.trim().toLowerCase();
+
+    if (!cleanName) {
+      showToast('El nombre completo es obligatorio.', 'error');
+      return { success: false, message: 'El nombre completo es obligatorio.' };
+    }
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      showToast('Ingresa un correo electrónico válido.', 'error');
+      return { success: false, message: 'Ingresa un correo electrónico válido.' };
+    }
+
+    const company = companies.find((c) => c.id === userData.companyId) || companies[0];
+    const targetCompanyId = company?.id || 'comp_nexus';
+    const targetCompanyName = company?.name || userData.companyName || 'Industrias Nexus Automotriz';
+
+    try {
+      const resp = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...userData,
+          name: cleanName,
+          email: cleanEmail,
+          companyId: targetCompanyId,
+          companyName: targetCompanyName,
+          status: userData.status || 'active',
+        }),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        showToast(data.message || 'Error al crear usuario.', 'error');
+        return { success: false, message: data.message || 'Error en el servidor al crear usuario.' };
+      }
+
+      const createdUser: UserProfile = data.user;
+      if (Array.isArray(data.users)) {
+        setAllUsers(data.users);
+      } else {
+        setAllUsers((prev) => [createdUser, ...prev.filter((u) => u.id !== createdUser.id)]);
+      }
+
+      showToast(`Usuario ${createdUser.name} registrado exitosamente.`, 'success');
+
+      // Trigger Welcome in-app simulated email message
+      const welcomeEmailBody = `¡Hola ${createdUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en acción.\n\nTu cuenta ha sido creada exitosamente asociada a ${createdUser.companyName}.\nEn Lidacta cuentas con un espacio 100% seguro y confidencial donde podrás analizar situaciones reales de tu día a día, practicar tus conversaciones y tomar acciones que fortalezcan tu autonomía como líder.\n\nRecursos Humanos únicamente recibirá indicadores agregados de uso, sin acceso a tus conversaciones privadas.\n\n¡Estamos listos para acompañarte en tu próximo reto!\n\nAtentamente,\nEl Equipo de Lidacta`;
+
+      setWelcomeModalData({
+        user: createdUser,
+        emailText: welcomeEmailBody,
+      });
+
+      return { success: true, message: data.message, user: createdUser };
+    } catch (err: any) {
+      // Fallback local creation if offline/server issues
+      const id = `user_${Date.now()}`;
+      const localNewUser: UserProfile = {
+        id,
+        name: cleanName,
+        email: cleanEmail,
+        role: userData.role,
+        companyId: targetCompanyId,
+        companyName: targetCompanyName,
+        position: userData.position || (userData.role === 'leader' ? 'Líder de Equipo' : 'Gestión Humana'),
+        area: userData.area || (userData.role === 'leader' ? 'Operaciones' : ''),
+        birthDate: userData.birthDate || '1990-01-01',
+        directReports: userData.directReports !== undefined ? Number(userData.directReports) : 5,
+        whatsapp: userData.whatsapp || '',
+        status: userData.status || 'active',
+        password: userData.password || '',
+        isProfileCompleted: true,
+        isProfileComplete: true,
+        createdAt: new Date().toISOString(),
+      };
+
+      setAllUsers((prev) => [localNewUser, ...prev]);
+      showToast(`Usuario ${localNewUser.name} creado exitosamente.`, 'success');
+      return { success: true, user: localNewUser };
+    }
+  };
+
+  const updateUser = async (
+    userId: string,
+    updates: Partial<UserProfile>
+  ): Promise<{ success: boolean; message?: string; user?: UserProfile }> => {
+    if (updates.name !== undefined && !updates.name.trim()) {
+      showToast('El nombre completo es obligatorio.', 'error');
+      return { success: false, message: 'El nombre completo es obligatorio.' };
+    }
+    if (updates.email !== undefined && (!updates.email.trim() || !updates.email.includes('@'))) {
+      showToast('Ingresa un correo electrónico válido.', 'error');
+      return { success: false, message: 'Ingresa un correo electrónico válido.' };
+    }
+
+    try {
+      const resp = await fetch(`/api/users/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        showToast(data.message || 'Error al actualizar usuario.', 'error');
+        return { success: false, message: data.message || 'Error al actualizar usuario.' };
+      }
+
+      const updatedUser: UserProfile = data.user;
+      if (Array.isArray(data.users)) {
+        setAllUsers(data.users);
+      } else {
+        setAllUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...updatedUser } : u)));
+      }
+
+      showToast(`Usuario ${updatedUser.name} actualizado correctamente.`, 'success');
+      return { success: true, message: data.message, user: updatedUser };
+    } catch (err: any) {
+      setAllUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, ...updates, updatedAt: new Date().toISOString() } : u))
+      );
+      showToast('Usuario actualizado correctamente.', 'success');
+      return { success: true };
+    }
+  };
+
+  const deleteUser = async (userId: string): Promise<{ success: boolean; message?: string }> => {
+    if (userId === 'user_admin_tania') {
+      const msg = 'No se puede eliminar la cuenta principal de administración (Tania Padierna).';
+      showToast(msg, 'error');
+      return { success: false, message: msg };
+    }
+
+    try {
+      const resp = await fetch(`/api/users/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        showToast(data.message || 'Error al eliminar usuario.', 'error');
+        return { success: false, message: data.message || 'Error al eliminar usuario.' };
+      }
+
+      if (Array.isArray(data.users)) {
+        setAllUsers(data.users);
+      } else {
+        setAllUsers((prev) => prev.filter((u) => u.id !== userId));
+      }
+
+      // If deleted current user, switch to admin
+      if (currentUserId === userId) {
+        const remainingAdmin = allUsers.find((u) => u.id !== userId && u.role === 'admin') || allUsers.find((u) => u.id !== userId);
+        if (remainingAdmin) {
+          setCurrentUserId(remainingAdmin.id);
+        }
+      }
+
+      showToast(data.message || 'Usuario eliminado correctamente.', 'success');
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      setAllUsers((prev) => prev.filter((u) => u.id !== userId));
+      showToast('Usuario eliminado del sistema.', 'info');
+      return { success: true };
+    }
+  };
+
   return (
     <LidactaContext.Provider
       value={{
@@ -1455,6 +1670,9 @@ El Equipo de Lidacta`;
         registerOrSetPassword,
         switchUser,
         createNewUser,
+        createUser,
+        updateUser,
+        deleteUser,
         setShowNewUserModal,
         closeWelcomeModal,
         setActiveMentorshipId,
