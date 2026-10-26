@@ -634,6 +634,8 @@ app.post('/api/admin/profile', (req: Request, res: Response) => {
 
 // GET /api/users - Cross-device synchronized user list
 app.get('/api/users', (_req: Request, res: Response) => {
+  serverUsers = readPersistentUsers();
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   return res.json({
     success: true,
     users: serverUsers,

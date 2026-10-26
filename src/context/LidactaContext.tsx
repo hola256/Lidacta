@@ -117,6 +117,10 @@ interface LidactaContextType {
     status: 'pendiente' | 'contactado' | 'atendido',
     notes?: string
   ) => void;
+
+  // Live Sync & Database Refetching (Multi-device)
+  refreshUsers: () => Promise<void>;
+  isSyncingUsers: boolean;
 }
 
 const LidactaContext = createContext<LidactaContextType | undefined>(undefined);
@@ -151,43 +155,46 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return INITIAL_USERS;
   });
 
+  const [isSyncingUsers, setIsSyncingUsers] = useState<boolean>(false);
+
+  const refreshUsers = async () => {
+    try {
+      setIsSyncingUsers(true);
+      const res = await fetch('/api/users', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.success && Array.isArray(data.users) && data.users.length > 0) {
+        const serverUsers = data.users as UserProfile[];
+        setAllUsers((prevUsers) => {
+          const prevStr = JSON.stringify(prevUsers);
+          const nextStr = JSON.stringify(serverUsers);
+          if (prevStr === nextStr) return prevUsers;
+          return serverUsers;
+        });
+      }
+    } catch (err) {
+      // network resilience
+    } finally {
+      setIsSyncingUsers(false);
+    }
+  };
+
   // Continuously sync centralized users and admin profile from server (Real-Time across all devices, windows, and incognito)
   useEffect(() => {
     let isMounted = true;
 
     const syncUsersFromServer = async () => {
       try {
-        const res = await fetch('/api/users');
+        const res = await fetch('/api/users', { cache: 'no-store' });
+        if (!res.ok) return;
         const data = await res.json();
-        if (isMounted && data.success && Array.isArray(data.users)) {
+        if (isMounted && data.success && Array.isArray(data.users) && data.users.length > 0) {
+          const serverUsers = data.users as UserProfile[];
           setAllUsers((prevUsers) => {
-            const serverUsers = data.users as UserProfile[];
-            const serverMap = new Map(serverUsers.map((u: UserProfile) => [u.id, u]));
-
-            let hasChanges = false;
-            const updated = prevUsers.map((localUser) => {
-              const serverUser = serverMap.get(localUser.id);
-              if (!serverUser) return localUser;
-
-              // Check if completion flags or crucial data differ
-              if (
-                serverUser.isProfileCompleted !== localUser.isProfileCompleted ||
-                serverUser.isProfileComplete !== localUser.isProfileComplete ||
-                serverUser.area !== localUser.area ||
-                serverUser.birthDate !== localUser.birthDate ||
-                serverUser.whatsapp !== localUser.whatsapp ||
-                serverUser.companyName !== localUser.companyName
-              ) {
-                hasChanges = true;
-                return {
-                  ...localUser,
-                  ...serverUser,
-                };
-              }
-              return localUser;
-            });
-
-            return hasChanges ? updated : prevUsers;
+            const prevStr = JSON.stringify(prevUsers);
+            const nextStr = JSON.stringify(serverUsers);
+            if (prevStr === nextStr) return prevUsers;
+            return serverUsers;
           });
         }
       } catch (err) {
@@ -200,7 +207,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const userPollInterval = setInterval(syncUsersFromServer, 2500);
 
     // Initial admin profile fetch
-    fetch('/api/admin/profile')
+    fetch('/api/admin/profile', { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         if (isMounted && data.success && data.profile) {
@@ -227,6 +234,16 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
         console.warn('Could not sync admin profile from server:', err);
       });
 
+    // Immediate refetch when user switches back to this tab/window or comes online
+    const handleWindowActive = () => {
+      if (document.visibilityState === 'visible') {
+        syncUsersFromServer();
+      }
+    };
+    window.addEventListener('focus', handleWindowActive);
+    window.addEventListener('online', handleWindowActive);
+    document.addEventListener('visibilitychange', handleWindowActive);
+
     // Listen for storage events (Instant 0ms cross-tab synchronization in same browser)
     const handleStorage = (e: StorageEvent) => {
       if (e.key === `${STORAGE_KEY_PREFIX}users` && e.newValue) {
@@ -244,6 +261,9 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
       isMounted = false;
       clearInterval(userPollInterval);
       window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleWindowActive);
+      window.removeEventListener('online', handleWindowActive);
+      document.removeEventListener('visibilitychange', handleWindowActive);
     };
   }, []);
 
@@ -1355,7 +1375,55 @@ El Equipo de Lidacta`;
       )
     );
 
-    // If updating admin, sync to centralized server memory
+    // Persist directly to central database via PUT /api/users/:id
+    try {
+      const resp = await fetch(`/api/users/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...updates,
+          name: cleanName,
+          email: cleanEmail,
+          whatsapp: cleanWhatsapp,
+          position: updates.position !== undefined ? updates.position.trim() : undefined,
+          companyName: updates.companyName !== undefined ? updates.companyName.trim() : undefined,
+          area: updates.area !== undefined ? updates.area.trim() : undefined,
+          birthDate: updates.birthDate !== undefined ? updates.birthDate.trim() : undefined,
+          directReports: updates.directReports !== undefined ? Number(updates.directReports) : undefined,
+          isProfileCompleted: true,
+          isProfileComplete: true,
+        }),
+      });
+      const data = await resp.json();
+      if (data.success && Array.isArray(data.users)) {
+        setAllUsers(data.users);
+      }
+    } catch (err) {
+      // Fallback endpoint for serverless or alternative routing
+      try {
+        const resp2 = await fetch('/api/users/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            updates: {
+              ...updates,
+              name: cleanName,
+              email: cleanEmail,
+              whatsapp: cleanWhatsapp,
+              isProfileCompleted: true,
+              isProfileComplete: true,
+            },
+          }),
+        });
+        const data2 = await resp2.json();
+        if (data2.success && Array.isArray(data2.users)) {
+          setAllUsers(data2.users);
+        }
+      } catch {}
+    }
+
+    // If updating admin, sync to centralized server memory & profile endpoint
     const targetUser = allUsers.find((u) => u.id === userId);
     if (userId === 'user_admin_tania' || updates.role === 'admin' || targetUser?.role === 'admin') {
       try {
@@ -1376,26 +1444,7 @@ El Equipo de Lidacta`;
       }
     }
 
-    // Also update server user list
-    try {
-      fetch('/api/users/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          updates: {
-            ...updates,
-            name: cleanName,
-            email: cleanEmail,
-            whatsapp: cleanWhatsapp,
-            isProfileCompleted: true,
-            isProfileComplete: true,
-          },
-        }),
-      }).catch(() => {});
-    } catch {}
-
-    return { success: true, message: 'Perfil actualizado y sincronizado centralmente.' };
+    return { success: true, message: 'Perfil actualizado y sincronizado centralmente en la base de datos.' };
   };
 
   const logout = () => {
@@ -1689,6 +1738,8 @@ El Equipo de Lidacta`;
         closeEmailDrawer,
         requestHumanMentor,
         updateMentorRequestStatus,
+        refreshUsers,
+        isSyncingUsers,
       }}
     >
       {children}

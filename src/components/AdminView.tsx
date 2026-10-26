@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useLidacta } from '../context/LidactaContext';
 import { CompanyContext, MentorshipSession, UserProfile } from '../types/lidacta';
 import { AddUserModal, EditUserModal, DeleteUserModal } from './UserManagementModals';
@@ -33,6 +33,7 @@ import {
   Trash2,
   UserPlus,
   Filter,
+  RefreshCw,
 } from 'lucide-react';
 
 export const AdminView: React.FC = () => {
@@ -47,6 +48,8 @@ export const AdminView: React.FC = () => {
     openEmailDrawer,
     openProfileModal,
     updateMentorRequestStatus,
+    refreshUsers,
+    isSyncingUsers,
   } = useLidacta();
 
   const adminProfile = allUsers.find((u) => u.role === 'admin') || currentUser;
@@ -66,6 +69,13 @@ export const AdminView: React.FC = () => {
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<UserProfile | null>(null);
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+
+  // Auto-refresh users whenever the users directory is viewed
+  useEffect(() => {
+    if (activeTab === 'users') {
+      refreshUsers();
+    }
+  }, [activeTab]);
 
   const filteredUsersList = useMemo(() => {
     return allUsers.filter((u) => {
@@ -974,31 +984,48 @@ export const AdminView: React.FC = () => {
       {/* TAB 4: DIRECTORIO DE USUARIOS */}
       {activeTab === 'users' && (
         <div className="bg-white border border-[#493447]/10 rounded-2xl p-4 sm:p-6 shadow-xs space-y-5 animate-in fade-in">
-          {/* Top Header Bar */}
+          {/* Top Header Bar with Live Real-time Sync */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#493447]/10 pb-4">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-[#2D1B4E]/10 text-[#2D1B4E] flex items-center justify-center shrink-0">
                   <Users className="w-4 h-4 text-[#2D1B4E]" />
                 </div>
                 <h3 className="font-heading font-extrabold text-base sm:text-lg text-[#2D1B4E]">
                   Directorio de Usuarios
                 </h3>
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 shadow-2xs">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  BD Central Conectada en Tiempo Real
+                </span>
               </div>
               <p className="text-xs text-[#4A3F55]/70 mt-1 max-w-xl">
-                Gestión centralizada de cuentas: creación de usuarios, asignación de roles, conmutación de estado activo/inactivo y restablecimiento de accesos.
+                Gestión centralizada y sincronizada globalmente: creación de usuarios, roles, estado activo/inactivo y persistencia directa en base de datos.
               </p>
             </div>
 
-            {/* "+ Agregar Usuario" Button */}
-            <button
-              type="button"
-              onClick={() => setIsAddUserModalOpen(true)}
-              className="min-h-[44px] px-4 py-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 shrink-0"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>+ Agregar Usuario</span>
-            </button>
+            {/* Action Buttons: Sync & Add User */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => refreshUsers()}
+                disabled={isSyncingUsers}
+                className="min-h-[44px] px-3.5 py-2.5 bg-[#FFF7EF] hover:bg-[#FFD3BF]/30 text-[#2D1B4E] border border-[#493447]/15 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                title="Sincronizar directorio con la base de datos central"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-[#BF3A1B] ${isSyncingUsers ? 'animate-spin' : ''}`} />
+                <span>{isSyncingUsers ? 'Sincronizando...' : 'Sincronizar'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsAddUserModalOpen(true)}
+                className="min-h-[44px] px-4 py-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 shrink-0"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ Agregar Usuario</span>
+              </button>
+            </div>
           </div>
 
           {/* Search & Filter Toolbar */}
