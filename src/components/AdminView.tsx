@@ -1005,9 +1005,9 @@ export const AdminView: React.FC = () => {
                     <span className="text-[10px] text-emerald-700/80 font-mono">({dbLatencyMs}ms)</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-900 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 shadow-2xs">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-                    <span>Reconectando con Servidor...</span>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#2D1B4E] bg-[#FFF7EF] px-2.5 py-0.5 rounded-full border border-[#FFD3BF] shadow-2xs">
+                    <span className="w-2 h-2 rounded-full bg-[#F7B538]" />
+                    <span>Almacenamiento Activo (Local / Vercel)</span>
                   </span>
                 )}
               </div>

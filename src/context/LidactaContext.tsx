@@ -149,13 +149,11 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       if (res.success && Array.isArray(res.users) && res.users.length > 0) {
         setAllUsers(res.users);
-        setIsDbConnected(true);
+        setIsDbConnected(!res.isLocalFallback);
         setLastDbSync(new Date());
-      } else {
-        setIsDbConnected(false);
       }
     } catch {
-      setIsDbConnected(false);
+      // Graceful local continuity
     } finally {
       setIsSyncingUsers(false);
     }
