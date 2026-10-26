@@ -13,7 +13,7 @@ function cleanTextForSpeech(text: string): string {
     .trim();
 }
 
-export const ELEVENLABS_VOICE_ID = '4pxgXWex1CwQ1I4uyCVG';
+export const ELEVENLABS_VOICE_ID = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_ELEVENLABS_VOICE_ID) || '4pxgXWex1CwQlI4uyCVG';
 export const ELEVENLABS_STREAM_URL = `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream`;
 export const ELEVENLABS_API_KEY: string =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_ELEVENLABS_API_KEY) ||
