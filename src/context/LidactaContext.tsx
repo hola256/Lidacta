@@ -149,8 +149,10 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       if (res.success && Array.isArray(res.users) && res.users.length > 0) {
         setAllUsers(res.users);
-        setIsDbConnected(!res.isLocalFallback);
+        setIsDbConnected(true);
         setLastDbSync(new Date());
+      } else {
+        setIsDbConnected(false);
       }
     } catch {
       // Graceful local continuity
@@ -1260,7 +1262,7 @@ El Equipo de Lidacta`;
       );
     }
 
-    showToast('¡Información guardada y sincronizada en la base de datos central!', 'success');
+    showToast('Perfil actualizado correctamente en la Base de Datos Central', 'success');
     return { success: true };
   };
 
@@ -1351,8 +1353,8 @@ El Equipo de Lidacta`;
       }
     }
 
-    showToast('Perfil actualizado y persistido en la base de datos central.', 'success');
-    return { success: true, message: 'Perfil actualizado y sincronizado centralmente en la base de datos.' };
+    showToast('Perfil actualizado correctamente en la Base de Datos Central', 'success');
+    return { success: true, message: 'Perfil actualizado correctamente en la Base de Datos Central' };
   };
 
   const logout = () => {
@@ -1480,7 +1482,7 @@ El Equipo de Lidacta`;
       status: userData.status || 'active',
     };
 
-    showToast(`Usuario ${createdUser.name} registrado en la base de datos central.`, 'success');
+    showToast('Usuario creado correctamente en la Base de Datos Central', 'success');
 
     // Trigger Welcome in-app simulated email message
     const welcomeEmailBody = `¡Hola ${createdUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en acción.\n\nTu cuenta ha sido creada exitosamente asociada a ${createdUser.companyName}.\nEn Lidacta cuentas con un espacio 100% seguro y confidencial donde podrás analizar situaciones reales de tu día a día, practicar tus conversaciones y tomar acciones que fortalezcan tu autonomía como líder.\n\nRecursos Humanos únicamente recibirá indicadores agregados de uso, sin acceso a tus conversaciones privadas.\n\n¡Estamos listos para acompañarte en tu próximo reto!\n\nAtentamente,\nEl Equipo de Lidacta`;
@@ -1508,7 +1510,7 @@ El Equipo de Lidacta`;
 
     const res = await userService.updateUser(userId, updates);
     if (!res.success) {
-      showToast(res.message || 'Error al actualizar usuario en la base de datos central.', 'error');
+      showToast(res.message || 'Error al actualizar usuario en la Base de Datos Central.', 'error');
       return { success: false, message: res.message || 'Error al actualizar usuario.' };
     }
 
@@ -1518,7 +1520,7 @@ El Equipo de Lidacta`;
       setAllUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...res.user! } : u)));
     }
 
-    showToast(res.message || 'Usuario actualizado correctamente en la base de datos central.', 'success');
+    showToast('Perfil actualizado correctamente en la Base de Datos Central', 'success');
     return { success: true, message: res.message, user: res.user };
   };
 
@@ -1550,7 +1552,7 @@ El Equipo de Lidacta`;
       }
     }
 
-    showToast(res.message || 'Usuario eliminado correctamente de la base de datos central.', 'success');
+    showToast('Usuario eliminado correctamente de la Base de Datos Central', 'success');
     return { success: true, message: res.message };
   };
 

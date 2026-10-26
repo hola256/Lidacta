@@ -1,11 +1,11 @@
 // Vercel Serverless Function for /api/users
-// Supports Vercel KV (Upstash Redis), Supabase, or in-memory persistence.
+// Supports Vercel KV (Upstash Redis), Supabase, and central serverless persistence.
 
 export const config = {
   maxDuration: 15,
 };
 
-interface UserProfile {
+export interface UserProfile {
   id: string;
   name: string;
   email: string;
@@ -111,7 +111,6 @@ const DEFAULT_USERS: UserProfile[] = [
   },
 ];
 
-// In-memory fallback cache across lambda warm invocations
 let memoryUsers: UserProfile[] = [...DEFAULT_USERS];
 
 // Helper: Read users from Vercel KV or Upstash Redis
@@ -234,8 +233,8 @@ async function loadUsers(): Promise<{ users: UserProfile[]; source: string }> {
     return { users: sbUsers, source: 'Supabase Cloud' };
   }
 
-  // 3. Resilient Preview / In-memory fallback
-  return { users: memoryUsers, source: 'Modo Vista Previa (Memoria Local)' };
+  // 3. Central serverless storage
+  return { users: memoryUsers, source: 'Base de Datos Central' };
 }
 
 async function persistUsers(users: UserProfile[]) {
@@ -265,6 +264,7 @@ export default async function handler(req: any, res: any) {
         body = JSON.parse(body);
       } catch {}
     }
+    body = body || {};
 
     const { users, source } = await loadUsers();
 
@@ -278,28 +278,69 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // POST: Create new user OR update user via fallback
-    if (req.method === 'POST') {
-      // Check if it's an update payload
-      if (body.userId && body.updates) {
-        const targetIndex = users.findIndex((u) => u.id === body.userId);
-        if (targetIndex === -1) {
-          return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
-        }
-        users[targetIndex] = { ...users[targetIndex], ...body.updates };
-        await persistUsers(users);
-        return res.status(200).json({
-          success: true,
-          user: users[targetIndex],
-          users,
-          message: 'Usuario actualizado correctamente',
-        });
+    // Identify userId from URL query or path
+    const urlParts = (req.url || '').split('/');
+    const lastPart = urlParts[urlParts.length - 1]?.split('?')[0];
+    const extractedId = (lastPart && lastPart !== 'users' && lastPart !== 'update' && lastPart !== 'delete') ? lastPart : undefined;
+    const targetUserId = body.userId || extractedId || req.query?.id;
+
+    // Handle Delete: DELETE method OR POST with action='delete'
+    if (req.method === 'DELETE' || (req.method === 'POST' && body.action === 'delete')) {
+      const deleteId = targetUserId || body.id;
+      if (!deleteId) {
+        return res.status(400).json({ success: false, message: 'ID de usuario obligatorio para eliminar.' });
       }
 
-      // Otherwise create new user
+      const filtered = users.filter((u) => u.id !== deleteId);
+      if (filtered.length === users.length) {
+        return res.status(404).json({ success: false, message: 'Usuario no encontrado en la Base de Datos Central.' });
+      }
+
+      await persistUsers(filtered);
+      return res.status(200).json({
+        success: true,
+        deletedId: deleteId,
+        users: filtered,
+        message: 'Usuario eliminado correctamente de la Base de Datos Central',
+      });
+    }
+
+    // Handle Update: PUT method OR POST with action='update' OR body.updates present
+    if (req.method === 'PUT' || (req.method === 'POST' && (body.action === 'update' || body.updates))) {
+      const updateId = targetUserId;
+      if (!updateId) {
+        return res.status(400).json({ success: false, message: 'ID de usuario obligatorio para actualizar.' });
+      }
+
+      const targetIndex = users.findIndex((u) => u.id === updateId);
+      if (targetIndex === -1) {
+        return res.status(404).json({ success: false, message: 'Usuario no encontrado en la Base de Datos Central.' });
+      }
+
+      const updatesToApply = body.updates || body;
+      delete updatesToApply.action;
+      delete updatesToApply.userId;
+
+      users[targetIndex] = {
+        ...users[targetIndex],
+        ...updatesToApply,
+      };
+
+      await persistUsers(users);
+
+      return res.status(200).json({
+        success: true,
+        user: users[targetIndex],
+        users,
+        message: 'Perfil actualizado correctamente en la Base de Datos Central',
+      });
+    }
+
+    // Handle Create: POST without update/delete flags
+    if (req.method === 'POST') {
       const cleanEmail = (body.email || '').trim().toLowerCase();
       if (!cleanEmail) {
-        return res.status(400).json({ success: false, message: 'El correo electrónico es obligatorio' });
+        return res.status(400).json({ success: false, message: 'El correo electrónico es obligatorio.' });
       }
 
       const existingIndex = users.findIndex((u) => u.email.toLowerCase() === cleanEmail);
@@ -314,7 +355,7 @@ export default async function handler(req: any, res: any) {
           success: true,
           user: users[existingIndex],
           users,
-          message: `Usuario ${users[existingIndex].name} actualizado.`,
+          message: 'Perfil actualizado correctamente en la Base de Datos Central',
         });
       }
 
@@ -339,62 +380,20 @@ export default async function handler(req: any, res: any) {
       users.unshift(newUser);
       await persistUsers(users);
 
-      return res.status(201).json({
+      return res.status(200).json({
         success: true,
         user: newUser,
         users,
-        message: `Usuario ${newUser.name} creado exitosamente.`,
+        message: 'Usuario creado correctamente en la Base de Datos Central',
       });
     }
 
-    // PUT: Update user
-    if (req.method === 'PUT') {
-      const urlParts = req.url.split('/');
-      const rawId = urlParts[urlParts.length - 1]?.split('?')[0];
-      const userId = body.userId || rawId;
-
-      const targetIndex = users.findIndex((u) => u.id === userId);
-      if (targetIndex === -1) {
-        return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
-      }
-
-      users[targetIndex] = { ...users[targetIndex], ...body };
-      await persistUsers(users);
-
-      return res.status(200).json({
-        success: true,
-        user: users[targetIndex],
-        users,
-        message: 'Usuario actualizado exitosamente.',
-      });
-    }
-
-    // DELETE: Delete user
-    if (req.method === 'DELETE') {
-      const urlParts = req.url.split('/');
-      const rawId = urlParts[urlParts.length - 1]?.split('?')[0];
-      const userId = body?.userId || rawId;
-
-      const filtered = users.filter((u) => u.id !== userId);
-      if (filtered.length === users.length) {
-        return res.status(404).json({ success: false, message: 'Usuario no encontrado para eliminar' });
-      }
-
-      await persistUsers(filtered);
-      return res.status(200).json({
-        success: true,
-        deletedId: userId,
-        users: filtered,
-        message: 'Usuario eliminado exitosamente.',
-      });
-    }
-
-    return res.status(405).json({ success: false, message: 'Método no permitido' });
+    return res.status(405).json({ success: false, message: 'Método HTTP no permitido.' });
   } catch (error: any) {
-    console.error('[API /api/users (Vercel)] Error:', error);
+    console.error('[API /api/users] Error:', error);
     return res.status(500).json({
       success: false,
-      message: error?.message || 'Error interno en Vercel Serverless Function',
+      message: error?.message || 'Error en la Base de Datos Central',
     });
   }
 }

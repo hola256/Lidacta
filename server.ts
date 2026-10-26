@@ -787,7 +787,7 @@ app.post('/api/users', (req: Request, res: Response) => {
 
     return res.status(201).json({
       success: true,
-      message: 'Usuario creado exitosamente y sincronizado en la base de datos.',
+      message: 'Usuario creado correctamente en la Base de Datos Central',
       user: newUser,
       users: serverUsers,
     });
@@ -874,7 +874,7 @@ app.put('/api/users/:id', (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      message: 'Usuario actualizado exitosamente.',
+      message: 'Perfil actualizado correctamente en la Base de Datos Central',
       user: updatedUser,
       users: serverUsers,
     });
@@ -908,7 +908,7 @@ app.delete('/api/users/:id', (req: Request, res: Response) => {
     console.log(`[SERVER DB] User deleted: ${deletedUser.name} (${deletedUser.email})`);
     return res.json({
       success: true,
-      message: `Usuario ${deletedUser.name} eliminado exitosamente del sistema.`,
+      message: 'Usuario eliminado correctamente de la Base de Datos Central',
       deletedId: id,
       users: serverUsers,
     });
@@ -946,7 +946,7 @@ app.post('/api/users/delete', (req: Request, res: Response) => {
     console.log(`[SERVER DB] User deleted via POST: ${deletedUser.name} (${deletedUser.email})`);
     return res.json({
       success: true,
-      message: `Usuario ${deletedUser.name} eliminado exitosamente del sistema.`,
+      message: 'Usuario eliminado correctamente de la Base de Datos Central',
       deletedId: userId,
       users: serverUsers,
     });
@@ -975,11 +975,12 @@ app.post('/api/users/update', (req: Request, res: Response) => {
 
     return res.json({
       success: true,
+      message: 'Perfil actualizado correctamente en la Base de Datos Central',
       user: serverUsers[targetIndex],
       users: serverUsers,
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, message: err?.message || 'Error al actualizar usuario' });
+    return res.status(500).json({ success: false, message: err?.message || 'Error al actualizar usuario en la Base de Datos Central' });
   }
 });
 
