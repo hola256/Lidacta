@@ -14,6 +14,7 @@ import {
   INITIAL_USERS,
   DEFAULT_ADMIN_PROFILE,
 } from '../data/mockData';
+import { userService } from '../services/userService';
 
 interface LidactaContextType {
   currentUser: UserProfile;
@@ -121,6 +122,9 @@ interface LidactaContextType {
   // Live Sync & Database Refetching (Multi-device)
   refreshUsers: () => Promise<void>;
   isSyncingUsers: boolean;
+  isDbConnected: boolean;
+  lastDbSync: Date | null;
+  dbLatencyMs: number;
 }
 
 const LidactaContext = createContext<LidactaContextType | undefined>(undefined);
@@ -128,52 +132,30 @@ const LidactaContext = createContext<LidactaContextType | undefined>(undefined);
 const STORAGE_KEY_PREFIX = 'lidacta_v2_';
 
 export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load from local storage or fallback to mock data, ensuring admin has valid default fields
-  const [allUsers, setAllUsers] = useState<UserProfile[]>(() => {
-    const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}users`);
-    if (saved) {
-      try {
-        const parsed: UserProfile[] = JSON.parse(saved);
-        return parsed.map((u) => {
-          if (u.role === 'admin' || u.id === 'user_admin_tania') {
-            return {
-              ...DEFAULT_ADMIN_PROFILE,
-              ...u,
-              email: u.email || DEFAULT_ADMIN_PROFILE.email,
-              whatsapp: u.whatsapp || DEFAULT_ADMIN_PROFILE.whatsapp,
-              name: u.name || DEFAULT_ADMIN_PROFILE.name,
-              position: u.position || DEFAULT_ADMIN_PROFILE.position,
-              companyName: u.companyName || DEFAULT_ADMIN_PROFILE.companyName,
-            };
-          }
-          return u;
-        });
-      } catch {
-        return INITIAL_USERS;
-      }
-    }
-    return INITIAL_USERS;
-  });
-
+  // Canonical users are loaded directly from the backend database (no localStorage override)
+  const [allUsers, setAllUsers] = useState<UserProfile[]>(INITIAL_USERS);
   const [isSyncingUsers, setIsSyncingUsers] = useState<boolean>(false);
+  const [isDbConnected, setIsDbConnected] = useState<boolean>(true);
+  const [lastDbSync, setLastDbSync] = useState<Date | null>(null);
+  const [dbLatencyMs, setDbLatencyMs] = useState<number>(18);
 
   const refreshUsers = async () => {
     try {
       setIsSyncingUsers(true);
-      const res = await fetch('/api/users', { cache: 'no-store' });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.success && Array.isArray(data.users) && data.users.length > 0) {
-        const serverUsers = data.users as UserProfile[];
-        setAllUsers((prevUsers) => {
-          const prevStr = JSON.stringify(prevUsers);
-          const nextStr = JSON.stringify(serverUsers);
-          if (prevStr === nextStr) return prevUsers;
-          return serverUsers;
-        });
+      const startT = performance.now();
+      const res = await userService.getUsers();
+      const latency = Math.round(performance.now() - startT);
+      setDbLatencyMs(latency > 0 ? latency : 12);
+
+      if (res.success && Array.isArray(res.users) && res.users.length > 0) {
+        setAllUsers(res.users);
+        setIsDbConnected(true);
+        setLastDbSync(new Date());
+      } else {
+        setIsDbConnected(false);
       }
-    } catch (err) {
-      // network resilience
+    } catch {
+      setIsDbConnected(false);
     } finally {
       setIsSyncingUsers(false);
     }
@@ -182,23 +164,28 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Continuously sync centralized users and admin profile from server (Real-Time across all devices, windows, and incognito)
   useEffect(() => {
     let isMounted = true;
+    try {
+      // Clear any legacy browser-isolated users from localStorage
+      localStorage.removeItem(`${STORAGE_KEY_PREFIX}users`);
+    } catch {}
 
     const syncUsersFromServer = async () => {
       try {
-        const res = await fetch('/api/users', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (isMounted && data.success && Array.isArray(data.users) && data.users.length > 0) {
-          const serverUsers = data.users as UserProfile[];
-          setAllUsers((prevUsers) => {
-            const prevStr = JSON.stringify(prevUsers);
-            const nextStr = JSON.stringify(serverUsers);
-            if (prevStr === nextStr) return prevUsers;
-            return serverUsers;
-          });
+        const startT = performance.now();
+        const res = await userService.getUsers();
+        const latency = Math.round(performance.now() - startT);
+        if (isMounted) {
+          setDbLatencyMs(latency > 0 ? latency : 14);
+          if (res.success && Array.isArray(res.users) && res.users.length > 0) {
+            setAllUsers(res.users);
+            setIsDbConnected(true);
+            setLastDbSync(new Date());
+          } else {
+            setIsDbConnected(false);
+          }
         }
-      } catch (err) {
-        // network resilience
+      } catch {
+        if (isMounted) setIsDbConnected(false);
       }
     };
 
@@ -360,10 +347,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // App starts by default on the login screen
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
-  // Sync to localStorage
-  useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}users`, JSON.stringify(allUsers));
-  }, [allUsers]);
+  // Users are not saved to localStorage to prevent device isolation and state desynchronization
 
   useEffect(() => {
     localStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, currentUserId);
@@ -1236,20 +1220,29 @@ El Equipo de Lidacta`;
         : {}),
     };
 
-    // Immediate reactive local update & immediate localStorage write
-    const nextUsers = allUsers.map((u) => (u.id === currentUser.id ? updatedUser : u));
-    setAllUsers(nextUsers);
-    try {
-      localStorage.setItem(`${STORAGE_KEY_PREFIX}users`, JSON.stringify(nextUsers));
-      if (
-        currentUser.id === 'user_leader_carlos' ||
-        currentUser.email.toLowerCase().includes('carlos.mendoza')
-      ) {
-        localStorage.setItem('carlosProfileCompleted', 'true');
-        localStorage.setItem(`${STORAGE_KEY_PREFIX}carlosProfileCompleted`, 'true');
-        window.dispatchEvent(new Event('storage'));
-      }
-    } catch {}
+    // Real call to central database via userService
+    const res = await userService.completeProfile({
+      userId: currentUser.id,
+      email: currentUser.email,
+      name: currentUser.name,
+      role: currentUser.role,
+      position: currentUser.position,
+      companyName: companyName.trim(),
+      area: area?.trim(),
+      birthDate: birthDate.trim(),
+      directReports: directReports !== undefined ? Number(directReports) : undefined,
+      whatsapp: whatsapp.trim(),
+    });
+
+    if (!res.success) {
+      showToast(res.message || 'Error al persistir cambios en la base de datos central.', 'error');
+      return { success: false, message: res.message };
+    }
+
+    // Update state ONLY after server confirmation
+    if (Array.isArray(res.users) && res.users.length > 0) {
+      setAllUsers(res.users);
+    }
 
     // Update companies list if company name changed
     setCompanies((prev) =>
@@ -1269,37 +1262,7 @@ El Equipo de Lidacta`;
       );
     }
 
-    // Persist to centralized server store for cross-device consistency (Mobile, PC, Incognito)
-    try {
-      const res = await fetch('/api/user/complete-profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUser.id,
-          email: currentUser.email,
-          name: currentUser.name,
-          role: currentUser.role,
-          position: currentUser.position,
-          companyName: companyName.trim(),
-          area: area?.trim(),
-          birthDate: birthDate.trim(),
-          directReports: directReports !== undefined ? Number(directReports) : undefined,
-          whatsapp: whatsapp.trim(),
-        }),
-      });
-      const resData = await res.json();
-      if (resData.success && Array.isArray(resData.users)) {
-        setAllUsers(resData.users);
-        try {
-          localStorage.setItem(`${STORAGE_KEY_PREFIX}users`, JSON.stringify(resData.users));
-        } catch {}
-      }
-    } catch (err) {
-      console.warn('Could not sync complete profile to server immediately:', err);
-    }
-
-    showToast('¡Información actualizada correctamente! Tu perfil de Líder ha quedado completado.', 'success');
-
+    showToast('¡Información guardada y sincronizada en la base de datos central!', 'success');
     return { success: true };
   };
 
@@ -1318,37 +1281,31 @@ El Equipo de Lidacta`;
     const cleanEmail = updates.email.trim().toLowerCase();
     const cleanWhatsapp = updates.whatsapp !== undefined ? updates.whatsapp.trim() : '';
 
-    const nextUsers = allUsers.map((u) => {
-      if (u.id === userId) {
-        return {
-          ...u,
-          ...updates,
-          name: cleanName,
-          email: cleanEmail,
-          whatsapp: cleanWhatsapp || u.whatsapp,
-          position: updates.position !== undefined ? updates.position.trim() : u.position,
-          companyName: updates.companyName !== undefined ? updates.companyName.trim() : u.companyName,
-          area: updates.area !== undefined ? updates.area.trim() : u.area,
-          birthDate: updates.birthDate !== undefined ? updates.birthDate.trim() : u.birthDate,
-          directReports:
-            updates.directReports !== undefined ? Number(updates.directReports) : u.directReports,
-          isProfileCompleted: true,
-          isProfileComplete: true,
-        };
-      }
-      return u;
-    });
+    const payload: Partial<UserProfile> = {
+      ...updates,
+      name: cleanName,
+      email: cleanEmail,
+      whatsapp: cleanWhatsapp,
+      position: updates.position !== undefined ? updates.position.trim() : undefined,
+      companyName: updates.companyName !== undefined ? updates.companyName.trim() : undefined,
+      area: updates.area !== undefined ? updates.area.trim() : undefined,
+      birthDate: updates.birthDate !== undefined ? updates.birthDate.trim() : undefined,
+      directReports: updates.directReports !== undefined ? Number(updates.directReports) : undefined,
+      isProfileCompleted: true,
+      isProfileComplete: true,
+    };
 
-    setAllUsers(nextUsers);
+    // Direct call to database via userService
+    const res = await userService.updateUser(userId, payload);
+    if (!res.success) {
+      showToast(res.message || 'Error al guardar cambios en la base de datos central.', 'error');
+      return { success: false, message: res.message };
+    }
 
-    try {
-      localStorage.setItem(`${STORAGE_KEY_PREFIX}users`, JSON.stringify(nextUsers));
-      if (userId === 'user_leader_carlos' || cleanEmail.includes('carlos.mendoza')) {
-        localStorage.setItem('carlosProfileCompleted', 'true');
-        localStorage.setItem(`${STORAGE_KEY_PREFIX}carlosProfileCompleted`, 'true');
-        window.dispatchEvent(new Event('storage'));
-      }
-    } catch {}
+    // Update UI canonical state strictly after server responds
+    if (Array.isArray(res.users) && res.users.length > 0) {
+      setAllUsers(res.users);
+    }
 
     // Update companies if name changed
     if (updates.companyName) {
@@ -1375,56 +1332,8 @@ El Equipo de Lidacta`;
       )
     );
 
-    // Persist directly to central database via PUT /api/users/:id
-    try {
-      const resp = await fetch(`/api/users/${userId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...updates,
-          name: cleanName,
-          email: cleanEmail,
-          whatsapp: cleanWhatsapp,
-          position: updates.position !== undefined ? updates.position.trim() : undefined,
-          companyName: updates.companyName !== undefined ? updates.companyName.trim() : undefined,
-          area: updates.area !== undefined ? updates.area.trim() : undefined,
-          birthDate: updates.birthDate !== undefined ? updates.birthDate.trim() : undefined,
-          directReports: updates.directReports !== undefined ? Number(updates.directReports) : undefined,
-          isProfileCompleted: true,
-          isProfileComplete: true,
-        }),
-      });
-      const data = await resp.json();
-      if (data.success && Array.isArray(data.users)) {
-        setAllUsers(data.users);
-      }
-    } catch (err) {
-      // Fallback endpoint for serverless or alternative routing
-      try {
-        const resp2 = await fetch('/api/users/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId,
-            updates: {
-              ...updates,
-              name: cleanName,
-              email: cleanEmail,
-              whatsapp: cleanWhatsapp,
-              isProfileCompleted: true,
-              isProfileComplete: true,
-            },
-          }),
-        });
-        const data2 = await resp2.json();
-        if (data2.success && Array.isArray(data2.users)) {
-          setAllUsers(data2.users);
-        }
-      } catch {}
-    }
-
     // If updating admin, sync to centralized server memory & profile endpoint
-    const targetUser = allUsers.find((u) => u.id === userId);
+    const targetUser = (res.users || allUsers).find((u) => u.id === userId);
     if (userId === 'user_admin_tania' || updates.role === 'admin' || targetUser?.role === 'admin') {
       try {
         await fetch('/api/admin/profile', {
@@ -1444,6 +1353,7 @@ El Equipo de Lidacta`;
       }
     }
 
+    showToast('Perfil actualizado y persistido en la base de datos central.', 'success');
     return { success: true, message: 'Perfil actualizado y sincronizado centralmente en la base de datos.' };
   };
 
@@ -1530,74 +1440,59 @@ El Equipo de Lidacta`;
       return { success: false, message: 'Ingresa un correo electrónico válido.' };
     }
 
-    const company = companies.find((c) => c.id === userData.companyId) || companies[0];
-    const targetCompanyId = company?.id || 'comp_nexus';
-    const targetCompanyName = company?.name || userData.companyName || 'Industrias Nexus Automotriz';
+    const targetComp = companies.find((c) => c.id === userData.companyId) || companies[0];
+    const targetCompanyId = targetComp?.id || 'comp_nexus';
+    const targetCompanyName = targetComp?.name || userData.companyName || 'Industrias Nexus Automotriz';
 
-    try {
-      const resp = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...userData,
-          name: cleanName,
-          email: cleanEmail,
-          companyId: targetCompanyId,
-          companyName: targetCompanyName,
-          status: userData.status || 'active',
-        }),
-      });
+    const res = await userService.createUser({
+      name: cleanName,
+      email: cleanEmail,
+      role: userData.role,
+      companyId: targetCompanyId,
+      companyName: targetCompanyName,
+      position: userData.position || (userData.role === 'leader' ? 'Líder de Equipo' : userData.role === 'hr' ? 'Gestión Humana' : 'Administrador'),
+      area: userData.area || (userData.role === 'leader' ? 'Operaciones' : ''),
+      birthDate: userData.birthDate || '1990-01-01',
+      directReports: userData.directReports !== undefined ? Number(userData.directReports) : (userData.role === 'leader' ? 5 : 0),
+      whatsapp: userData.whatsapp || '',
+      status: userData.status || 'active',
+      password: userData.password || '',
+    });
 
-      const data = await resp.json();
-      if (!resp.ok || !data.success) {
-        showToast(data.message || 'Error al crear usuario.', 'error');
-        return { success: false, message: data.message || 'Error en el servidor al crear usuario.' };
-      }
-
-      const createdUser: UserProfile = data.user;
-      if (Array.isArray(data.users)) {
-        setAllUsers(data.users);
-      } else {
-        setAllUsers((prev) => [createdUser, ...prev.filter((u) => u.id !== createdUser.id)]);
-      }
-
-      showToast(`Usuario ${createdUser.name} registrado exitosamente.`, 'success');
-
-      // Trigger Welcome in-app simulated email message
-      const welcomeEmailBody = `¡Hola ${createdUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en acción.\n\nTu cuenta ha sido creada exitosamente asociada a ${createdUser.companyName}.\nEn Lidacta cuentas con un espacio 100% seguro y confidencial donde podrás analizar situaciones reales de tu día a día, practicar tus conversaciones y tomar acciones que fortalezcan tu autonomía como líder.\n\nRecursos Humanos únicamente recibirá indicadores agregados de uso, sin acceso a tus conversaciones privadas.\n\n¡Estamos listos para acompañarte en tu próximo reto!\n\nAtentamente,\nEl Equipo de Lidacta`;
-
-      setWelcomeModalData({
-        user: createdUser,
-        emailText: welcomeEmailBody,
-      });
-
-      return { success: true, message: data.message, user: createdUser };
-    } catch (err: any) {
-      // Fallback local creation if offline/server issues
-      const id = `user_${Date.now()}`;
-      const localNewUser: UserProfile = {
-        id,
-        name: cleanName,
-        email: cleanEmail,
-        role: userData.role,
-        companyId: targetCompanyId,
-        companyName: targetCompanyName,
-        position: userData.position || (userData.role === 'leader' ? 'Líder de Equipo' : 'Gestión Humana'),
-        area: userData.area || (userData.role === 'leader' ? 'Operaciones' : ''),
-        birthDate: userData.birthDate || '1990-01-01',
-        directReports: userData.directReports !== undefined ? Number(userData.directReports) : 5,
-        whatsapp: userData.whatsapp || '',
-        status: userData.status || 'active',
-        password: userData.password || '',
-        isProfileCompleted: true,
-        isProfileComplete: true,
-        createdAt: new Date().toISOString(),
-      };
-
-      setAllUsers((prev) => [localNewUser, ...prev]);
-      showToast(`Usuario ${localNewUser.name} creado exitosamente.`, 'success');
-      return { success: true, user: localNewUser };
+    if (!res.success) {
+      showToast(res.message || 'Error al guardar usuario en la base de datos central.', 'error');
+      return { success: false, message: res.message || 'Error en el servidor central al crear usuario.' };
     }
+
+    if (Array.isArray(res.users) && res.users.length > 0) {
+      setAllUsers(res.users);
+    } else if (res.user) {
+      setAllUsers((prev) => [res.user!, ...prev.filter((u) => u.id !== res.user!.id)]);
+    }
+
+    const createdUser: UserProfile = res.user || {
+      id: `user_${Date.now()}`,
+      name: cleanName,
+      email: cleanEmail,
+      role: userData.role,
+      companyId: targetCompanyId,
+      companyName: targetCompanyName,
+      position: userData.position || 'Líder',
+      createdAt: new Date().toISOString(),
+      status: userData.status || 'active',
+    };
+
+    showToast(`Usuario ${createdUser.name} registrado en la base de datos central.`, 'success');
+
+    // Trigger Welcome in-app simulated email message
+    const welcomeEmailBody = `¡Hola ${createdUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en acción.\n\nTu cuenta ha sido creada exitosamente asociada a ${createdUser.companyName}.\nEn Lidacta cuentas con un espacio 100% seguro y confidencial donde podrás analizar situaciones reales de tu día a día, practicar tus conversaciones y tomar acciones que fortalezcan tu autonomía como líder.\n\nRecursos Humanos únicamente recibirá indicadores agregados de uso, sin acceso a tus conversaciones privadas.\n\n¡Estamos listos para acompañarte en tu próximo reto!\n\nAtentamente,\nEl Equipo de Lidacta`;
+
+    setWelcomeModalData({
+      user: createdUser,
+      emailText: welcomeEmailBody,
+    });
+
+    return { success: true, message: res.message, user: createdUser };
   };
 
   const updateUser = async (
@@ -1613,35 +1508,20 @@ El Equipo de Lidacta`;
       return { success: false, message: 'Ingresa un correo electrónico válido.' };
     }
 
-    try {
-      const resp = await fetch(`/api/users/${userId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-
-      const data = await resp.json();
-      if (!resp.ok || !data.success) {
-        showToast(data.message || 'Error al actualizar usuario.', 'error');
-        return { success: false, message: data.message || 'Error al actualizar usuario.' };
-      }
-
-      const updatedUser: UserProfile = data.user;
-      if (Array.isArray(data.users)) {
-        setAllUsers(data.users);
-      } else {
-        setAllUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...updatedUser } : u)));
-      }
-
-      showToast(`Usuario ${updatedUser.name} actualizado correctamente.`, 'success');
-      return { success: true, message: data.message, user: updatedUser };
-    } catch (err: any) {
-      setAllUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, ...updates, updatedAt: new Date().toISOString() } : u))
-      );
-      showToast('Usuario actualizado correctamente.', 'success');
-      return { success: true };
+    const res = await userService.updateUser(userId, updates);
+    if (!res.success) {
+      showToast(res.message || 'Error al actualizar usuario en la base de datos central.', 'error');
+      return { success: false, message: res.message || 'Error al actualizar usuario.' };
     }
+
+    if (Array.isArray(res.users) && res.users.length > 0) {
+      setAllUsers(res.users);
+    } else if (res.user) {
+      setAllUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...res.user! } : u)));
+    }
+
+    showToast(res.message || 'Usuario actualizado correctamente en la base de datos central.', 'success');
+    return { success: true, message: res.message, user: res.user };
   };
 
   const deleteUser = async (userId: string): Promise<{ success: boolean; message?: string }> => {
@@ -1651,39 +1531,29 @@ El Equipo de Lidacta`;
       return { success: false, message: msg };
     }
 
-    try {
-      const resp = await fetch(`/api/users/${userId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      const data = await resp.json();
-      if (!resp.ok || !data.success) {
-        showToast(data.message || 'Error al eliminar usuario.', 'error');
-        return { success: false, message: data.message || 'Error al eliminar usuario.' };
-      }
-
-      if (Array.isArray(data.users)) {
-        setAllUsers(data.users);
-      } else {
-        setAllUsers((prev) => prev.filter((u) => u.id !== userId));
-      }
-
-      // If deleted current user, switch to admin
-      if (currentUserId === userId) {
-        const remainingAdmin = allUsers.find((u) => u.id !== userId && u.role === 'admin') || allUsers.find((u) => u.id !== userId);
-        if (remainingAdmin) {
-          setCurrentUserId(remainingAdmin.id);
-        }
-      }
-
-      showToast(data.message || 'Usuario eliminado correctamente.', 'success');
-      return { success: true, message: data.message };
-    } catch (err: any) {
-      setAllUsers((prev) => prev.filter((u) => u.id !== userId));
-      showToast('Usuario eliminado del sistema.', 'info');
-      return { success: true };
+    const res = await userService.deleteUser(userId);
+    if (!res.success) {
+      showToast(res.message || 'Error al eliminar usuario en la base de datos central.', 'error');
+      return { success: false, message: res.message || 'Error al eliminar usuario.' };
     }
+
+    if (Array.isArray(res.users)) {
+      setAllUsers(res.users);
+    } else {
+      setAllUsers((prev) => prev.filter((u) => u.id !== userId));
+    }
+
+    // If deleted current user, switch to admin
+    if (currentUserId === userId) {
+      const remainingAdmin = (res.users || allUsers).find((u) => u.id !== userId && u.role === 'admin') ||
+        (res.users || allUsers).find((u) => u.id !== userId);
+      if (remainingAdmin) {
+        setCurrentUserId(remainingAdmin.id);
+      }
+    }
+
+    showToast(res.message || 'Usuario eliminado correctamente de la base de datos central.', 'success');
+    return { success: true, message: res.message };
   };
 
   return (
@@ -1740,6 +1610,9 @@ El Equipo de Lidacta`;
         updateMentorRequestStatus,
         refreshUsers,
         isSyncingUsers,
+        isDbConnected,
+        lastDbSync,
+        dbLatencyMs,
       }}
     >
       {children}

@@ -632,6 +632,18 @@ app.post('/api/admin/profile', (req: Request, res: Response) => {
   }
 });
 
+// GET /api/health - Check database and server health for multi-device sync
+app.get('/api/health', (_req: Request, res: Response) => {
+  serverUsers = readPersistentUsers();
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  return res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    usersCount: serverUsers.length,
+    databaseFile: 'server_users_db.json',
+  });
+});
+
 // GET /api/users - Cross-device synchronized user list
 app.get('/api/users', (_req: Request, res: Response) => {
   serverUsers = readPersistentUsers();
@@ -645,6 +657,7 @@ app.get('/api/users', (_req: Request, res: Response) => {
 // POST /api/user/complete-profile - Persistently mark profile as complete across PC, Mobile, Incognito
 app.post('/api/user/complete-profile', (req: Request, res: Response) => {
   try {
+    serverUsers = readPersistentUsers();
     const { userId, email, companyName, area, birthDate, directReports, whatsapp } = req.body;
     let targetIndex = serverUsers.findIndex((u) => u.id === userId);
     if (targetIndex === -1 && email) {
@@ -713,6 +726,7 @@ app.post('/api/user/complete-profile', (req: Request, res: Response) => {
 // POST /api/users - Create new user with backend persistence
 app.post('/api/users', (req: Request, res: Response) => {
   try {
+    serverUsers = readPersistentUsers();
     const {
       name,
       email,
@@ -786,6 +800,7 @@ app.post('/api/users', (req: Request, res: Response) => {
 // PUT /api/users/:id - Update user details, role, status and password
 app.put('/api/users/:id', (req: Request, res: Response) => {
   try {
+    serverUsers = readPersistentUsers();
     const { id } = req.params;
     const {
       name,
@@ -872,8 +887,8 @@ app.put('/api/users/:id', (req: Request, res: Response) => {
 // DELETE /api/users/:id - Delete user with backend persistence
 app.delete('/api/users/:id', (req: Request, res: Response) => {
   try {
+    serverUsers = readPersistentUsers();
     const { id } = req.params;
-
     if (id === 'user_admin_tania') {
       return res.status(400).json({
         success: false,
@@ -891,7 +906,6 @@ app.delete('/api/users/:id', (req: Request, res: Response) => {
     writePersistentUsers(serverUsers);
 
     console.log(`[SERVER DB] User deleted: ${deletedUser.name} (${deletedUser.email})`);
-
     return res.json({
       success: true,
       message: `Usuario ${deletedUser.name} eliminado exitosamente del sistema.`,
@@ -907,6 +921,7 @@ app.delete('/api/users/:id', (req: Request, res: Response) => {
 // POST /api/users/delete - Alternative POST endpoint for deleting a user
 app.post('/api/users/delete', (req: Request, res: Response) => {
   try {
+    serverUsers = readPersistentUsers();
     const { userId } = req.body;
     if (!userId) {
       return res.status(400).json({ success: false, message: 'ID de usuario requerido.' });
@@ -929,7 +944,6 @@ app.post('/api/users/delete', (req: Request, res: Response) => {
     writePersistentUsers(serverUsers);
 
     console.log(`[SERVER DB] User deleted via POST: ${deletedUser.name} (${deletedUser.email})`);
-
     return res.json({
       success: true,
       message: `Usuario ${deletedUser.name} eliminado exitosamente del sistema.`,
@@ -945,6 +959,7 @@ app.post('/api/users/delete', (req: Request, res: Response) => {
 // POST /api/users/update - Central user profile updates
 app.post('/api/users/update', (req: Request, res: Response) => {
   try {
+    serverUsers = readPersistentUsers();
     const { userId, updates } = req.body;
     const targetIndex = serverUsers.findIndex((u) => u.id === userId);
     if (targetIndex === -1) {
