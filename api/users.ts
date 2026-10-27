@@ -243,6 +243,8 @@ async function persistUsers(users: UserProfile[]) {
   await saveToSupabase(users);
 }
 
+export { loadUsers, persistUsers, DEFAULT_USERS };
+
 export default async function handler(req: any, res: any) {
   // CORS Configuration
   res.setHeader('Access-Control-Allow-Credentials', 'true');

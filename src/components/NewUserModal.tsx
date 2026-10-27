@@ -4,7 +4,7 @@ import { UserRole } from '../types/lidacta';
 import { X, UserPlus, ShieldCheck } from 'lucide-react';
 
 export const NewUserModal: React.FC = () => {
-  const { showNewUserModal, setShowNewUserModal, createNewUser, companies } = useLidacta();
+  const { showNewUserModal, setShowNewUserModal, createUser, companies } = useLidacta();
 
   const [role, setRole] = useState<UserRole>('leader');
   const [name, setName] = useState('');
@@ -18,13 +18,13 @@ export const NewUserModal: React.FC = () => {
 
   if (!showNewUserModal) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    createNewUser({
-      name,
-      email: email || `${name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
+    await createUser({
+      name: name.trim(),
+      email: email.trim() || `${name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
       role,
       companyId,
       position: position || (role === 'leader' ? 'Líder de Operaciones' : 'Gestión Humana'),

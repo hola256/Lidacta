@@ -19,11 +19,14 @@ import {
 export const LoginView: React.FC = () => {
   const { registerOrSetPassword, login, allUsers, companies } = useLidacta();
 
-  // Unified form fields
+  // Mode: Iniciar Sesión vs Registrar Nuevo Usuario
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+
+  // Form fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<UserRole>('admin');
+  const [role, setRole] = useState<UserRole>('leader');
   const [position, setPosition] = useState('');
   const [companyId, setCompanyId] = useState(companies[0]?.id || 'comp_nexus');
   const [showPassword, setShowPassword] = useState(false);
@@ -32,12 +35,12 @@ export const LoginView: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Auto-fill profile helpers when typing recognizable emails
+  // Auto-fill profile helpers when typing recognizable emails in login mode
   const handleEmailChange = (val: string) => {
     setEmail(val);
     const lower = val.trim().toLowerCase();
     const existing = allUsers.find((u) => u.email.toLowerCase() === lower);
-    if (existing) {
+    if (existing && authMode === 'login') {
       if (!name) setName(existing.name);
       setRole(existing.role);
       if (!position) setPosition(existing.position);
@@ -45,8 +48,8 @@ export const LoginView: React.FC = () => {
     }
   };
 
-  // Single-step Unified Form Submission
-  const handleUnifiedSubmit = (e: React.FormEvent) => {
+  // Login handler
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -63,28 +66,86 @@ export const LoginView: React.FC = () => {
 
     setIsLoading(true);
 
-    setTimeout(() => {
-      // Process unified access: creates profile if new or updates/logs in if existing
-      const res = registerOrSetPassword(
+    try {
+      const res = login(cleanEmail, password.trim());
+      if (!res.success) {
+        // If user does not exist, suggest registration
+        const exists = allUsers.some((u) => u.email.toLowerCase() === cleanEmail);
+        if (!exists) {
+          setErrorMessage(
+            'No encontramos una cuenta con este correo. Puedes crear tu cuenta en la pestaña "Registrar Nuevo Usuario".'
+          );
+        } else {
+          setErrorMessage(res.message || 'No se pudo iniciar sesión. Verifica tus credenciales.');
+        }
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Error inesperado al iniciar sesión.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Registration handler with full field validation
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    const cleanName = name.trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+    const cleanPosition = position.trim();
+
+    // Required Field Validations
+    if (!cleanName || cleanName.length < 2) {
+      setErrorMessage('Por favor, ingresa tu nombre completo.');
+      return;
+    }
+
+    if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+      setErrorMessage('Por favor, ingresa un correo electrónico corporativo válido.');
+      return;
+    }
+
+    // Check duplicate
+    const exists = allUsers.some((u) => u.email.toLowerCase() === cleanEmail);
+    if (exists) {
+      setErrorMessage('Ya existe una cuenta registrada con este correo. Inicia sesión directamente.');
+      return;
+    }
+
+    if (!cleanPassword || cleanPassword.length < 6) {
+      setErrorMessage('La contraseña de acceso debe tener al menos 6 caracteres.');
+      return;
+    }
+
+    if (!cleanPosition) {
+      setErrorMessage('Por favor, ingresa tu puesto o cargo dentro de la empresa.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const res = await registerOrSetPassword(
         cleanEmail,
-        password,
-        name.trim() || (role === 'admin' ? 'Tania Padierna' : 'Usuario Lidacta'),
+        cleanPassword,
+        cleanName,
         role,
-        position.trim() ||
-          (role === 'admin'
-            ? 'Administradora de Plataforma'
-            : role === 'hr'
-            ? 'Gestión de Talento Humano'
-            : 'Líder de Operaciones'),
+        cleanPosition,
         companyId
       );
 
-      setIsLoading(false);
-
       if (!res.success) {
-        setErrorMessage(res.message || 'No se pudo procesar el acceso.');
+        setErrorMessage(res.message || 'Error al procesar el registro en la base de datos central.');
       }
-    }, 300);
+      // If success, LidactaProvider automatically switches to CompleteProfileView for leaders/HR,
+      // strictly protected against background polling overrides and session leakage.
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Error al conectar con la base de datos central.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Quick 1-click test handlers
@@ -138,11 +199,11 @@ export const LoginView: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Centered Login / Registration Container (Single unified step) */}
+      {/* Main Centered Login / Registration Container */}
       <main className="w-full max-w-lg mx-auto my-6 sm:my-8 flex-1 flex flex-col justify-center animate-in fade-in zoom-in-95 duration-300">
-        <div className="bg-[#24153F]/95 backdrop-blur-xl border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+        <div className="bg-[#24153F]/95 backdrop-blur-xl border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5">
           {/* Card Header */}
-          <div className="text-center space-y-2">
+          <div className="text-center space-y-1.5">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#F7B538]/15 border border-[#F7B538]/30 text-[#F7B538] mb-1">
               <Lock className="w-6 h-6" />
             </div>
@@ -150,8 +211,43 @@ export const LoginView: React.FC = () => {
               Portal de Acceso
             </h1>
             <p className="text-xs sm:text-sm text-[#FFF7EF]/80 leading-relaxed max-w-sm mx-auto">
-              Ingresa a Lidacta
+              {authMode === 'login'
+                ? 'Ingresa tus credenciales para acceder a Lidacta'
+                : 'Crea tu nueva cuenta para comenzar tu acompañamiento'}
             </p>
+          </div>
+
+          {/* Mode Selector Tabs: Iniciar Sesión vs Registrarse */}
+          <div className="grid grid-cols-2 p-1 bg-white/5 border border-white/15 rounded-2xl">
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode('login');
+                setErrorMessage(null);
+              }}
+              className={`py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                authMode === 'login'
+                  ? 'bg-[#F7B538] text-[#2D1B4E] shadow-xs'
+                  : 'text-white/70 hover:text-white'
+              }`}
+            >
+              Iniciar Sesión
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode('register');
+                setErrorMessage(null);
+                setRole('leader');
+              }}
+              className={`py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                authMode === 'register'
+                  ? 'bg-[#F7B538] text-[#2D1B4E] shadow-xs'
+                  : 'text-white/70 hover:text-white'
+              }`}
+            >
+              + Registrar Nuevo Usuario
+            </button>
           </div>
 
           {/* Error / Alert notification banner in Coral Profundo (#BF3A1B) */}
@@ -162,135 +258,252 @@ export const LoginView: React.FC = () => {
             </div>
           )}
 
-          {/* UNIFIED SINGLE-STEP FORM */}
-          <form onSubmit={handleUnifiedSubmit} className="space-y-4">
-            {/* 1. Correo Electrónico */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
-                Correo Electrónico *
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => handleEmailChange(e.target.value)}
-                  placeholder="hola@taniapadierna.com o tu.correo@empresa.com"
-                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
-                />
+          {/* FORM: INICIAR SESIÓN */}
+          {authMode === 'login' && (
+            <form onSubmit={handleLoginSubmit} className="space-y-4 animate-in fade-in">
+              {/* Correo Electrónico */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
+                  Correo Electrónico *
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => handleEmailChange(e.target.value)}
+                    placeholder="tu.correo@empresa.com"
+                    className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* 2. Contraseña */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
-                Contraseña *
-              </label>
-              <div className="relative">
-                <KeyRound className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  className="w-full pl-10 pr-10 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3 text-white/50 hover:text-white cursor-pointer p-0.5"
-                  title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* 3. Datos de Perfil: Nombre Completo */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
-                Nombre Completo
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ej. Tania Padierna o Roberto Gómez"
-                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
-                />
-              </div>
-            </div>
-
-            {/* 4. Datos de Perfil: Rol de Acceso */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
-                Rol en la Plataforma
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: 'admin', label: 'Administradora' },
-                  { id: 'leader', label: 'Líder' },
-                  { id: 'hr', label: 'RRHH' },
-                ].map((r) => (
+              {/* Contraseña */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
+                  Contraseña *
+                </label>
+                <div className="relative">
+                  <KeyRound className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full pl-10 pr-10 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
+                  />
                   <button
                     type="button"
-                    key={r.id}
-                    onClick={() => setRole(r.id as UserRole)}
-                    className={`py-2 px-1 text-center rounded-xl border text-xs font-bold cursor-pointer transition-all ${
-                      role === r.id
-                        ? 'bg-[#F7B538] text-[#2D1B4E] border-[#F7B538] shadow-xs'
-                        : 'bg-white/5 text-white/70 border-white/15 hover:border-white/30'
-                    }`}
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-3 text-white/50 hover:text-white cursor-pointer p-0.5"
+                    title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
                   >
-                    {r.label}
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
-                ))}
+                </div>
               </div>
-            </div>
 
-            {/* 5. Datos de Perfil: Puesto / Área */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
-                Puesto / Cargo
-              </label>
-              <div className="relative">
-                <Briefcase className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
-                <input
-                  type="text"
-                  value={position}
-                  onChange={(e) => setPosition(e.target.value)}
-                  placeholder={
-                    role === 'admin'
-                      ? 'Creadora & Directora de Plataforma'
-                      : role === 'hr'
-                      ? 'Directora de Gestión Humana & Talento'
-                      : 'Líder de Línea de Ensamble y Calidad'
-                  }
-                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
-                />
+              {/* Botón Acceder */}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full min-h-[48px] py-3.5 px-6 bg-[#F7B538] hover:bg-[#e5a62f] text-[#2D1B4E] font-heading font-extrabold text-sm rounded-xl shadow-lg shadow-[#F7B538]/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 mt-2"
+              >
+                {isLoading ? (
+                  <span>Validando credenciales...</span>
+                ) : (
+                  <>
+                    <span>Acceder a Lidacta</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('register');
+                    setErrorMessage(null);
+                    setRole('leader');
+                  }}
+                  className="text-xs text-[#FFD3BF] hover:underline cursor-pointer"
+                >
+                  ¿No tienes cuenta aún? Registrar nuevo usuario
+                </button>
               </div>
-            </div>
+            </form>
+          )}
 
-            {/* 6. UN SOLO BOTÓN PRINCIPAL DE ACCIÓN en Ámbar Impulso (#F7B538) */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full min-h-[48px] py-3.5 px-6 bg-[#F7B538] hover:bg-[#e5a62f] text-[#2D1B4E] font-heading font-extrabold text-sm rounded-xl shadow-lg shadow-[#F7B538]/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 mt-4"
-            >
-              {isLoading ? (
-                <span>Validando y accediendo...</span>
-              ) : (
-                <>
-                  <span>Acceder a Lidacta</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </form>
+          {/* FORM: REGISTRAR NUEVO USUARIO (Con validación y persistencia central) */}
+          {authMode === 'register' && (
+            <form onSubmit={handleRegisterSubmit} className="space-y-3.5 animate-in fade-in">
+              {/* 1. Nombre Completo */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
+                  Nombre Completo *
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ej. Roberto Gómez o Carlos Mendoza"
+                    className="w-full pl-10 pr-4 py-2.5 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* 2. Correo Electrónico Corporativo */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
+                  Correo Electrónico Corporativo *
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="tu.correo@empresa.com"
+                    className="w-full pl-10 pr-4 py-2.5 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* 3. Contraseña */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
+                  Contraseña de Acceso (mínimo 6 caracteres) *
+                </label>
+                <div className="relative">
+                  <KeyRound className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full pl-10 pr-10 py-2.5 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-2.5 text-white/50 hover:text-white cursor-pointer p-0.5"
+                    title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* 4. Empresa */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
+                  Empresa Asociada *
+                </label>
+                <div className="relative">
+                  <Building2 className="w-4 h-4 absolute left-3.5 top-3 text-[#FFF7EF]/50 pointer-events-none" />
+                  <select
+                    value={companyId}
+                    onChange={(e) => setCompanyId(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-[#24153F] border border-white/20 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-[#BF3A1B]"
+                  >
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id} className="bg-[#24153F] text-white">
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* 5. Rol en la Plataforma (Default: Líder) */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
+                  Rol en la Plataforma *
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'leader', label: 'Líder' },
+                    { id: 'hr', label: 'Recursos Humanos' },
+                    { id: 'admin', label: 'Administradora' },
+                  ].map((r) => (
+                    <button
+                      type="button"
+                      key={r.id}
+                      onClick={() => setRole(r.id as UserRole)}
+                      className={`py-2 px-1 text-center rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                        role === r.id
+                          ? 'bg-[#F7B538] text-[#2D1B4E] border-[#F7B538] shadow-xs'
+                          : 'bg-white/5 text-white/70 border-white/15 hover:border-white/30'
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 6. Puesto / Cargo */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
+                  Puesto / Cargo *
+                </label>
+                <div className="relative">
+                  <Briefcase className="w-4 h-4 absolute left-3.5 top-3 text-[#FFF7EF]/50 pointer-events-none" />
+                  <input
+                    type="text"
+                    required
+                    value={position}
+                    onChange={(e) => setPosition(e.target.value)}
+                    placeholder={
+                      role === 'leader'
+                        ? 'Líder de Línea / Supervisor de Operaciones'
+                        : role === 'hr'
+                        ? 'Directora de Gestión Humana'
+                        : 'Administradora de Plataforma'
+                    }
+                    className="w-full pl-10 pr-4 py-2.5 bg-white/10 border border-white/20 rounded-xl text-xs sm:text-sm text-white placeholder-white/35 focus:outline-none focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/50 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Botón Confirmar Registro */}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full min-h-[48px] py-3.5 px-6 bg-[#F7B538] hover:bg-[#e5a62f] text-[#2D1B4E] font-heading font-extrabold text-sm rounded-xl shadow-lg shadow-[#F7B538]/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 mt-3"
+              >
+                {isLoading ? (
+                  <span>Registrando usuario en la Base de Datos Central...</span>
+                ) : (
+                  <>
+                    <span>Confirmar Registro y Acceder</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('login');
+                    setErrorMessage(null);
+                  }}
+                  className="text-xs text-[#FFD3BF] hover:underline cursor-pointer"
+                >
+                  ¿Ya tienes cuenta registrada? Iniciar sesión
+                </button>
+              </div>
+            </form>
+          )}
 
           {/* Quick Demo Access (1-Click Instant Access) */}
           <div className="pt-4 border-t border-white/10 space-y-3">

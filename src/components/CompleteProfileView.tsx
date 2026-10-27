@@ -383,16 +383,16 @@ export const CompleteProfileView: React.FC = () => {
                 {isSubmitting ? (
                   <>
                     <div className="w-5 h-5 border-2 border-[#2D1B4E] border-t-transparent rounded-full animate-spin" />
-                    <span>Guardando y verificando perfil...</span>
+                    <span>Guardando perfil en la Base de Datos Central...</span>
                   </>
                 ) : isSuccess ? (
                   <>
                     <CheckCircle2 className="w-5 h-5 text-[#2D1B4E]" />
-                    <span>¡Perfil completado! Redirigiendo...</span>
+                    <span>¡Perfil completado y guardado! Redirigiendo a tu panel...</span>
                   </>
                 ) : (
                   <>
-                    <span>Guardar y acceder al panel de {isLeader ? 'Líder' : 'Recursos Humanos'}</span>
+                    <span>Guardar Perfil / Confirmar Registro</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}

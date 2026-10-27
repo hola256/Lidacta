@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import {
   CompanyContext,
   MentorshipSession,
@@ -53,6 +53,7 @@ interface LidactaContextType {
     userId: string,
     updates: Partial<UserProfile>
   ) => Promise<{ success: boolean; message?: string }>;
+  sessionUser: UserProfile | null;
   registerOrSetPassword: (
     email: string,
     password: string,
@@ -60,7 +61,7 @@ interface LidactaContextType {
     role?: UserRole,
     position?: string,
     companyId?: string
-  ) => { success: boolean; message?: string };
+  ) => Promise<{ success: boolean; message?: string; user?: UserProfile }>;
   
   // Actions
   switchUser: (userId: string) => void;
@@ -139,6 +140,32 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [lastDbSync, setLastDbSync] = useState<Date | null>(null);
   const [dbLatencyMs, setDbLatencyMs] = useState<number>(18);
 
+  // Active Session User & ID to ensure strict isolation and avoid premature fallbacks
+  const [sessionUser, setSessionUser] = useState<UserProfile | null>(() => {
+    try {
+      const saved = sessionStorage.getItem(`${STORAGE_KEY_PREFIX}session_user`);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [currentUserId, setCurrentUserId] = useState<string>(() => {
+    try {
+      const saved =
+        sessionStorage.getItem(`${STORAGE_KEY_PREFIX}current_user_id`) ||
+        localStorage.getItem(`${STORAGE_KEY_PREFIX}current_user_id`);
+      return saved || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const sessionUserRef = useRef<UserProfile | null>(sessionUser);
+  sessionUserRef.current = sessionUser;
+  const currentUserIdRef = useRef<string>(currentUserId);
+  currentUserIdRef.current = currentUserId;
+
   const refreshUsers = async () => {
     try {
       setIsSyncingUsers(true);
@@ -148,7 +175,22 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setDbLatencyMs(latency > 0 ? latency : 12);
 
       if (res.success && Array.isArray(res.users) && res.users.length > 0) {
-        setAllUsers(res.users);
+        setAllUsers((prevUsers) => {
+          const serverUsers = res.users;
+          const activeId = currentUserIdRef.current || sessionUserRef.current?.id;
+          if (activeId) {
+            const activeUser = prevUsers.find((u) => u.id === activeId) || sessionUserRef.current;
+            const inServer = serverUsers.some(
+              (u) =>
+                u.id === activeId ||
+                (activeUser?.email && u.email.toLowerCase() === activeUser.email.toLowerCase())
+            );
+            if (activeUser && !inServer) {
+              return [activeUser, ...serverUsers];
+            }
+          }
+          return serverUsers;
+        });
         setIsDbConnected(true);
         setLastDbSync(new Date());
       } else {
@@ -177,7 +219,24 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (isMounted) {
           setDbLatencyMs(latency > 0 ? latency : 14);
           if (res.success && Array.isArray(res.users) && res.users.length > 0) {
-            setAllUsers(res.users);
+            setAllUsers((prevUsers) => {
+              const serverUsers = res.users;
+              // CRITICAL: Protect the currently active/registering session user!
+              // If active user is not yet reflected in serverUsers list, DO NOT drop them from allUsers!
+              const activeId = currentUserIdRef.current || sessionUserRef.current?.id;
+              if (activeId) {
+                const activeUser = prevUsers.find((u) => u.id === activeId) || sessionUserRef.current;
+                const inServer = serverUsers.some(
+                  (u) =>
+                    u.id === activeId ||
+                    (activeUser?.email && u.email.toLowerCase() === activeUser.email.toLowerCase())
+                );
+                if (activeUser && !inServer) {
+                  return [activeUser, ...serverUsers];
+                }
+              }
+              return serverUsers;
+            });
             setIsDbConnected(true);
             setLastDbSync(new Date());
           } else {
@@ -286,11 +345,6 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, []);
 
-  const [currentUserId, setCurrentUserId] = useState<string>(() => {
-    const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}current_user_id`);
-    return saved || 'user_leader_roberto';
-  });
-
   const [companies, setCompanies] = useState<CompanyContext[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}companies`);
     return saved ? JSON.parse(saved) : INITIAL_COMPANIES;
@@ -350,7 +404,10 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Users are not saved to localStorage to prevent device isolation and state desynchronization
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, currentUserId);
+    if (currentUserId) {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, currentUserId);
+      sessionStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, currentUserId);
+    }
   }, [currentUserId]);
 
   useEffect(() => {
@@ -365,7 +422,24 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.setItem(`${STORAGE_KEY_PREFIX}notifications`, JSON.stringify(notifications));
   }, [notifications]);
 
-  const currentUser = allUsers.find((u) => u.id === currentUserId) || allUsers[0];
+  const currentUser = useMemo(() => {
+    // 1. If active sessionUser exists, find latest matching record in allUsers or use sessionUser
+    if (sessionUser && sessionUser.id) {
+      const live = allUsers.find(
+        (u) =>
+          u.id === sessionUser.id ||
+          (sessionUser.email && u.email.toLowerCase() === sessionUser.email.toLowerCase())
+      );
+      return live ? { ...sessionUser, ...live } : sessionUser;
+    }
+    // 2. If currentUserId set, find in allUsers
+    if (currentUserId) {
+      const found = allUsers.find((u) => u.id === currentUserId);
+      if (found) return found;
+    }
+    // 3. Fallback for unauthenticated or initial state
+    return allUsers[0] || DEFAULT_ADMIN_PROFILE;
+  }, [allUsers, currentUserId, sessionUser]);
 
   const activeMentorship =
     mentorships.find((m) => m.id === activeMentorshipId) ||
@@ -408,7 +482,25 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     setAllUsers((prev) => [newUser, ...prev]);
-    setCurrentUserId(newUser.id);
+    if (currentUser.role !== 'admin') {
+      setCurrentUserId(newUser.id);
+      setSessionUser(newUser);
+    }
+
+    // Async persist to central database
+    userService.createUser({
+      name: newUser.name,
+      email: newUser.email,
+      role: newUser.role,
+      companyId: newUser.companyId,
+      companyName: newUser.companyName,
+      position: newUser.position,
+      area: newUser.area,
+      birthDate: newUser.birthDate,
+      directReports: newUser.directReports,
+      whatsapp: newUser.whatsapp,
+      status: 'active',
+    }).catch((err) => console.warn('Could not persist new user in database:', err));
 
     // Trigger Welcome in-app and simulated email message
     const welcomeEmailBody = `¡Hola ${newUser.name}!
@@ -1123,7 +1215,13 @@ El Equipo de Lidacta`;
     }
 
     setCurrentUserId(user.id);
+    setSessionUser(user);
     setIsAuthenticated(true);
+    try {
+      sessionStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, user.id);
+      sessionStorage.setItem(`${STORAGE_KEY_PREFIX}session_user`, JSON.stringify(user));
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, user.id);
+    } catch {}
 
     if (user.role === 'leader') {
       const leaderMentorship =
@@ -1239,10 +1337,17 @@ El Equipo de Lidacta`;
       return { success: false, message: res.message };
     }
 
-    // Update state ONLY after server confirmation
+    // Update state and sessionUser
+    setSessionUser(updatedUser);
     if (Array.isArray(res.users) && res.users.length > 0) {
       setAllUsers(res.users);
+    } else {
+      setAllUsers((prev) => prev.map((u) => (u.id === currentUser.id ? updatedUser : u)));
     }
+
+    try {
+      sessionStorage.setItem(`${STORAGE_KEY_PREFIX}session_user`, JSON.stringify(updatedUser));
+    } catch {}
 
     // Update companies list if company name changed
     setCompanies((prev) =>
@@ -1359,59 +1464,155 @@ El Equipo de Lidacta`;
 
   const logout = () => {
     setIsAuthenticated(false);
+    setSessionUser(null);
+    setCurrentUserId('');
+    try {
+      sessionStorage.removeItem(`${STORAGE_KEY_PREFIX}current_user_id`);
+      sessionStorage.removeItem(`${STORAGE_KEY_PREFIX}session_user`);
+      localStorage.removeItem(`${STORAGE_KEY_PREFIX}current_user_id`);
+    } catch {}
   };
 
-  const registerOrSetPassword = (
+  const registerOrSetPassword = async (
     email: string,
-    _password: string,
+    password: string,
     name?: string,
     role?: UserRole,
     position?: string,
     companyId?: string
-  ): { success: boolean; message?: string } => {
+  ): Promise<{ success: boolean; message?: string; user?: UserProfile }> => {
     const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return { success: false, message: 'Por favor, ingresa un correo electrónico corporativo válido.' };
+    }
+    if (!password || password.trim().length < 6) {
+      return { success: false, message: 'La contraseña debe tener al menos 6 caracteres.' };
+    }
+
+    // 1. Check if user already exists
     const existingUser = allUsers.find((u) => u.email.toLowerCase() === cleanEmail);
 
     if (existingUser) {
+      if (existingUser.password && existingUser.password !== password) {
+        return { success: false, message: 'La contraseña ingresada no es correcta. Verifica e intenta nuevamente.' };
+      }
+      if (existingUser.status === 'inactive') {
+        return { success: false, message: 'Esta cuenta se encuentra inactiva. Contacta al administrador.' };
+      }
+
       if (name?.trim() || role || position?.trim()) {
-        const updatedUser = {
-          ...existingUser,
+        const updates: Partial<UserProfile> = {
           name: name?.trim() || existingUser.name,
           role: role || existingUser.role,
           position: position?.trim() || existingUser.position,
         };
+        await userService.updateUser(existingUser.id, updates);
+        const updatedUser = { ...existingUser, ...updates };
         setAllUsers((prev) => prev.map((u) => (u.id === existingUser.id ? updatedUser : u)));
+        setSessionUser(updatedUser);
+      } else {
+        setSessionUser(existingUser);
       }
+
       setCurrentUserId(existingUser.id);
       setIsAuthenticated(true);
-      return { success: true };
+      try {
+        sessionStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, existingUser.id);
+        sessionStorage.setItem(`${STORAGE_KEY_PREFIX}session_user`, JSON.stringify(existingUser));
+        localStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, existingUser.id);
+      } catch {}
+
+      if (existingUser.role === 'leader') {
+        const leaderMentorship =
+          mentorships.find((m) => m.leaderId === existingUser.id && m.status !== 'completed') ||
+          mentorships.find((m) => m.leaderId === existingUser.id);
+        setActiveMentorshipIdState(leaderMentorship ? leaderMentorship.id : null);
+      }
+
+      return { success: true, user: existingUser };
     }
 
-    const assignedRole: UserRole = role || 'admin';
+    // 2. New User Registration Flow (Direct Central Database Persistence)
+    const cleanName = name?.trim();
+    if (!cleanName || cleanName.length < 2) {
+      return { success: false, message: 'Por favor ingresa tu nombre completo para el registro.' };
+    }
+
+    const assignedRole: UserRole = role || 'leader';
     const targetCompany = companies.find((c) => c.id === companyId) || companies[0];
-    const newUser: UserProfile = {
-      id: `user_${Date.now()}`,
-      name: name?.trim() || (assignedRole === 'admin' ? 'Tania Padierna' : 'Usuario Lidacta'),
+    const targetCompId = targetCompany?.id || 'comp_nexus';
+    const targetCompName = targetCompany?.name || 'Industrias Nexus Automotriz';
+
+    const defaultPosition =
+      position?.trim() ||
+      (assignedRole === 'admin'
+        ? 'Administradora de Plataforma'
+        : assignedRole === 'hr'
+        ? 'Gestión de Talento Humano'
+        : 'Líder Operativo');
+
+    // Create directly in central database via userService
+    const res = await userService.createUser({
+      name: cleanName,
       email: cleanEmail,
       role: assignedRole,
-      companyId: targetCompany?.id || 'comp_nexus',
-      companyName: targetCompany?.name || 'Lidacta Platform',
-      position:
-        position?.trim() ||
-        (assignedRole === 'admin'
-          ? 'Administradora de Plataforma'
-          : assignedRole === 'hr'
-          ? 'Gestión de Talento Humano'
-          : 'Líder Operativo'),
-      area: assignedRole === 'admin' ? 'Dirección y Auditoría' : '',
+      companyId: targetCompId,
+      companyName: targetCompName,
+      position: defaultPosition,
+      area: assignedRole === 'leader' ? '' : undefined,
+      birthDate: '',
+      directReports: assignedRole === 'leader' ? undefined : 0,
+      whatsapp: '',
+      status: 'active',
+      password: password.trim(),
+    });
+
+    if (!res.success) {
+      return {
+        success: false,
+        message: res.message || 'Error al guardar el nuevo usuario en la base de datos central.',
+      };
+    }
+
+    const createdUser: UserProfile = res.user || {
+      id: `user_${Date.now()}`,
+      name: cleanName,
+      email: cleanEmail,
+      role: assignedRole,
+      companyId: targetCompId,
+      companyName: targetCompName,
+      position: defaultPosition,
+      area: '',
+      birthDate: '',
+      directReports: undefined,
+      whatsapp: '',
       isProfileCompleted: assignedRole === 'admin',
+      isProfileComplete: assignedRole === 'admin',
       createdAt: new Date().toISOString().split('T')[0],
+      status: 'active',
+      password: password.trim(),
     };
 
-    setAllUsers((prev) => [newUser, ...prev]);
-    setCurrentUserId(newUser.id);
+    // Ensure session isolation: clear any lingering admin cache and bind session strictly to new user
+    setSessionUser(createdUser);
+    setCurrentUserId(createdUser.id);
+    try {
+      sessionStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, createdUser.id);
+      sessionStorage.setItem(`${STORAGE_KEY_PREFIX}session_user`, JSON.stringify(createdUser));
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, createdUser.id);
+    } catch {}
+
+    setAllUsers((prev) => [
+      createdUser,
+      ...prev.filter((u) => u.id !== createdUser.id && u.email.toLowerCase() !== cleanEmail),
+    ]);
     setIsAuthenticated(true);
-    return { success: true };
+
+    if (assignedRole === 'leader') {
+      setActiveMentorshipIdState(null);
+    }
+
+    return { success: true, user: createdUser };
   };
 
   const createUser = async (userData: {
@@ -1559,6 +1760,7 @@ El Equipo de Lidacta`;
   return (
     <LidactaContext.Provider
       value={{
+        sessionUser,
         currentUser,
         allUsers,
         companies,
