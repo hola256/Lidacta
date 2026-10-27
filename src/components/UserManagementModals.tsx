@@ -34,6 +34,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({ isOpen, onClose, com
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('leader');
   const [companyId, setCompanyId] = useState(companies[0]?.id || 'comp_nexus');
+  const [customCompanyName, setCustomCompanyName] = useState('');
   const [position, setPosition] = useState('');
   const [area, setArea] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
@@ -221,13 +222,25 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({ isOpen, onClose, com
             </div>
 
             <div className="sm:col-span-2 space-y-1">
-              <label className="font-bold text-[#2D1B4E] flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-[#BF3A1B]" />
-                Empresa Asignada *
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-[#2D1B4E] flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                  Empresa Asignada *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setCompanyId(companyId === 'other' ? (companies[0]?.id || 'comp_nexus') : 'other')}
+                  className="text-[11px] text-[#BF3A1B] hover:underline font-bold cursor-pointer"
+                >
+                  {companyId === 'other' ? '← Seleccionar de la lista' : '+ Otra Empresa'}
+                </button>
+              </div>
               <select
                 value={companyId}
-                onChange={(e) => setCompanyId(e.target.value)}
+                onChange={(e) => {
+                  setCompanyId(e.target.value);
+                  if (e.target.value !== 'other') setCustomCompanyName('');
+                }}
                 className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E] focus:outline-hidden focus:border-[#BF3A1B]"
               >
                 {companies.map((c) => (
@@ -235,7 +248,24 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({ isOpen, onClose, com
                     {c.name}
                   </option>
                 ))}
+                <option value="other" className="font-bold text-[#BF3A1B]">
+                  + Otra Empresa (Personalizada)...
+                </option>
               </select>
+
+              {companyId === 'other' && (
+                <div className="pt-1.5 space-y-1 animate-in fade-in">
+                  <input
+                    type="text"
+                    required
+                    value={customCompanyName}
+                    onChange={(e) => setCustomCompanyName(e.target.value)}
+                    placeholder="Escribe el nombre de la empresa..."
+                    className="w-full p-2.5 min-h-[44px] bg-white border border-[#BF3A1B]/40 rounded-xl text-xs text-[#2D1B4E]"
+                    autoFocus
+                  />
+                </div>
+              )}
             </div>
 
             <div className="space-y-1">

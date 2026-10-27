@@ -29,6 +29,7 @@ export const LoginView: React.FC = () => {
   const [role, setRole] = useState<UserRole>('leader');
   const [position, setPosition] = useState('');
   const [companyId, setCompanyId] = useState(companies[0]?.id || 'comp_nexus');
+  const [customCompanyName, setCustomCompanyName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   // Status & feedback
@@ -124,6 +125,11 @@ export const LoginView: React.FC = () => {
       return;
     }
 
+    if (companyId === 'other' && !customCompanyName.trim()) {
+      setErrorMessage('Por favor, ingresa el nombre de tu empresa u organización.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -133,7 +139,8 @@ export const LoginView: React.FC = () => {
         cleanName,
         role,
         cleanPosition,
-        companyId
+        companyId,
+        companyId === 'other' ? customCompanyName.trim() : undefined
       );
 
       if (!res.success) {
@@ -404,14 +411,34 @@ export const LoginView: React.FC = () => {
 
               {/* 4. Empresa */}
               <div className="space-y-1">
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
-                  Empresa Asociada *
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#FFF7EF]/90">
+                    Empresa Asociada *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (companyId === 'other') {
+                        setCompanyId(companies[0]?.id || 'comp_nexus');
+                      } else {
+                        setCompanyId('other');
+                      }
+                    }}
+                    className="text-[11px] text-[#F7B538] hover:text-[#FFD3BF] hover:underline cursor-pointer font-medium"
+                  >
+                    {companyId === 'other' ? '← Seleccionar de la lista' : '+ Otra Empresa'}
+                  </button>
+                </div>
                 <div className="relative">
                   <Building2 className="w-4 h-4 absolute left-3.5 top-3 text-[#FFF7EF]/50 pointer-events-none" />
                   <select
                     value={companyId}
-                    onChange={(e) => setCompanyId(e.target.value)}
+                    onChange={(e) => {
+                      setCompanyId(e.target.value);
+                      if (e.target.value !== 'other') {
+                        setCustomCompanyName('');
+                      }
+                    }}
                     className="w-full pl-10 pr-4 py-2.5 bg-[#24153F] border border-white/20 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-[#BF3A1B]"
                   >
                     {companies.map((c) => (
@@ -419,8 +446,32 @@ export const LoginView: React.FC = () => {
                         {c.name}
                       </option>
                     ))}
+                    <option value="other" className="bg-[#24153F] text-[#F7B538] font-bold">
+                      + Otra Empresa (Escribir nombre personalizado...)
+                    </option>
                   </select>
                 </div>
+
+                {/* Input for custom company when 'other' is selected */}
+                {companyId === 'other' && (
+                  <div className="mt-2 space-y-1 animate-in fade-in duration-200">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#FFD3BF]">
+                      Nombre de tu Empresa u Organización *
+                    </label>
+                    <div className="relative">
+                      <Building2 className="w-4 h-4 absolute left-3.5 top-3 text-[#FFD3BF] pointer-events-none" />
+                      <input
+                        type="text"
+                        required
+                        value={customCompanyName}
+                        onChange={(e) => setCustomCompanyName(e.target.value)}
+                        placeholder="Escribe el nombre de tu empresa..."
+                        className="w-full pl-10 pr-4 py-2.5 bg-white/10 border border-[#F7B538]/60 rounded-xl text-xs sm:text-sm text-white placeholder-white/40 focus:outline-none focus:border-[#F7B538] focus:ring-1 focus:ring-[#F7B538] transition-all"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 5. Rol en la Plataforma (Default: Líder) */}

@@ -26,10 +26,14 @@ export interface CreateUserPayload {
   position: string;
   area?: string;
   birthDate?: string;
+  fechaNacimiento?: string;
   directReports?: number;
+  personasACargo?: number;
   whatsapp?: string;
   status?: 'active' | 'inactive';
   password?: string;
+  isProfileCompleted?: boolean;
+  isProfileComplete?: boolean;
 }
 
 export interface CompleteProfilePayload {
@@ -42,6 +46,7 @@ export interface CompleteProfilePayload {
   position?: string;
   area?: string;
   birthDate: string;
+  fechaNacimiento?: string;
   directReports?: number;
   personasACargo?: number;
   whatsapp: string;

@@ -10,6 +10,7 @@ export const NewUserModal: React.FC = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [companyId, setCompanyId] = useState(companies[0]?.id || 'comp_nexus');
+  const [customCompanyName, setCustomCompanyName] = useState('');
   const [position, setPosition] = useState('');
   const [area, setArea] = useState('');
   const [birthDate, setBirthDate] = useState('1988-06-15');
@@ -22,11 +23,16 @@ export const NewUserModal: React.FC = () => {
     e.preventDefault();
     if (!name.trim()) return;
 
+    const isCustomCompany = companyId === 'other';
+    const effectiveCompany = isCustomCompany ? (customCompanyName.trim() || 'Mi Empresa') : (companies.find((c) => c.id === companyId)?.name || 'Empresa');
+    const effectiveCompId = isCustomCompany ? `comp_${Date.now()}` : companyId;
+
     await createUser({
       name: name.trim(),
       email: email.trim() || `${name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
       role,
-      companyId,
+      companyId: effectiveCompId,
+      companyName: effectiveCompany,
       position: position || (role === 'leader' ? 'Líder de Operaciones' : 'Gestión Humana'),
       area: area || 'Operaciones',
       birthDate,
@@ -97,10 +103,22 @@ export const NewUserModal: React.FC = () => {
             </div>
 
             <div className="sm:col-span-2 space-y-1">
-              <label className="font-bold text-[#2D1B4E]">Empresa *</label>
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-[#2D1B4E]">Empresa *</label>
+                <button
+                  type="button"
+                  onClick={() => setCompanyId(companyId === 'other' ? (companies[0]?.id || 'comp_nexus') : 'other')}
+                  className="text-[11px] text-[#BF3A1B] hover:underline font-bold cursor-pointer"
+                >
+                  {companyId === 'other' ? '← Seleccionar de la lista' : '+ Otra Empresa'}
+                </button>
+              </div>
               <select
                 value={companyId}
-                onChange={(e) => setCompanyId(e.target.value)}
+                onChange={(e) => {
+                  setCompanyId(e.target.value);
+                  if (e.target.value !== 'other') setCustomCompanyName('');
+                }}
                 className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
               >
                 {companies.map((c) => (
@@ -108,7 +126,24 @@ export const NewUserModal: React.FC = () => {
                     {c.name}
                   </option>
                 ))}
+                <option value="other" className="font-bold text-[#BF3A1B]">
+                  + Otra Empresa (Personalizada)...
+                </option>
               </select>
+
+              {companyId === 'other' && (
+                <div className="pt-1.5 space-y-1 animate-in fade-in">
+                  <input
+                    type="text"
+                    required
+                    value={customCompanyName}
+                    onChange={(e) => setCustomCompanyName(e.target.value)}
+                    placeholder="Escribe el nombre de la empresa..."
+                    className="w-full p-2.5 min-h-[44px] bg-white border border-[#BF3A1B]/40 rounded-xl text-xs text-[#2D1B4E]"
+                    autoFocus
+                  />
+                </div>
+              )}
             </div>
 
             <div className="space-y-1">
