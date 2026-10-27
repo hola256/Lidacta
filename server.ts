@@ -654,71 +654,116 @@ app.get('/api/users', (_req: Request, res: Response) => {
   });
 });
 
-// POST /api/user/complete-profile - Persistently mark profile as complete across PC, Mobile, Incognito
+// POST /api/user/complete-profile - Persistently mark profile as complete across PC, Mobile, Incognito (Permanent UPSERT)
 app.post('/api/user/complete-profile', (req: Request, res: Response) => {
   try {
     serverUsers = readPersistentUsers();
-    const { userId, email, companyName, area, birthDate, directReports, whatsapp } = req.body;
-    let targetIndex = serverUsers.findIndex((u) => u.id === userId);
-    if (targetIndex === -1 && email) {
+    const {
+      userId,
+      email,
+      name,
+      role,
+      companyId,
+      companyName,
+      area,
+      position,
+      birthDate,
+      directReports,
+      personasACargo,
+      whatsapp,
+    } = req.body;
+
+    // Explicit type conversion & sanitization as strictly required:
+    // 1. Explicitly convert personasACargo / directReports to Number
+    const rawReports = directReports !== undefined ? directReports : (personasACargo !== undefined ? personasACargo : 0);
+    const numPersonasACargo = Number(rawReports);
+    const sanitizedPersonasACargo = isNaN(numPersonasACargo) ? 0 : Math.max(0, numPersonasACargo);
+
+    // 2. Explicitly convert whatsapp to String
+    const sanitizedWhatsapp = String(whatsapp !== undefined && whatsapp !== null ? whatsapp : '').trim() || 'Sin especificar';
+
+    // 3. Defaults for optional/required fields to prevent schema breakage
+    const sanitizedCompanyName = String(companyName || '').trim() || 'Empresa Sin especificar';
+    const sanitizedArea = String(area !== undefined && area !== null ? area : '').trim() || 'Sin especificar';
+    const sanitizedPosition = String(position !== undefined && position !== null ? position : '').trim() || 'Sin especificar';
+    const sanitizedBirthDate = String(birthDate || '').trim() || '1990-01-01';
+    const sanitizedName = String(name || '').trim() || 'Usuario Lidacta';
+    const sanitizedEmail = String(email || '').trim().toLowerCase();
+    const sanitizedRole = (role === 'admin' || role === 'hr' || role === 'leader') ? role : 'leader';
+    const sanitizedCompanyId = String(companyId || 'comp_custom');
+
+    // UPSERT: Find existing record by id or email
+    let targetIndex = -1;
+    if (userId) {
+      targetIndex = serverUsers.findIndex((u) => u.id === userId);
+    }
+    if (targetIndex === -1 && sanitizedEmail) {
       targetIndex = serverUsers.findIndex(
-        (u) => u.email.toLowerCase() === String(email).trim().toLowerCase()
+        (u) => u.email.toLowerCase() === sanitizedEmail
       );
     }
 
+    let savedUser: ServerUserProfile;
+
     if (targetIndex === -1) {
-      // If user not in initial list, add them as complete
-      const newUser: ServerUserProfile = {
-        id: userId || `user_${Date.now()}`,
-        name: req.body.name || 'Líder Lidacta',
-        email: (email || 'lider@empresa.com').trim().toLowerCase(),
-        role: req.body.role || 'leader',
-        companyId: req.body.companyId || 'comp_custom',
-        companyName: companyName ? String(companyName).trim() : 'Empresa Líder',
-        position: req.body.position || 'Líder de Equipo',
-        area: area !== undefined ? String(area).trim() : '',
-        birthDate: birthDate ? String(birthDate).trim() : '',
-        directReports: directReports !== undefined ? Number(directReports) : 5,
-        whatsapp: whatsapp ? String(whatsapp).trim() : '',
+      // INSERT: Permanent creation in central database
+      const newId = userId || `user_${Date.now()}`;
+      savedUser = {
+        id: newId,
+        name: sanitizedName,
+        email: sanitizedEmail || `${newId}@lidacta.com`,
+        role: sanitizedRole,
+        companyId: sanitizedCompanyId,
+        companyName: sanitizedCompanyName,
+        position: sanitizedPosition,
+        area: sanitizedArea,
+        birthDate: sanitizedBirthDate,
+        directReports: sanitizedPersonasACargo,
+        whatsapp: sanitizedWhatsapp,
+        status: 'active',
         isProfileCompleted: true,
         isProfileComplete: true,
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
-      serverUsers.push(newUser);
-      writePersistentUsers(serverUsers);
-      console.log(`[LIDACTA USERS] New user created and completed centrally: ${newUser.name} (${newUser.email})`);
-      return res.json({
-        success: true,
-        message: 'Perfil completado exitosamente y sincronizado en el servidor central.',
-        user: newUser,
-        users: serverUsers,
-      });
+      serverUsers.unshift(savedUser);
+      console.log(`[LIDACTA USERS UPSERT-INSERT] User permanently created and completed: ${savedUser.name} (${savedUser.email})`);
+    } else {
+      // UPDATE: In-place update of user fields
+      const current = serverUsers[targetIndex];
+      savedUser = {
+        ...current,
+        name: sanitizedName !== 'Usuario Lidacta' ? sanitizedName : (current.name || sanitizedName),
+        email: sanitizedEmail || current.email,
+        role: current.role || sanitizedRole,
+        companyId: current.companyId || sanitizedCompanyId,
+        companyName: sanitizedCompanyName !== 'Empresa Sin especificar' ? sanitizedCompanyName : (current.companyName || sanitizedCompanyName),
+        area: sanitizedArea,
+        position: sanitizedPosition,
+        birthDate: sanitizedBirthDate,
+        directReports: sanitizedPersonasACargo,
+        whatsapp: sanitizedWhatsapp,
+        status: current.status || 'active',
+        isProfileCompleted: true,
+        isProfileComplete: true,
+        updatedAt: new Date().toISOString(),
+      };
+      serverUsers[targetIndex] = savedUser;
+      console.log(`[LIDACTA USERS UPSERT-UPDATE] Profile permanently updated & completed: ${savedUser.name} (${savedUser.email})`);
     }
 
-    const current = serverUsers[targetIndex];
-    const updatedUser: ServerUserProfile = {
-      ...current,
-      companyName: companyName ? String(companyName).trim() : current.companyName,
-      area: area !== undefined ? String(area).trim() : current.area,
-      birthDate: birthDate ? String(birthDate).trim() : current.birthDate,
-      directReports: directReports !== undefined ? Number(directReports) : current.directReports,
-      whatsapp: whatsapp ? String(whatsapp).trim() : current.whatsapp,
-      isProfileCompleted: true,
-      isProfileComplete: true,
-    };
-
-    serverUsers[targetIndex] = updatedUser;
+    // Direct permanent write to disk (eliminating temporary cache-only persistence)
     writePersistentUsers(serverUsers);
-    console.log(`[LIDACTA USERS] Profile completed centrally for: ${updatedUser.name} (${updatedUser.email}). isProfileComplete=true`);
 
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     return res.json({
       success: true,
-      message: 'Perfil completado exitosamente y sincronizado en el servidor central.',
-      user: updatedUser,
+      message: 'Perfil completado exitosamente y persistido en la Base de Datos Central.',
+      user: savedUser,
       users: serverUsers,
     });
   } catch (error: any) {
-    console.error('Error completing profile centrally:', error);
+    console.error('Error completing profile centrally (UPSERT):', error);
     return res.status(500).json({ success: false, message: error?.message || 'Error al completar perfil' });
   }
 });
@@ -740,6 +785,8 @@ app.post('/api/users', (req: Request, res: Response) => {
       whatsapp,
       status,
       password,
+      isProfileCompleted,
+      isProfileComplete,
     } = req.body;
 
     if (!name || !String(name).trim()) {
@@ -762,6 +809,14 @@ app.post('/api/users', (req: Request, res: Response) => {
     const effectiveCompanyId = companyId || 'comp_nexus';
     const effectiveCompanyName = companyName || 'Industrias Nexus Automotriz';
 
+    // If isProfileCompleted was explicitly specified, use it. Otherwise, default admin to true, leader/hr to false if whatsapp is empty.
+    const isCompletedExplicit =
+      isProfileCompleted !== undefined
+        ? Boolean(isProfileCompleted)
+        : isProfileComplete !== undefined
+        ? Boolean(isProfileComplete)
+        : validRole === 'admin';
+
     const newUser: ServerUserProfile = {
       id: `user_${Date.now()}`,
       name: String(name).trim(),
@@ -776,8 +831,8 @@ app.post('/api/users', (req: Request, res: Response) => {
       whatsapp: whatsapp ? String(whatsapp).trim() : '',
       status: (status === 'inactive' ? 'inactive' : 'active'),
       password: password ? String(password).trim() : '',
-      isProfileCompleted: true,
-      isProfileComplete: true,
+      isProfileCompleted: isCompletedExplicit,
+      isProfileComplete: isCompletedExplicit,
       createdAt: new Date().toISOString(),
     };
 

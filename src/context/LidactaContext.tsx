@@ -45,8 +45,10 @@ interface LidactaContextType {
   completeUserProfile: (data: {
     companyName: string;
     area?: string;
-    birthDate: string;
+    position?: string;
+    birthDate?: string;
     directReports?: number;
+    personasACargo?: number;
     whatsapp: string;
   }) => Promise<{ success: boolean; message?: string }>;
   updateUserProfile: (
@@ -1273,63 +1275,59 @@ El Equipo de Lidacta`;
   const completeUserProfile = async (data: {
     companyName: string;
     area?: string;
-    birthDate: string;
+    position?: string;
+    birthDate?: string;
     directReports?: number;
+    personasACargo?: number;
     whatsapp: string;
   }): Promise<{ success: boolean; message?: string }> => {
-    const { companyName, area, birthDate, directReports, whatsapp } = data;
+    const { companyName, area, position, birthDate, directReports, personasACargo, whatsapp } = data;
 
-    if (!companyName || !companyName.trim()) {
+    const cleanCompany = String(companyName || currentUser.companyName || '').trim();
+    if (!cleanCompany) {
       return { success: false, message: 'El nombre de la empresa es obligatorio.' };
     }
-    if (!birthDate || !birthDate.trim()) {
-      return { success: false, message: 'La fecha de nacimiento es obligatoria.' };
-    }
-    if (!whatsapp || !whatsapp.trim()) {
+
+    const cleanWhatsapp = String(whatsapp !== undefined && whatsapp !== null ? whatsapp : (currentUser.whatsapp || '')).trim();
+    if (!cleanWhatsapp) {
       return { success: false, message: 'El número de WhatsApp es obligatorio.' };
     }
 
-    if (currentUser.role === 'leader') {
-      if (!area || !area.trim()) {
-        return { success: false, message: 'El área es obligatoria para el rol de Líder.' };
-      }
-      if (
-        directReports === undefined ||
-        directReports === null ||
-        isNaN(Number(directReports)) ||
-        Number(directReports) < 0
-      ) {
-        return { success: false, message: 'El número de personas a cargo es obligatorio.' };
-      }
-    }
+    const cleanArea = String(area !== undefined && area !== null ? area : (currentUser.area || '')).trim() || 'Operaciones';
+    const cleanPosition = String(position !== undefined && position !== null ? position : (currentUser.position || '')).trim() || 'Líder Operativo';
+    const cleanBirthDate = String(birthDate || currentUser.birthDate || '1990-01-01').trim() || '1990-01-01';
+
+    // Explicitly convert personasACargo / directReports to number
+    const rawReports = personasACargo !== undefined ? personasACargo : (directReports !== undefined ? directReports : (currentUser.directReports ?? 0));
+    const numReports = Number(rawReports);
+    const cleanReports = isNaN(numReports) ? 0 : Math.max(0, numReports);
 
     const updatedUser: UserProfile = {
       ...currentUser,
-      companyName: companyName.trim(),
-      birthDate: birthDate.trim(),
-      whatsapp: whatsapp.trim(),
+      companyName: cleanCompany,
+      area: cleanArea,
+      position: cleanPosition,
+      birthDate: cleanBirthDate,
+      directReports: cleanReports,
+      whatsapp: cleanWhatsapp,
       isProfileCompleted: true,
       isProfileComplete: true,
-      ...(currentUser.role === 'leader'
-        ? {
-            area: area?.trim() || '',
-            directReports: Number(directReports),
-          }
-        : {}),
     };
 
-    // Real call to central database via userService
+    // Real call to central database via userService (Permanent UPSERT)
     const res = await userService.completeProfile({
       userId: currentUser.id,
       email: currentUser.email,
-      name: currentUser.name,
+      name: currentUser.name || 'Usuario Lidacta',
       role: currentUser.role,
-      position: currentUser.position,
-      companyName: companyName.trim(),
-      area: area?.trim(),
-      birthDate: birthDate.trim(),
-      directReports: directReports !== undefined ? Number(directReports) : undefined,
-      whatsapp: whatsapp.trim(),
+      companyId: currentUser.companyId || 'comp_custom',
+      companyName: cleanCompany,
+      area: cleanArea,
+      position: cleanPosition,
+      birthDate: cleanBirthDate,
+      directReports: cleanReports,
+      personasACargo: cleanReports,
+      whatsapp: cleanWhatsapp,
     });
 
     if (!res.success) {
@@ -1337,22 +1335,38 @@ El Equipo de Lidacta`;
       return { success: false, message: res.message };
     }
 
-    // Update state and sessionUser
-    setSessionUser(updatedUser);
+    const savedUser = res.user || updatedUser;
+
+    // Update state and session refs immediately to prevent polling race conditions
+    setSessionUser(savedUser);
+    sessionUserRef.current = savedUser;
+    setCurrentUserId(savedUser.id);
+    currentUserIdRef.current = savedUser.id;
+
     if (Array.isArray(res.users) && res.users.length > 0) {
       setAllUsers(res.users);
     } else {
-      setAllUsers((prev) => prev.map((u) => (u.id === currentUser.id ? updatedUser : u)));
+      setAllUsers((prev) => {
+        const idx = prev.findIndex((u) => u.id === savedUser.id || u.email.toLowerCase() === savedUser.email.toLowerCase());
+        if (idx !== -1) {
+          const copy = [...prev];
+          copy[idx] = savedUser;
+          return copy;
+        }
+        return [savedUser, ...prev];
+      });
     }
 
     try {
-      sessionStorage.setItem(`${STORAGE_KEY_PREFIX}session_user`, JSON.stringify(updatedUser));
+      sessionStorage.setItem(`${STORAGE_KEY_PREFIX}session_user`, JSON.stringify(savedUser));
+      sessionStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, savedUser.id);
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, savedUser.id);
     } catch {}
 
     // Update companies list if company name changed
     setCompanies((prev) =>
       prev.map((c) =>
-        c.id === currentUser.companyId ? { ...c, name: companyName.trim() } : c
+        c.id === currentUser.companyId ? { ...c, name: cleanCompany } : c
       )
     );
 
@@ -1361,7 +1375,7 @@ El Equipo de Lidacta`;
       setMentorships((prev) =>
         prev.map((m) =>
           m.leaderId === currentUser.id
-            ? { ...m, companyName: companyName.trim(), leaderArea: area?.trim() || m.leaderArea }
+            ? { ...m, companyName: cleanCompany, leaderArea: cleanArea || m.leaderArea }
             : m
         )
       );

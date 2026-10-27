@@ -12,6 +12,8 @@ import {
   LogOut,
   Sparkles,
   CheckCircle2,
+  UserCheck,
+  Layers,
 } from 'lucide-react';
 
 export const CompleteProfileView: React.FC = () => {
@@ -21,16 +23,17 @@ export const CompleteProfileView: React.FC = () => {
   const isLeader = currentUser.role === 'leader';
   const isHR = currentUser.role === 'hr';
 
-  // Form states initialized with existing values if available
-  const [companyName, setCompanyName] = useState(currentUser.companyName || '');
-  const [area, setArea] = useState(currentUser.area || '');
-  const [birthDate, setBirthDate] = useState(currentUser.birthDate || '');
+  // Form states initialized with existing values if available, never undefined
+  const [companyName, setCompanyName] = useState<string>(currentUser.companyName || '');
+  const [area, setArea] = useState<string>(currentUser.area || '');
+  const [position, setPosition] = useState<string>(currentUser.position || '');
   const [directReports, setDirectReports] = useState<string>(
     currentUser.directReports !== undefined && currentUser.directReports !== null
       ? String(currentUser.directReports)
-      : ''
+      : isLeader ? '6' : '0'
   );
-  const [whatsapp, setWhatsapp] = useState(currentUser.whatsapp || '');
+  const [whatsapp, setWhatsapp] = useState<string>(currentUser.whatsapp || '');
+  const [birthDate, setBirthDate] = useState<string>(currentUser.birthDate || '1990-01-01');
 
   // Validation states
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -40,14 +43,14 @@ export const CompleteProfileView: React.FC = () => {
 
   // Field validation helpers
   const isCompanyValid = companyName.trim().length > 0;
-  const isBirthDateValid = birthDate.trim().length > 0;
-  const isWhatsappValid = whatsapp.trim().length >= 8;
-  const isAreaValid = !isLeader || area.trim().length > 0;
+  const isAreaValid = area.trim().length > 0;
+  const isPositionValid = position.trim().length > 0;
   const isDirectReportsValid =
-    !isLeader ||
-    (directReports.trim().length > 0 &&
-      !isNaN(Number(directReports)) &&
-      Number(directReports) >= 0);
+    directReports.trim().length > 0 &&
+    !isNaN(Number(directReports)) &&
+    Number(directReports) >= 0;
+  const isWhatsappValid = whatsapp.trim().length >= 8;
+  const isBirthDateValid = birthDate.trim().length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,10 +59,11 @@ export const CompleteProfileView: React.FC = () => {
     // Mark all touched
     setTouched({
       companyName: true,
-      birthDate: true,
-      whatsapp: true,
       area: true,
+      position: true,
       directReports: true,
+      whatsapp: true,
+      birthDate: true,
     });
 
     // Validate mandatory fields
@@ -68,8 +72,23 @@ export const CompleteProfileView: React.FC = () => {
       return;
     }
 
-    if (isLeader && !isAreaValid) {
-      setErrorMessage('Por favor ingresa el área a la que perteneces.');
+    if (!isAreaValid) {
+      setErrorMessage('Por favor ingresa tu área o departamento.');
+      return;
+    }
+
+    if (!isPositionValid) {
+      setErrorMessage('Por favor ingresa tu puesto o cargo.');
+      return;
+    }
+
+    if (!isDirectReportsValid) {
+      setErrorMessage('Por favor ingresa el número de personas a tu cargo (coloca 0 si no aplica).');
+      return;
+    }
+
+    if (!isWhatsappValid) {
+      setErrorMessage('Por favor ingresa un número de WhatsApp válido (mínimo 8 dígitos).');
       return;
     }
 
@@ -78,20 +97,10 @@ export const CompleteProfileView: React.FC = () => {
       return;
     }
 
-    if (isLeader && !isDirectReportsValid) {
-      setErrorMessage('Por favor ingresa el número de personas a tu cargo.');
-      return;
-    }
-
-    if (!isWhatsappValid) {
-      setErrorMessage('Por favor ingresa un número de WhatsApp válido.');
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
-      // Explicitly register carlosProfileCompleted = true in global localStorage as required
+      // Explicitly register carlosProfileCompleted = true in localStorage if Carlos
       if (
         currentUser.id === 'user_leader_carlos' ||
         currentUser.email.toLowerCase().includes('carlos.mendoza')
@@ -103,20 +112,25 @@ export const CompleteProfileView: React.FC = () => {
         } catch {}
       }
 
+      // Explicit conversions and sanitization: guarantee no field is undefined or empty
+      const cleanCompany = companyName.trim() || 'Empresa Sin especificar';
+      const cleanArea = area.trim() || 'Sin especificar';
+      const cleanPosition = position.trim() || 'Sin especificar';
+      const numReports = Math.max(0, Number(directReports) || 0);
+      const cleanWhatsapp = String(whatsapp || '').trim() || 'Sin especificar';
+      const cleanBirthDate = birthDate.trim() || '1990-01-01';
+
       const result = await completeUserProfile({
-        companyName: companyName.trim(),
-        birthDate: birthDate.trim(),
-        whatsapp: whatsapp.trim(),
-        ...(isLeader
-          ? {
-              area: area.trim(),
-              directReports: Number(directReports),
-            }
-          : {}),
+        companyName: cleanCompany,
+        area: cleanArea,
+        position: cleanPosition,
+        directReports: numReports,
+        personasACargo: numReports,
+        whatsapp: cleanWhatsapp,
+        birthDate: cleanBirthDate,
       });
 
       if (result.success) {
-        // Guarantee carlosProfileCompleted = true in global localStorage before redirecting
         if (
           currentUser.id === 'user_leader_carlos' ||
           currentUser.email.toLowerCase().includes('carlos.mendoza')
@@ -130,11 +144,11 @@ export const CompleteProfileView: React.FC = () => {
         setIsSuccess(true);
       } else {
         setIsSubmitting(false);
-        setErrorMessage(result.message || 'Error al guardar el perfil.');
+        setErrorMessage(result.message || 'Error al guardar el perfil en la base de datos central.');
       }
     } catch (err: any) {
       setIsSubmitting(false);
-      setErrorMessage(err?.message || 'Error al procesar la actualización del perfil.');
+      setErrorMessage(err?.message || 'Error al conectar con la base de datos central.');
     }
   };
 
@@ -179,11 +193,11 @@ export const CompleteProfileView: React.FC = () => {
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#FFD3BF]/40 text-[#BF3A1B]">
                 <Sparkles className="w-3.5 h-3.5" />
-                {isLeader ? 'Rol: Líder' : isHR ? 'Rol: Recursos Humanos (RH)' : 'Perfil'}
+                {isLeader ? 'Rol: Líder' : isHR ? 'Rol: Recursos Humanos (RH)' : 'Perfil de Usuario'}
               </span>
             </div>
             <span className="text-xs text-[#4A3F55]/70 font-medium">
-              Hola, <strong className="text-[#2D1B4E]">{currentUser.name}</strong>
+              Hola, <strong className="text-[#2D1B4E]">{currentUser.name || 'Líder'}</strong>
             </span>
           </div>
 
@@ -192,26 +206,24 @@ export const CompleteProfileView: React.FC = () => {
               Completa tu perfil para acceder
             </h1>
             <p className="text-xs sm:text-sm text-[#4A3F55]/80 leading-relaxed">
-              {isLeader
-                ? 'Para habilitar tu panel de acompañamiento reflexivo, ingresa los datos obligatorios de tu entorno operativo.'
-                : 'Para habilitar el panel de gestión y analítica de talento, confirma los datos obligatorios de tu empresa y contacto.'}
+              Para habilitar tu acceso seguro y comenzar tu proceso de acompañamiento directivo en Lidacta, ingresa los datos requeridos de tu entorno operativo.
             </p>
           </div>
 
           {/* Error Banner */}
           {errorMessage && (
-            <div className="p-3.5 bg-[#BF3A1B]/10 border border-[#BF3A1B]/30 rounded-xl flex items-center gap-3 text-xs text-[#BF3A1B] font-semibold animate-in fade-in duration-200">
+            <div className="p-3.5 mb-4 bg-[#BF3A1B]/10 border border-[#BF3A1B]/30 rounded-xl flex items-center gap-3 text-xs text-[#BF3A1B] font-semibold animate-in fade-in duration-200">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMessage}</span>
             </div>
           )}
 
-          {/* Form */}
+          {/* Form with all 5 mandatory fields */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* 1. Nombre de la empresa (Obligatorio para RH y Líder) */}
+            {/* 1. Empresa */}
             <div className="space-y-1.5">
               <label className="block text-xs font-bold uppercase tracking-wider text-[#2D1B4E]">
-                Nombre de la empresa <span className="text-[#BF3A1B]">*</span>
+                Empresa <span className="text-[#BF3A1B]">*</span>
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#4A3F55]/50">
@@ -233,7 +245,7 @@ export const CompleteProfileView: React.FC = () => {
                   } rounded-xl text-sm text-[#2D1B4E] placeholder-[#4A3F55]/40 outline-none transition-all shadow-xs`}
                 />
               </div>
-              {/* Optional Quick Company Suggestions */}
+              {/* Quick Company Suggestions */}
               {companies.length > 0 && !companyName && (
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   <span className="text-[11px] text-[#4A3F55]/70">Sugerencias:</span>
@@ -251,15 +263,16 @@ export const CompleteProfileView: React.FC = () => {
               )}
             </div>
 
-            {/* 2. Área (Solo obligatoria para Líder) */}
-            {isLeader && (
+            {/* 2. Área / Departamento & Puesto / Cargo */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Área / Departamento */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold uppercase tracking-wider text-[#2D1B4E]">
-                  Área <span className="text-[#BF3A1B]">*</span>
+                  Área / Departamento <span className="text-[#BF3A1B]">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#4A3F55]/50">
-                    <Briefcase className="w-4 h-4" />
+                    <Layers className="w-4 h-4" />
                   </div>
                   <input
                     type="text"
@@ -269,8 +282,8 @@ export const CompleteProfileView: React.FC = () => {
                       if (errorMessage) setErrorMessage(null);
                     }}
                     onBlur={() => setTouched((p) => ({ ...p, area: true }))}
-                    placeholder="ej. Operaciones de Manufactura, Ventas, Logística..."
-                    className={`w-full pl-10 pr-4 py-2.5 bg-white border ${
+                    placeholder="ej. Operaciones, Ventas..."
+                    className={`w-full pl-10 pr-3 py-2.5 bg-white border ${
                       touched.area && !isAreaValid
                         ? 'border-[#BF3A1B] ring-1 ring-[#BF3A1B]'
                         : 'border-[#493447]/20 focus:border-[#BF3A1B]'
@@ -278,15 +291,69 @@ export const CompleteProfileView: React.FC = () => {
                   />
                 </div>
               </div>
-            )}
 
-            {/* Two-column layout for birthDate and directReports (or full width for RH) */}
-            <div
-              className={`grid grid-cols-1 ${
-                isLeader ? 'sm:grid-cols-2' : ''
-              } gap-3.5`}
-            >
-              {/* Fecha de nacimiento (Obligatorio para RH y Líder) */}
+              {/* Puesto / Cargo */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#2D1B4E]">
+                  Puesto / Cargo <span className="text-[#BF3A1B]">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#4A3F55]/50">
+                    <Briefcase className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    value={position}
+                    onChange={(e) => {
+                      setPosition(e.target.value);
+                      if (errorMessage) setErrorMessage(null);
+                    }}
+                    onBlur={() => setTouched((p) => ({ ...p, position: true }))}
+                    placeholder="ej. Líder de Línea, Gerente..."
+                    className={`w-full pl-10 pr-3 py-2.5 bg-white border ${
+                      touched.position && !isPositionValid
+                        ? 'border-[#BF3A1B] ring-1 ring-[#BF3A1B]'
+                        : 'border-[#493447]/20 focus:border-[#BF3A1B]'
+                    } rounded-xl text-sm text-[#2D1B4E] placeholder-[#4A3F55]/40 outline-none transition-all shadow-xs`}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Personas a Cargo & Fecha de Nacimiento */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Personas a Cargo */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#2D1B4E]">
+                  Personas a Cargo <span className="text-[#BF3A1B]">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#4A3F55]/50">
+                    <Users className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    value={directReports}
+                    onChange={(e) => {
+                      setDirectReports(e.target.value);
+                      if (errorMessage) setErrorMessage(null);
+                    }}
+                    onBlur={() => setTouched((p) => ({ ...p, directReports: true }))}
+                    placeholder="0"
+                    className={`w-full pl-10 pr-3 py-2.5 bg-white border ${
+                      touched.directReports && !isDirectReportsValid
+                        ? 'border-[#BF3A1B] ring-1 ring-[#BF3A1B]'
+                        : 'border-[#493447]/20 focus:border-[#BF3A1B]'
+                    } rounded-xl text-sm text-[#2D1B4E] placeholder-[#4A3F55]/40 outline-none transition-all shadow-xs`}
+                  />
+                </div>
+                <p className="text-[10px] text-[#4A3F55]/70">
+                  Coloca 0 si no tienes personal directo a tu cargo.
+                </p>
+              </div>
+
+              {/* Fecha de nacimiento */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold uppercase tracking-wider text-[#2D1B4E]">
                   Fecha de nacimiento <span className="text-[#BF3A1B]">*</span>
@@ -311,39 +378,9 @@ export const CompleteProfileView: React.FC = () => {
                   />
                 </div>
               </div>
-
-              {/* Número de personas a cargo (Obligatorio solo para Líder) */}
-              {isLeader && (
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#2D1B4E]">
-                    Personas a cargo <span className="text-[#BF3A1B]">*</span>
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#4A3F55]/50">
-                      <Users className="w-4 h-4" />
-                    </div>
-                    <input
-                      type="number"
-                      min="0"
-                      value={directReports}
-                      onChange={(e) => {
-                        setDirectReports(e.target.value);
-                        if (errorMessage) setErrorMessage(null);
-                      }}
-                      onBlur={() => setTouched((p) => ({ ...p, directReports: true }))}
-                      placeholder="ej. 12"
-                      className={`w-full pl-10 pr-3 py-2.5 bg-white border ${
-                        touched.directReports && !isDirectReportsValid
-                          ? 'border-[#BF3A1B] ring-1 ring-[#BF3A1B]'
-                          : 'border-[#493447]/20 focus:border-[#BF3A1B]'
-                      } rounded-xl text-sm text-[#2D1B4E] placeholder-[#4A3F55]/40 outline-none transition-all shadow-xs`}
-                    />
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* Número de WhatsApp (Obligatorio para RH y Líder) */}
+            {/* 4. Número de WhatsApp */}
             <div className="space-y-1.5">
               <label className="block text-xs font-bold uppercase tracking-wider text-[#2D1B4E]">
                 Número de WhatsApp <span className="text-[#BF3A1B]">*</span>
@@ -369,7 +406,7 @@ export const CompleteProfileView: React.FC = () => {
                 />
               </div>
               <p className="text-[11px] text-[#4A3F55]/70">
-                Se usará para recordatorios confidenciales de compromisos y planes de acción.
+                Se usará para recordatorios confidenciales de compromisos y planes de acción directivos.
               </p>
             </div>
 
@@ -403,7 +440,7 @@ export const CompleteProfileView: React.FC = () => {
           {/* Footer note */}
           <div className="mt-5 pt-3 border-t border-[#493447]/10 flex items-center justify-center gap-2 text-center text-xs text-[#4A3F55]/70">
             <ShieldCheck className="w-3.5 h-3.5 text-[#F7B538] shrink-0" />
-            <span>Información protegida y de uso exclusivo para tu experiencia Lidacta.</span>
+            <span>Información protegida y de uso confidencial para tu experiencia Lidacta.</span>
           </div>
         </div>
       </main>

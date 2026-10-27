@@ -43,6 +43,7 @@ export interface CompleteProfilePayload {
   area?: string;
   birthDate: string;
   directReports?: number;
+  personasACargo?: number;
   whatsapp: string;
 }
 
