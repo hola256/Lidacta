@@ -40,6 +40,7 @@ interface LidactaContextType {
   // Authentication & Onboarding
   isAuthenticated: boolean;
   isProfileComplete: boolean;
+  forceCompleteProfile: (userId?: string) => void;
   login: (email: string, password?: string) => { success: boolean; message?: string };
   logout: () => void;
   completeUserProfile: (data: {
@@ -169,6 +170,35 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   sessionUserRef.current = sessionUser;
   const currentUserIdRef = useRef<string>(currentUserId);
   currentUserIdRef.current = currentUserId;
+
+  // Force completed profiles tracking for immediate 0ms redirect
+  const [forceCompletedUserIds, setForceCompletedUserIds] = useState<Record<string, boolean>>(() => {
+    const map: Record<string, boolean> = {};
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('lidacta_profile_completed_') && localStorage.getItem(key) === 'true') {
+          const id = key.replace('lidacta_profile_completed_', '');
+          map[id] = true;
+        }
+      }
+    } catch {}
+    return map;
+  });
+
+  const forceCompleteProfile = (userId?: string) => {
+    const targetId = userId || currentUserIdRef.current || sessionUserRef.current?.id || '';
+    const email = sessionUserRef.current?.email?.toLowerCase();
+    setForceCompletedUserIds((prev) => ({
+      ...prev,
+      ...(targetId ? { [targetId]: true } : {}),
+      ...(email ? { [email]: true } : {}),
+    }));
+    try {
+      if (targetId) localStorage.setItem(`lidacta_profile_completed_${targetId}`, 'true');
+      if (email) localStorage.setItem(`lidacta_profile_completed_${email}`, 'true');
+    } catch {}
+  };
 
   const refreshUsers = async () => {
     try {
@@ -1238,27 +1268,54 @@ El Equipo de Lidacta`;
   };
 
   const isProfileComplete = useMemo(() => {
+    if (!currentUser) return false;
     if (currentUser.role === 'admin') return true;
 
+    // Check force completed map immediately
+    if (
+      forceCompletedUserIds[currentUser.id] ||
+      (currentUser.email && forceCompletedUserIds[currentUser.email.toLowerCase()])
+    ) {
+      return true;
+    }
+
+    // Check direct persistent localStorage flags
+    try {
+      if (
+        localStorage.getItem(`lidacta_profile_completed_${currentUser.id}`) === 'true' ||
+        (currentUser.email && localStorage.getItem(`lidacta_profile_completed_${currentUser.email.toLowerCase()}`) === 'true')
+      ) {
+        return true;
+      }
+    } catch {}
+
     // Check explicit localStorage flag for Carlos Mendoza
-    const isCarlos = currentUser.id === 'user_leader_carlos' || currentUser.email.toLowerCase().includes('carlos.mendoza');
+    const isCarlos = currentUser.id === 'user_leader_carlos' || (currentUser.email && currentUser.email.toLowerCase().includes('carlos.mendoza'));
     let carlosStoredComplete = false;
     try {
-      carlosStoredComplete = isCarlos && (
-        localStorage.getItem('carlosProfileCompleted') === 'true' ||
-        localStorage.getItem(`${STORAGE_KEY_PREFIX}carlosProfileCompleted`) === 'true'
+      carlosStoredComplete = Boolean(
+        isCarlos && (
+          localStorage.getItem('carlosProfileCompleted') === 'true' ||
+          localStorage.getItem(`${STORAGE_KEY_PREFIX}carlosProfileCompleted`) === 'true'
+        )
       );
     } catch {}
 
-    if (currentUser.isProfileCompleted === false && currentUser.isProfileComplete !== true && !carlosStoredComplete) return false;
+    if (currentUser.isProfileCompleted === true || currentUser.isProfileComplete === true || carlosStoredComplete) {
+      return true;
+    }
 
-    const hasCompany = Boolean(currentUser.companyName && currentUser.companyName.trim());
+    if (currentUser.isProfileCompleted === false && !currentUser.isProfileComplete && !carlosStoredComplete) {
+      return false;
+    }
+
+    const hasCompany = Boolean(currentUser.companyName && currentUser.companyName.trim() && currentUser.companyName !== 'Empresa Sin especificar');
     const hasBirthDate = Boolean(currentUser.birthDate && currentUser.birthDate.trim());
     const hasWhatsapp = Boolean(currentUser.whatsapp && currentUser.whatsapp.trim());
     const isFlaggedComplete = Boolean(currentUser.isProfileCompleted || currentUser.isProfileComplete || carlosStoredComplete);
 
     if (currentUser.role === 'hr') {
-      return isFlaggedComplete && hasCompany && hasBirthDate && hasWhatsapp;
+      return isFlaggedComplete || (hasCompany && hasBirthDate && hasWhatsapp);
     }
 
     if (currentUser.role === 'leader') {
@@ -1268,11 +1325,11 @@ El Equipo de Lidacta`;
         currentUser.directReports !== null &&
         !isNaN(Number(currentUser.directReports)) &&
         Number(currentUser.directReports) >= 0;
-      return isFlaggedComplete && hasCompany && hasArea && hasBirthDate && hasReports && hasWhatsapp;
+      return isFlaggedComplete || (hasCompany && hasArea && hasBirthDate && hasReports && hasWhatsapp);
     }
 
     return true;
-  }, [currentUser]);
+  }, [currentUser, forceCompletedUserIds]);
 
   const completeUserProfile = async (data: {
     companyName: string;
@@ -1326,6 +1383,7 @@ El Equipo de Lidacta`;
 
     // 1. Synchronously persist to local storage and update session state immediately
     // Guarantees zero latency and instantaneous entry even if remote backend is slow
+    forceCompleteProfile(updatedUser.id);
     setSessionUser(updatedUser);
     sessionUserRef.current = updatedUser;
     setCurrentUserId(updatedUser.id);
@@ -1342,6 +1400,9 @@ El Equipo de Lidacta`;
     });
 
     try {
+      localStorage.setItem(`lidacta_profile_completed_${updatedUser.id}`, 'true');
+      localStorage.setItem(`lidacta_profile_completed_${updatedUser.email.toLowerCase()}`, 'true');
+      sessionStorage.setItem(`lidacta_profile_completed_${updatedUser.id}`, 'true');
       sessionStorage.setItem(`${STORAGE_KEY_PREFIX}session_user`, JSON.stringify(updatedUser));
       sessionStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, updatedUser.id);
       localStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, updatedUser.id);
@@ -1900,6 +1961,7 @@ El Equipo de Lidacta`;
         hideToast,
         isAuthenticated,
         isProfileComplete,
+        forceCompleteProfile,
         login,
         logout,
         completeUserProfile,

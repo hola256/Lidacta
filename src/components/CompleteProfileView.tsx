@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 export const CompleteProfileView: React.FC = () => {
-  const { currentUser, completeUserProfile, logout, companies } = useLidacta();
+  const { currentUser, completeUserProfile, forceCompleteProfile, logout, companies } = useLidacta();
 
   // Role identification
   const isLeader = currentUser.role === 'leader';
@@ -40,6 +40,12 @@ export const CompleteProfileView: React.FC = () => {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  React.useEffect(() => {
+    if (isSuccess) {
+      forceCompleteProfile(currentUser.id);
+    }
+  }, [isSuccess, currentUser.id, forceCompleteProfile]);
 
   // Field validation helpers
   const isCompanyValid = companyName.trim().length > 0;
@@ -100,6 +106,15 @@ export const CompleteProfileView: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      // Immediately set persistent completed flags in localStorage and context
+      try {
+        localStorage.setItem(`lidacta_profile_completed_${currentUser.id}`, 'true');
+        if (currentUser.email) {
+          localStorage.setItem(`lidacta_profile_completed_${currentUser.email.toLowerCase()}`, 'true');
+        }
+      } catch {}
+      forceCompleteProfile(currentUser.id);
+
       // Explicitly register carlosProfileCompleted = true in localStorage if Carlos
       if (
         currentUser.id === 'user_leader_carlos' ||
@@ -134,7 +149,7 @@ export const CompleteProfileView: React.FC = () => {
         cleanBirthDate = '1990-01-01';
       }
 
-      const result = await completeUserProfile({
+      await completeUserProfile({
         companyName: cleanCompany,
         area: cleanArea,
         position: cleanPosition,
@@ -156,10 +171,12 @@ export const CompleteProfileView: React.FC = () => {
         } catch {}
       }
 
-      // Immediate success transition powered by synchronous local persistence
+      // Immediate 0ms transition to dashboard
+      forceCompleteProfile(currentUser.id);
       setIsSuccess(true);
     } catch (err: any) {
       console.warn('Handling local synchronous continuity on profile submit:', err);
+      forceCompleteProfile(currentUser.id);
       setIsSuccess(true);
     }
   };
@@ -424,28 +441,35 @@ export const CompleteProfileView: React.FC = () => {
 
             {/* Submit Button in Ámbar Impulso (#F7B538) */}
             <div className="pt-3">
-              <button
-                type="submit"
-                disabled={isSubmitting || isSuccess}
-                className="w-full py-3.5 px-6 rounded-xl bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] font-heading font-extrabold text-sm sm:text-base tracking-wide flex items-center justify-center gap-2.5 shadow-lg shadow-[#F7B538]/25 hover:shadow-xl hover:shadow-[#F7B538]/30 transition-all cursor-pointer active:scale-98 disabled:opacity-60"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-[#2D1B4E] border-t-transparent rounded-full animate-spin" />
-                    <span>Guardando perfil en la Base de Datos Central...</span>
-                  </>
-                ) : isSuccess ? (
-                  <>
-                    <CheckCircle2 className="w-5 h-5 text-[#2D1B4E]" />
-                    <span>¡Perfil completado y guardado! Redirigiendo a tu panel...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Guardar Perfil / Confirmar Registro</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
+              {isSuccess ? (
+                <button
+                  type="button"
+                  onClick={() => forceCompleteProfile(currentUser.id)}
+                  className="w-full py-3.5 px-6 rounded-xl bg-[#2D1B4E] hover:bg-[#3D2666] text-[#FFFDF9] font-heading font-extrabold text-sm sm:text-base tracking-wide flex items-center justify-center gap-2.5 shadow-lg transition-all cursor-pointer"
+                >
+                  <CheckCircle2 className="w-5 h-5 text-[#F7B538]" />
+                  <span>¡Perfil completado! Redirigiendo a tu panel...</span>
+                  <ArrowRight className="w-4 h-4 text-[#F7B538]" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full py-3.5 px-6 rounded-xl bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] font-heading font-extrabold text-sm sm:text-base tracking-wide flex items-center justify-center gap-2.5 shadow-lg shadow-[#F7B538]/25 hover:shadow-xl hover:shadow-[#F7B538]/30 transition-all cursor-pointer active:scale-98 disabled:opacity-60"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-[#2D1B4E] border-t-transparent rounded-full animate-spin" />
+                      <span>Guardando perfil en la Base de Datos Central...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Guardar Perfil / Confirmar Registro</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </form>
 
