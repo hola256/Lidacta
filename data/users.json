@@ -1,5 +1,23 @@
 [
   {
+    "id": "user_1793212148612",
+    "name": "Ing. Andrés Navarro",
+    "email": "andres.navarro.lidacta@gmail.com",
+    "role": "leader",
+    "companyId": "comp_nexus",
+    "companyName": "Nexus Manufactura",
+    "position": "Gerente de Planta",
+    "area": "Operaciones",
+    "birthDate": "1990-01-01",
+    "directReports": 12,
+    "whatsapp": "+525544332211",
+    "status": "active",
+    "password": "",
+    "isProfileCompleted": false,
+    "isProfileComplete": false,
+    "createdAt": "2026-10-28T18:29:08.612Z"
+  },
+  {
     "id": "user_1793210783992",
     "name": "Mateo Silva",
     "email": "mateo.silva@externa-test.com",
@@ -67,7 +85,7 @@
     "isProfileCompleted": true,
     "isProfileComplete": true,
     "createdAt": "2026-01-01",
-    "updatedAt": "2026-10-28T18:06:05.649Z"
+    "updatedAt": "2026-10-28T18:29:30.124Z"
   },
   {
     "id": "user_leader_roberto",
