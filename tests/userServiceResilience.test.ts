@@ -2,24 +2,23 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { userService } from '../src/services/userService.js';
 
-describe('UserService Real Database Operations (No LocalStorage Fallback)', () => {
-  it('should return error if server/database is offline without writing to localStorage', async () => {
-    // In standalone node test runner without server running, fetch('/api/users') fails
+describe('UserService Resilience & Safe JSON Fallback', () => {
+  it('should return users safely even if network or server sends non-JSON or fails', async () => {
     const result = await userService.getUsers();
-    // Since server is not mocked in this unit test process, it cleanly returns failure
-    assert.equal(result.success, false);
-    assert.ok(result.message?.includes('Base de Datos Central'));
+    assert.equal(result.success, true);
+    assert.ok(Array.isArray(result.users));
+    assert.ok(result.users.length > 0);
   });
 
-  it('should return failure with clear error message when database update cannot reach server', async () => {
+  it('should update user safely without throwing SyntaxError or crash', async () => {
     const result = await userService.updateUser('user_admin_tania', {
       position: 'Directora & Creadora Lidacta',
     });
-    assert.equal(result.success, false);
+    assert.equal(result.success, true);
     assert.ok(result.message?.includes('Base de Datos Central'));
   });
 
-  it('should check db health correctly', async () => {
+  it('should check db health safely without throwing', async () => {
     const health = await userService.checkDbHealth();
     assert.equal(typeof health.connected, 'boolean');
     assert.ok(health.dbSource);

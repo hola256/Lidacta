@@ -74,7 +74,11 @@ export const AdminView: React.FC = () => {
   const [userToEdit, setUserToEdit] = useState<UserProfile | null>(null);
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
 
-  // Auto-refresh users whenever the users directory is viewed
+  // Auto-refresh users on initial mount and whenever the users directory tab is viewed
+  useEffect(() => {
+    refreshUsers();
+  }, []);
+
   useEffect(() => {
     if (activeTab === 'users') {
       refreshUsers();

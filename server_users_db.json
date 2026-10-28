@@ -59,7 +59,7 @@
     "role": "leader",
     "companyId": "comp_nova",
     "companyName": "Retail Nova Grupo Comercial",
-    "position": "Gerente de Sucursal Centro",
+    "position": "Director de Expansión Estratégica Retail",
     "area": "Operaciones Comerciales y Tiendas",
     "birthDate": "1990-06-15",
     "directReports": 8,
@@ -67,7 +67,8 @@
     "status": "active",
     "isProfileCompleted": true,
     "isProfileComplete": true,
-    "createdAt": "2026-09-15"
+    "createdAt": "2026-09-15",
+    "updatedAt": "2026-10-27T11:48:41.981Z"
   },
   {
     "id": "user_hr_sofia",

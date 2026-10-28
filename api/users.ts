@@ -113,6 +113,49 @@ const DEFAULT_USERS: UserProfile[] = [
 
 let memoryUsers: UserProfile[] = [...DEFAULT_USERS];
 
+// Durable file storage across cold starts
+function readDurableFile(): UserProfile[] | null {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const tmpPath = path.join('/tmp', 'lidacta_users_db.json');
+    if (fs.existsSync(tmpPath)) {
+      const content = fs.readFileSync(tmpPath, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const diskPath = path.join(process.cwd(), 'server_users_db.json');
+    if (fs.existsSync(diskPath)) {
+      const content = fs.readFileSync(diskPath, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+
+  return null;
+}
+
+function writeDurableFile(users: UserProfile[]) {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const tmpPath = path.join('/tmp', 'lidacta_users_db.json');
+    fs.writeFileSync(tmpPath, JSON.stringify(users, null, 2), 'utf-8');
+  } catch {}
+
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const diskPath = path.join(process.cwd(), 'server_users_db.json');
+    fs.writeFileSync(diskPath, JSON.stringify(users, null, 2), 'utf-8');
+  } catch {}
+}
+
 // Helper: Read users from Vercel KV or Upstash Redis
 async function getFromKv(): Promise<UserProfile[] | null> {
   const kvUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
@@ -223,6 +266,7 @@ async function loadUsers(): Promise<{ users: UserProfile[]; source: string }> {
   const kvUsers = await getFromKv();
   if (kvUsers) {
     memoryUsers = kvUsers;
+    writeDurableFile(kvUsers);
     return { users: kvUsers, source: 'Vercel KV (Upstash)' };
   }
 
@@ -230,15 +274,24 @@ async function loadUsers(): Promise<{ users: UserProfile[]; source: string }> {
   const sbUsers = await getFromSupabase();
   if (sbUsers) {
     memoryUsers = sbUsers;
+    writeDurableFile(sbUsers);
     return { users: sbUsers, source: 'Supabase Cloud' };
   }
 
-  // 3. Central serverless storage
+  // 3. Try Local Persistent File (/tmp/lidacta_users_db.json or server_users_db.json)
+  const fileUsers = readDurableFile();
+  if (fileUsers) {
+    memoryUsers = fileUsers;
+    return { users: fileUsers, source: 'Base de Datos Persistente' };
+  }
+
+  // 4. Central serverless baseline (only if database completely empty)
   return { users: memoryUsers, source: 'Base de Datos Central' };
 }
 
 async function persistUsers(users: UserProfile[]) {
   memoryUsers = users;
+  writeDurableFile(users);
   await saveToKv(users);
   await saveToSupabase(users);
 }
