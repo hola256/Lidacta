@@ -1003,39 +1003,117 @@ async function sendTransactionalEmail(options: {
   type?: string;
   title?: string;
   message?: string;
-}): Promise<{ realSent: boolean; emailId?: string; error?: string }> {
+}): Promise<{ realSent: boolean; emailId?: string; error?: string; deliveryNote?: string }> {
   const currentKey = process.env.RESEND_API_KEY;
+  const adminOwner = process.env.ADMIN_EMAIL || 'hola@taniapadierna.com';
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <onboarding@resend.dev>';
+  const cleanTo = options.to.trim().toLowerCase();
+
   let realSent = false;
   let emailId: string | undefined;
   let errorMsg: string | undefined;
+  let deliveryNote: string | undefined;
+
+  console.log(`[LIDACTA MAILING 📧] ==========================================`);
+  console.log(`[LIDACTA MAILING 📧] Timestamp: ${new Date().toISOString()}`);
+  console.log(`[LIDACTA MAILING 📧] Destinatario objetivo: ${cleanTo}`);
+  console.log(`[LIDACTA MAILING 📧] Remitente configurado: ${fromEmail}`);
+  console.log(`[LIDACTA MAILING 📧] Asunto: ${options.subject}`);
+  console.log(`[LIDACTA MAILING 📧] Proveedor: Resend (API Key activa: ${currentKey ? 'SÍ [longitud ' + currentKey.length + ']' : 'NO'})`);
 
   if (currentKey) {
+    const client = new Resend(currentKey);
     try {
-      const client = new Resend(currentKey);
+      // 1. Intentar envío directo a la dirección objetivo
+      console.log(`[LIDACTA MAILING 📧] 🚀 Despachando llamada a Resend API para ${cleanTo}...`);
       const res = await client.emails.send({
-        from: 'Lidacta <onboarding@resend.dev>',
-        to: [options.to],
+        from: fromEmail,
+        to: [cleanTo],
         subject: options.subject,
         html: options.html,
         text: options.text,
       });
+
       if (res.data?.id) {
         realSent = true;
         emailId = res.data.id;
-        console.log(`[LIDACTA MAILING] Real email sent to ${options.to} via Resend. ID: ${emailId}`);
+        deliveryNote = `Entregado directamente a ${cleanTo} vía Resend`;
+        console.log(`[LIDACTA MAILING 📧] ✅ ¡ÉXITO! Correo entregado directamente a ${cleanTo}. ID de Resend: ${emailId}`);
       } else if (res.error) {
         errorMsg = res.error.message;
-        console.warn(`[LIDACTA MAILING] Resend reported error:`, res.error);
+        console.warn(`[LIDACTA MAILING 📧] ⚠️ Resend reportó aviso/error:`, res.error);
+
+        // Detectar si la causa es la restricción del Sandbox de Resend (dominio de prueba onboarding@resend.dev)
+        const isSandboxRestricted =
+          res.error.statusCode === 403 ||
+          (res.error.message && res.error.message.includes('only send testing emails to your own email address')) ||
+          (res.error.message && res.error.message.includes('verify a domain'));
+
+        if (isSandboxRestricted) {
+          console.warn(`[LIDACTA MAILING 📧] ⚠️ [MODO SANDBOX ACTIVO] El remitente 'onboarding@resend.dev' de Resend restringe el envío al correo del propietario (${adminOwner}).`);
+          console.log(`[LIDACTA MAILING 📧] 🔄 Reenviando copia de verificación a la bandeja de ${adminOwner}...`);
+
+          const sandboxBanner = `
+            <div style="background-color: #FFF3CD; border: 2px solid #FFEEBA; color: #856404; padding: 14px 18px; border-radius: 10px; margin: 0 0 24px 0; font-family: sans-serif; font-size: 13px; line-height: 1.5;">
+              <strong style="color: #664D03; font-size: 14px;">ℹ️ Notificación de Modo de Pruebas (Sandbox de Resend):</strong><br>
+              Este correo fue generado originalmente para el usuario: <strong>${cleanTo}</strong>.<br>
+              Debido a que el remitente actual es <code>onboarding@resend.dev</code>, Resend entrega los correos de prueba exclusivamente al propietario de la cuenta registrada (<strong>${adminOwner}</strong>).<br><br>
+              <strong>💡 Para enviar directamente a cualquier correo externo:</strong><br>
+              Agrega y verifica un dominio propio en <a href="https://resend.com/domains" target="_blank" style="color: #BF3A1B; font-weight: bold;">resend.com/domains</a> y configura la variable de entorno <code>RESEND_FROM_EMAIL="Lidacta &lt;notificaciones@tudominio.com&gt;"</code>.
+            </div>
+          `;
+
+          const fallbackRes = await client.emails.send({
+            from: fromEmail,
+            to: [adminOwner],
+            subject: `[Copia para: ${cleanTo}] ${options.subject}`,
+            html: `${sandboxBanner}${options.html}`,
+            text: `[Copia de prueba para: ${cleanTo}]\n\nAVISO SANDBOX RESEND: Entregado a ${adminOwner} porque el dominio remitente es onboarding@resend.dev.\nPara entregar a cualquier correo, configura RESEND_FROM_EMAIL con tu dominio verificado.\n\n${options.text}`,
+          });
+
+          if (fallbackRes.data?.id) {
+            realSent = true;
+            emailId = fallbackRes.data.id;
+            deliveryNote = `Entregado en bandeja de ${adminOwner} (copia de prueba para ${cleanTo})`;
+            console.log(`[LIDACTA MAILING 📧] ✅ Copia de verificación entregada exitosamente a ${adminOwner}. ID de Resend: ${emailId}`);
+          } else {
+            console.error(`[LIDACTA MAILING ERROR ❌] Fallo al entregar copia de prueba a ${adminOwner}:`, fallbackRes.error);
+          }
+        }
       }
     } catch (e: any) {
       errorMsg = e?.message;
-      console.warn(`[LIDACTA MAILING] Error sending via Resend:`, e);
+      console.error(`[LIDACTA MAILING ERROR ❌] Excepción al invocar Resend:`, e);
+
+      // Si la excepción fue por 403 / restricción de sandbox, intentar entrega al adminOwner
+      if (e?.message && (e.message.includes('only send testing emails') || e.message.includes('403'))) {
+        try {
+          console.log(`[LIDACTA MAILING 📧] Reintentando envío como copia de prueba a ${adminOwner}...`);
+          const client = new Resend(currentKey);
+          const fallbackRes = await client.emails.send({
+            from: fromEmail,
+            to: [adminOwner],
+            subject: `[Copia para: ${cleanTo}] ${options.subject}`,
+            html: options.html,
+            text: options.text,
+          });
+          if (fallbackRes.data?.id) {
+            realSent = true;
+            emailId = fallbackRes.data.id;
+            deliveryNote = `Entregado a ${adminOwner} (copia tras excepción)`;
+            console.log(`[LIDACTA MAILING 📧] ✅ Copia de prueba entregada a ${adminOwner}. ID: ${emailId}`);
+          }
+        } catch (fallbackErr) {
+          console.error(`[LIDACTA MAILING ERROR ❌] Excepción en reenvío a admin:`, fallbackErr);
+        }
+      }
     }
   } else {
-    console.log(`[LIDACTA MAILING] Simulated email generated for ${options.to} (RESEND_API_KEY not configured)`);
+    console.log(`[LIDACTA MAILING 📧] Correo registrado en bandeja simulada (RESEND_API_KEY no presente)`);
+    deliveryNote = 'Registrado en memoria del servidor y bandeja visual';
   }
 
-  // Record in centralized server notifications store for instant cross-device visibility
+  // Registrar en la lista centralizada de notificaciones en memoria / base de datos
   const notifId = `notif_mail_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const notifItem: ServerNotificationItem = {
     id: notifId,
@@ -1057,10 +1135,13 @@ async function sendTransactionalEmail(options: {
   };
   serverNotifications.unshift(notifItem);
 
-  return { realSent, emailId, error: errorMsg };
+  console.log(`[LIDACTA MAILING 📧] Fin de procesamiento. realSent=${realSent}, id=${emailId || 'ninguno'}, nota=${deliveryNote || 'N/A'}`);
+  console.log(`[LIDACTA MAILING 📧] ==========================================`);
+
+  return { realSent, emailId, error: errorMsg, deliveryNote };
 }
 
-async function sendWelcomeEmail(user: ServerUserProfile): Promise<{ realSent: boolean; emailId?: string }> {
+async function sendWelcomeEmail(user: ServerUserProfile): Promise<{ realSent: boolean; emailId?: string; deliveryNote?: string }> {
   const subject = `¡Te damos la bienvenida a Lidacta, ${user.name}!`;
   const text = `¡Hola ${user.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nTu cuenta ha sido creada exitosamente asociada a ${user.companyName}.\nEn Lidacta cuentas con un espacio 100% seguro y confidencial donde podrás analizar situaciones reales de tu día a día, practicar tus conversaciones y tomar acciones que fortalezcan tu autonomía como líder.\n\nRecursos Humanos únicamente recibirá indicadores agregados de uso, sin acceso a tus conversaciones privadas.\n\nPuedes acceder en: https://ais-dev-5pctfozdv244x3okeqjryq-710027895954.us-east1.run.app\n\n¡Estamos listos para acompañarte en tu próximo reto!\n\nAtentamente,\nEl Equipo de Lidacta`;
   const html = generateWelcomeEmailHtml(user);
@@ -1079,7 +1160,7 @@ async function sendWelcomeEmail(user: ServerUserProfile): Promise<{ realSent: bo
   });
 }
 
-async function sendProfileInviteEmail(user: ServerUserProfile, inviteUrl?: string): Promise<{ realSent: boolean; emailId?: string }> {
+async function sendProfileInviteEmail(user: ServerUserProfile, inviteUrl?: string): Promise<{ realSent: boolean; emailId?: string; deliveryNote?: string }> {
   const subject = `🎯 Invitación para completar tu perfil de liderazgo en Lidacta`;
   const directUrl = inviteUrl || 'https://ais-dev-5pctfozdv244x3okeqjryq-710027895954.us-east1.run.app';
   const text = `¡Hola ${user.name}!\n\nLa administración de ${user.companyName} te ha invitado a formar parte del programa directivo en Lidacta.\n\nPara habilitar tu acceso seguro y comenzar tu proceso de acompañamiento directivo personalizado, por favor ingresa al siguiente enlace y completa los datos de tu entorno operativo (Área, Puesto, WhatsApp y Personas a Cargo):\n\n${directUrl}\n\nDatos de acceso:\nUsuario: ${user.email}\nEmpresa: ${user.companyName}\n\nEl contenido de tus conversaciones es privado y confidencial.\n\nAtentamente,\nEl Equipo de Lidacta`;
@@ -1099,7 +1180,7 @@ async function sendProfileInviteEmail(user: ServerUserProfile, inviteUrl?: strin
   });
 }
 
-// POST /api/users - Create new user with backend persistence & automatic welcome mailing
+// POST /api/users - Create new user with backend persistence & guaranteed asynchronous welcome mailing
 app.post('/api/users', async (req: Request, res: Response) => {
   try {
     serverUsers = readPersistentUsers();
@@ -1172,11 +1253,19 @@ app.post('/api/users', async (req: Request, res: Response) => {
 
     serverUsers.unshift(newUser);
     writePersistentUsers(serverUsers);
-    console.log(`[SERVER DB] New user created: ${newUser.name} (${newUser.email}) - Role: ${newUser.role} - Status: ${newUser.status}`);
+    console.log(`[SERVER DB] ✅ Nuevo usuario registrado: ${newUser.name} (${newUser.email}) - Rol: ${newUser.role}`);
 
-    // Disparar automáticamente correo electrónico de bienvenida
-    sendWelcomeEmail(newUser).catch((err) => {
-      console.warn('[SERVER DB] Could not send automatic welcome email:', err);
+    // Disparo 100% asíncrono y no bloqueante del correo de bienvenida:
+    // Nunca bloquea la respuesta 201 Created ni la navegación en frontend
+    setImmediate(() => {
+      console.log(`[LIDACTA MAILING 📧] [Async Background] Disparando bienvenida para ${newUser.email}...`);
+      sendWelcomeEmail(newUser)
+        .then((result) => {
+          console.log(`[LIDACTA MAILING 📧] [Async Background] Resultado de bienvenida para ${newUser.email}: realSent=${result.realSent}, ID=${result.emailId || 'N/A'}`);
+        })
+        .catch((err) => {
+          console.error(`[LIDACTA MAILING ERROR ❌] Error en envío asíncrono de bienvenida para ${newUser.email}:`, err);
+        });
     });
 
     return res.status(201).json({
@@ -1191,24 +1280,125 @@ app.post('/api/users', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/mail/send-welcome - Manually or programmatically trigger welcome email
+// POST /api/send-email - Universal Transactional Email Endpoint (Asynchronous & Non-Blocking)
+app.post('/api/send-email', async (req: Request, res: Response) => {
+  try {
+    const { to, subject, html, text, type, userId, email, name, role, companyName, inviteUrl } = req.body;
+    console.log(`[LIDACTA MAILING 📧] Petición recibida en POST /api/send-email:`, { to, email, userId, type, subject });
+
+    serverUsers = readPersistentUsers();
+    let targetUser: ServerUserProfile | undefined;
+    if (userId || email || to) {
+      targetUser = serverUsers.find(
+        (u) =>
+          (userId && u.id === userId) ||
+          (email && u.email.toLowerCase() === String(email).trim().toLowerCase()) ||
+          (to && u.email.toLowerCase() === String(to).trim().toLowerCase())
+      );
+    }
+
+    const targetEmail = to || targetUser?.email || email;
+    if (!targetEmail || !String(targetEmail).includes('@')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Debe proporcionarse un correo destinatario válido ("to" o "email") o un "userId" existente.',
+      });
+    }
+
+    const emailType = type || (subject?.toLowerCase().includes('invit') ? 'invite' : 'welcome');
+
+    // Procesamiento en segundo plano de manera no bloqueante
+    setImmediate(async () => {
+      try {
+        if (emailType === 'invite') {
+          const userForInvite = targetUser || {
+            id: userId || `user_${Date.now()}`,
+            name: name || 'Líder Lidacta',
+            email: targetEmail,
+            role: role || 'leader',
+            companyId: 'comp_custom',
+            companyName: companyName || 'Lidacta Platform',
+            position: 'Líder',
+            createdAt: new Date().toISOString(),
+          };
+          await sendProfileInviteEmail(userForInvite, inviteUrl);
+        } else if (emailType === 'welcome') {
+          const userForWelcome = targetUser || {
+            id: userId || `user_${Date.now()}`,
+            name: name || 'Líder Lidacta',
+            email: targetEmail,
+            role: role || 'leader',
+            companyId: 'comp_custom',
+            companyName: companyName || 'Industrias Nexus Automotriz',
+            position: 'Líder Operativo',
+            createdAt: new Date().toISOString(),
+          };
+          await sendWelcomeEmail(userForWelcome);
+        } else {
+          // Envío transaccional personalizado
+          await sendTransactionalEmail({
+            to: targetEmail,
+            subject: subject || 'Notificación de Lidacta',
+            html: html || `<p>${text || 'Notificación de Lidacta'}</p>`,
+            text: text || 'Notificación de Lidacta',
+            recipientRole: role || targetUser?.role || 'leader',
+            recipientUserId: targetUser?.id,
+            companyId: targetUser?.companyId,
+            type: emailType,
+            title: subject || 'Notificación de Lidacta',
+            message: text ? text.slice(0, 150) : 'Notificación enviada',
+          });
+        }
+      } catch (asyncErr) {
+        console.error('[LIDACTA MAILING ERROR ❌] Excepción en despacho asíncrono desde /api/send-email:', asyncErr);
+      }
+    });
+
+    // Respuesta inmediata 200 OK para no bloquear el flujo de la aplicación
+    return res.status(200).json({
+      success: true,
+      message: `El correo para ${targetEmail} ha sido encolado y se está despachando de forma asíncrona.`,
+      recipient: targetEmail,
+      type: emailType,
+      queued: true,
+    });
+  } catch (error: any) {
+    console.error('[LIDACTA MAILING ERROR ❌] Error en /api/send-email:', error);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'Error al procesar solicitud de envío de correo',
+    });
+  }
+});
+
+// POST /api/mail/send-welcome - Trigger welcome email asynchronously
 app.post('/api/mail/send-welcome', async (req: Request, res: Response) => {
   try {
     const { userId, email } = req.body;
     serverUsers = readPersistentUsers();
-    const targetUser = serverUsers.find((u) => (userId && u.id === userId) || (email && u.email.toLowerCase() === String(email).trim().toLowerCase()));
+    const targetUser = serverUsers.find(
+      (u) =>
+        (userId && u.id === userId) ||
+        (email && u.email.toLowerCase() === String(email).trim().toLowerCase())
+    );
     if (!targetUser) {
       return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
     }
-    const result = await sendWelcomeEmail(targetUser);
+
+    // Ejecución asíncrona inmediata
+    setImmediate(() => {
+      sendWelcomeEmail(targetUser).catch((e) =>
+        console.error('[LIDACTA MAILING ERROR ❌] Error en sendWelcomeEmail:', e)
+      );
+    });
+
     return res.json({
       success: true,
-      message: `Correo de bienvenida enviado exitosamente a ${targetUser.email}`,
-      realSent: result.realSent,
-      emailId: result.emailId,
+      message: `Correo de bienvenida programado exitosamente para ${targetUser.email}`,
+      queued: true,
     });
   } catch (error: any) {
-    console.error('Error sending welcome email:', error);
+    console.error('Error in /api/mail/send-welcome:', error);
     return res.status(500).json({ success: false, message: error?.message || 'Error al enviar correo' });
   }
 });
@@ -1218,8 +1408,12 @@ app.post('/api/mail/send-profile-invite', async (req: Request, res: Response) =>
   try {
     const { userId, email, inviteUrl } = req.body;
     serverUsers = readPersistentUsers();
-    let targetUser = serverUsers.find((u) => (userId && u.id === userId) || (email && u.email.toLowerCase() === String(email).trim().toLowerCase()));
-    
+    let targetUser = serverUsers.find(
+      (u) =>
+        (userId && u.id === userId) ||
+        (email && u.email.toLowerCase() === String(email).trim().toLowerCase())
+    );
+
     if (!targetUser) {
       targetUser = {
         id: userId || `user_${Date.now()}`,
@@ -1232,15 +1426,21 @@ app.post('/api/mail/send-profile-invite', async (req: Request, res: Response) =>
         createdAt: new Date().toISOString(),
       };
     }
-    const result = await sendProfileInviteEmail(targetUser, inviteUrl);
+
+    // Despacho asíncrono
+    setImmediate(() => {
+      sendProfileInviteEmail(targetUser, inviteUrl).catch((e) =>
+        console.error('[LIDACTA MAILING ERROR ❌] Error en sendProfileInviteEmail:', e)
+      );
+    });
+
     return res.json({
       success: true,
-      message: `Correo de invitación para completar perfil enviado exitosamente a ${targetUser.email}`,
-      realSent: result.realSent,
-      emailId: result.emailId,
+      message: `Correo de invitación para completar perfil programado para ${targetUser.email}`,
+      queued: true,
     });
   } catch (error: any) {
-    console.error('Error sending profile invite email:', error);
+    console.error('Error in /api/mail/send-profile-invite:', error);
     return res.status(500).json({ success: false, message: error?.message || 'Error al enviar invitación' });
   }
 });

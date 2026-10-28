@@ -1840,6 +1840,20 @@ El Equipo de Lidacta`;
     };
     setNotifications((prev) => [welcomeNotif, ...prev]);
 
+    // Garantizar disparo de correo de bienvenida de forma asíncrona y no bloqueante
+    fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: createdUser.id,
+        email: cleanEmail,
+        name: cleanName,
+        role: assignedRole,
+        companyName: targetCompName,
+        type: 'welcome',
+      }),
+    }).catch((err) => console.warn('[LIDACTA] Envío asíncrono desde cliente registrado:', err));
+
     return { success: true, user: createdUser };
   };
 
@@ -1920,6 +1934,20 @@ El Equipo de Lidacta`;
       user: createdUser,
       emailText: welcomeEmailBody,
     });
+
+    // Disparar envío garantizado de bienvenida asíncrono
+    fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: createdUser.id,
+        email: cleanEmail,
+        name: cleanName,
+        role: userData.role,
+        companyName: targetCompanyName,
+        type: 'welcome',
+      }),
+    }).catch((err) => console.warn('[LIDACTA] Envío asíncrono desde alta admin:', err));
 
     return { success: true, message: res.message, user: createdUser };
   };

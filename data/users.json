@@ -1,5 +1,23 @@
 [
   {
+    "id": "user_1793207684558",
+    "name": "Valeria Rivas",
+    "email": "valeria.rivas@nexus-auto.com",
+    "role": "leader",
+    "companyId": "comp_nexus",
+    "companyName": "Industrias Nexus Automotriz",
+    "position": "Líder de Turno B",
+    "area": "Operaciones",
+    "birthDate": "1990-01-01",
+    "directReports": 5,
+    "whatsapp": "Sin especificar",
+    "status": "active",
+    "password": "",
+    "isProfileCompleted": false,
+    "isProfileComplete": false,
+    "createdAt": "2026-10-28T17:14:44.558Z"
+  },
+  {
     "id": "user_admin_tania",
     "name": "Tania Padierna",
     "email": "hola@taniapadierna.com",
