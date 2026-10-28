@@ -891,8 +891,216 @@ app.post('/api/user/complete-profile', (req: Request, res: Response) => {
   }
 });
 
-// POST /api/users - Create new user with backend persistence
-app.post('/api/users', (req: Request, res: Response) => {
+// --- Transactional Email Functions (Resend + Centralized Server Notifications) ---
+
+function generateWelcomeEmailHtml(user: ServerUserProfile): string {
+  const roleName = user.role === 'leader' ? 'Líder de Equipo' : user.role === 'hr' ? 'Gestión de Talento Humano' : 'Administrador';
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>¡Te damos la bienvenida a Lidacta!</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F8F6F4; margin: 0; padding: 24px; color: #2D1B4E;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(45, 27, 78, 0.08); border: 1px solid #EADBCE;">
+    <tr>
+      <td style="background-color: #2D1B4E; padding: 32px 24px; text-align: center;">
+        <h1 style="color: #FFF7EF; font-size: 24px; margin: 0 0 8px 0; font-weight: 800; letter-spacing: -0.5px;">LIDACTA</h1>
+        <p style="color: #F7B538; font-size: 13px; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Desarrollo de Liderazgo en Acción</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 32px 28px;">
+        <h2 style="font-size: 20px; color: #2D1B4E; margin: 0 0 16px 0; font-weight: 700;">¡Hola ${user.name}!</h2>
+        <p style="font-size: 14px; line-height: 1.6; color: #4A3F55; margin: 0 0 16px 0;">
+          Te damos una cálida bienvenida a <strong>Lidacta</strong>. Tu cuenta ha sido dada de alta exitosamente asociada a <strong>${user.companyName}</strong> con el rol de <strong>${roleName}</strong>.
+        </p>
+        <p style="font-size: 14px; line-height: 1.6; color: #4A3F55; margin: 0 0 20px 0;">
+          Lidacta es tu espacio seguro, confidencial y práctico para abordar retos reales de liderazgo, entrenar conversaciones difíciles y consolidar planes de acción con autonomía.
+        </p>
+        <div style="background-color: #FFF7EF; border-left: 4px solid #F7B538; padding: 16px; border-radius: 8px; margin: 0 0 24px 0;">
+          <p style="font-size: 13px; font-weight: 700; color: #2D1B4E; margin: 0 0 6px 0;">🔒 Confidencialidad Absoluta Garantizada</p>
+          <p style="font-size: 12px; line-height: 1.5; color: #4A3F55; margin: 0;">
+            El contenido de tus conversaciones, simulaciones y casos es estrictamente privado. Recursos Humanos únicamente recibe métricas agregadas de participación, nunca el detalle de tus casos.
+          </p>
+        </div>
+        <div style="text-align: center; margin: 30px 0 20px 0;">
+          <a href="https://ais-dev-5pctfozdv244x3okeqjryq-710027895954.us-east1.run.app" style="background-color: #BF3A1B; color: #ffffff; padding: 14px 28px; font-size: 14px; font-weight: 700; text-decoration: none; border-radius: 12px; display: inline-block; box-shadow: 0 4px 12px rgba(191, 58, 27, 0.3);">
+            Acceder a Lidacta →
+          </a>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="background-color: #FFF7EF; padding: 20px 24px; text-align: center; border-top: 1px solid #EADBCE;">
+        <p style="font-size: 11px; color: #4A3F55; margin: 0;">Lidacta © ${new Date().getFullYear()} · Desarrollo de Liderazgo Operativo</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function generateProfileInviteEmailHtml(user: ServerUserProfile, directUrl: string): string {
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Invitación para completar tu perfil en Lidacta</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F8F6F4; margin: 0; padding: 24px; color: #2D1B4E;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(45, 27, 78, 0.08); border: 1px solid #EADBCE;">
+    <tr>
+      <td style="background-color: #2D1B4E; padding: 32px 24px; text-align: center;">
+        <h1 style="color: #FFF7EF; font-size: 24px; margin: 0 0 8px 0; font-weight: 800; letter-spacing: -0.5px;">LIDACTA</h1>
+        <p style="color: #F7B538; font-size: 13px; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Invitación de Onboarding Directivo</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 32px 28px;">
+        <span style="display: inline-block; padding: 4px 12px; background-color: #FFD3BF; color: #BF3A1B; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 12px;">Paso Requerido</span>
+        <h2 style="font-size: 20px; color: #2D1B4E; margin: 0 0 16px 0; font-weight: 700;">¡Hola ${user.name}!</h2>
+        <p style="font-size: 14px; line-height: 1.6; color: #4A3F55; margin: 0 0 16px 0;">
+          La administración de <strong>${user.companyName}</strong> te ha invitado a formar parte del programa directivo en <strong>Lidacta</strong>.
+        </p>
+        <p style="font-size: 14px; line-height: 1.6; color: #4A3F55; margin: 0 0 20px 0;">
+          Para habilitar tu acceso seguro y comenzar tu proceso de acompañamiento directivo personalizado, por favor ingresa al siguiente enlace y completa los datos de tu entorno operativo (Área, Puesto, WhatsApp y Personas a Cargo):
+        </p>
+        <div style="background-color: #FFF7EF; border: 1px solid #EADBCE; padding: 18px; border-radius: 12px; margin: 0 0 24px 0; text-align: left;">
+          <p style="font-size: 13px; font-weight: 700; color: #2D1B4E; margin: 0 0 6px 0;">📋 Tus datos de acceso:</p>
+          <p style="font-size: 13px; color: #4A3F55; margin: 0 0 4px 0;">• <strong>Usuario:</strong> ${user.email}</p>
+          <p style="font-size: 13px; color: #4A3F55; margin: 0;">• <strong>Empresa:</strong> ${user.companyName}</p>
+        </div>
+        <div style="text-align: center; margin: 28px 0 20px 0;">
+          <a href="${directUrl}" style="background-color: #F7B538; color: #2D1B4E; padding: 14px 28px; font-size: 14px; font-weight: 800; text-decoration: none; border-radius: 12px; display: inline-block; box-shadow: 0 4px 12px rgba(247, 181, 56, 0.35);">
+            Completar Mi Perfil en Lidacta →
+          </a>
+        </div>
+        <p style="font-size: 12px; color: #4A3F55; text-align: center; margin: 20px 0 0 0;">
+          Si el botón no funciona, copia y pega este enlace en tu navegador:<br>
+          <a href="${directUrl}" style="color: #BF3A1B; text-decoration: underline; word-break: break-all;">${directUrl}</a>
+        </p>
+      </td>
+    </tr>
+    <tr>
+      <td style="background-color: #FFF7EF; padding: 20px 24px; text-align: center; border-top: 1px solid #EADBCE;">
+        <p style="font-size: 11px; color: #4A3F55; margin: 0;">Lidacta © ${new Date().getFullYear()} · Desarrollo de Liderazgo en Acción</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+async function sendTransactionalEmail(options: {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  recipientRole?: string;
+  recipientUserId?: string;
+  companyId?: string;
+  type?: string;
+  title?: string;
+  message?: string;
+}): Promise<{ realSent: boolean; emailId?: string; error?: string }> {
+  const currentKey = process.env.RESEND_API_KEY;
+  let realSent = false;
+  let emailId: string | undefined;
+  let errorMsg: string | undefined;
+
+  if (currentKey) {
+    try {
+      const client = new Resend(currentKey);
+      const res = await client.emails.send({
+        from: 'Lidacta <onboarding@resend.dev>',
+        to: [options.to],
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+      });
+      if (res.data?.id) {
+        realSent = true;
+        emailId = res.data.id;
+        console.log(`[LIDACTA MAILING] Real email sent to ${options.to} via Resend. ID: ${emailId}`);
+      } else if (res.error) {
+        errorMsg = res.error.message;
+        console.warn(`[LIDACTA MAILING] Resend reported error:`, res.error);
+      }
+    } catch (e: any) {
+      errorMsg = e?.message;
+      console.warn(`[LIDACTA MAILING] Error sending via Resend:`, e);
+    }
+  } else {
+    console.log(`[LIDACTA MAILING] Simulated email generated for ${options.to} (RESEND_API_KEY not configured)`);
+  }
+
+  // Record in centralized server notifications store for instant cross-device visibility
+  const notifId = `notif_mail_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const notifItem: ServerNotificationItem = {
+    id: notifId,
+    recipientRole: options.recipientRole || 'leader',
+    recipientUserId: options.recipientUserId,
+    companyId: options.companyId || 'comp_nexus',
+    title: options.title || options.subject,
+    message: options.message || options.text.slice(0, 150),
+    type: (options.type as any) || 'registration',
+    timestamp: new Date().toISOString(),
+    read: false,
+    emailSimulated: {
+      to: options.to,
+      subject: options.subject,
+      bodyText: options.text,
+      realEmailSent: realSent,
+      realEmailId: emailId,
+    },
+  };
+  serverNotifications.unshift(notifItem);
+
+  return { realSent, emailId, error: errorMsg };
+}
+
+async function sendWelcomeEmail(user: ServerUserProfile): Promise<{ realSent: boolean; emailId?: string }> {
+  const subject = `¡Te damos la bienvenida a Lidacta, ${user.name}!`;
+  const text = `¡Hola ${user.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nTu cuenta ha sido creada exitosamente asociada a ${user.companyName}.\nEn Lidacta cuentas con un espacio 100% seguro y confidencial donde podrás analizar situaciones reales de tu día a día, practicar tus conversaciones y tomar acciones que fortalezcan tu autonomía como líder.\n\nRecursos Humanos únicamente recibirá indicadores agregados de uso, sin acceso a tus conversaciones privadas.\n\nPuedes acceder en: https://ais-dev-5pctfozdv244x3okeqjryq-710027895954.us-east1.run.app\n\n¡Estamos listos para acompañarte en tu próximo reto!\n\nAtentamente,\nEl Equipo de Lidacta`;
+  const html = generateWelcomeEmailHtml(user);
+
+  return sendTransactionalEmail({
+    to: user.email,
+    subject,
+    html,
+    text,
+    recipientRole: user.role,
+    recipientUserId: user.id,
+    companyId: user.companyId,
+    type: 'registration',
+    title: `Correo de Bienvenida enviado a ${user.name}`,
+    message: `Hemos enviado el correo de bienvenida a ${user.email} con la información de acceso a Lidacta.`,
+  });
+}
+
+async function sendProfileInviteEmail(user: ServerUserProfile, inviteUrl?: string): Promise<{ realSent: boolean; emailId?: string }> {
+  const subject = `🎯 Invitación para completar tu perfil de liderazgo en Lidacta`;
+  const directUrl = inviteUrl || 'https://ais-dev-5pctfozdv244x3okeqjryq-710027895954.us-east1.run.app';
+  const text = `¡Hola ${user.name}!\n\nLa administración de ${user.companyName} te ha invitado a formar parte del programa directivo en Lidacta.\n\nPara habilitar tu acceso seguro y comenzar tu proceso de acompañamiento directivo personalizado, por favor ingresa al siguiente enlace y completa los datos de tu entorno operativo (Área, Puesto, WhatsApp y Personas a Cargo):\n\n${directUrl}\n\nDatos de acceso:\nUsuario: ${user.email}\nEmpresa: ${user.companyName}\n\nEl contenido de tus conversaciones es privado y confidencial.\n\nAtentamente,\nEl Equipo de Lidacta`;
+  const html = generateProfileInviteEmailHtml(user, directUrl);
+
+  return sendTransactionalEmail({
+    to: user.email,
+    subject,
+    html,
+    text,
+    recipientRole: user.role,
+    recipientUserId: user.id,
+    companyId: user.companyId,
+    type: 'registration',
+    title: `Invitación para completar perfil enviada a ${user.name}`,
+    message: `Se envió un correo a ${user.email} con el enlace directo para completar su perfil de liderazgo.`,
+  });
+}
+
+// POST /api/users - Create new user with backend persistence & automatic welcome mailing
+app.post('/api/users', async (req: Request, res: Response) => {
   try {
     serverUsers = readPersistentUsers();
     const {
@@ -932,7 +1140,7 @@ app.post('/api/users', (req: Request, res: Response) => {
     const effectiveCompanyId = companyId || 'comp_nexus';
     const effectiveCompanyName = companyName || 'Industrias Nexus Automotriz';
 
-    // If isProfileCompleted was explicitly specified, use it. Otherwise, default admin to true, leader/hr to false if whatsapp is empty.
+    // Profiles for leaders and HR are strictly uncompleted on initial registration until onboarding form is submitted
     const isCompletedExplicit =
       isProfileCompleted !== undefined
         ? Boolean(isProfileCompleted)
@@ -966,6 +1174,11 @@ app.post('/api/users', (req: Request, res: Response) => {
     writePersistentUsers(serverUsers);
     console.log(`[SERVER DB] New user created: ${newUser.name} (${newUser.email}) - Role: ${newUser.role} - Status: ${newUser.status}`);
 
+    // Disparar automáticamente correo electrónico de bienvenida
+    sendWelcomeEmail(newUser).catch((err) => {
+      console.warn('[SERVER DB] Could not send automatic welcome email:', err);
+    });
+
     return res.status(201).json({
       success: true,
       message: 'Usuario creado correctamente en la Base de Datos Central',
@@ -975,6 +1188,60 @@ app.post('/api/users', (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error creating user:', error);
     return res.status(500).json({ success: false, message: error?.message || 'Error al crear usuario' });
+  }
+});
+
+// POST /api/mail/send-welcome - Manually or programmatically trigger welcome email
+app.post('/api/mail/send-welcome', async (req: Request, res: Response) => {
+  try {
+    const { userId, email } = req.body;
+    serverUsers = readPersistentUsers();
+    const targetUser = serverUsers.find((u) => (userId && u.id === userId) || (email && u.email.toLowerCase() === String(email).trim().toLowerCase()));
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+    }
+    const result = await sendWelcomeEmail(targetUser);
+    return res.json({
+      success: true,
+      message: `Correo de bienvenida enviado exitosamente a ${targetUser.email}`,
+      realSent: result.realSent,
+      emailId: result.emailId,
+    });
+  } catch (error: any) {
+    console.error('Error sending welcome email:', error);
+    return res.status(500).json({ success: false, message: error?.message || 'Error al enviar correo' });
+  }
+});
+
+// POST /api/mail/send-profile-invite - Send invitation email to complete profile
+app.post('/api/mail/send-profile-invite', async (req: Request, res: Response) => {
+  try {
+    const { userId, email, inviteUrl } = req.body;
+    serverUsers = readPersistentUsers();
+    let targetUser = serverUsers.find((u) => (userId && u.id === userId) || (email && u.email.toLowerCase() === String(email).trim().toLowerCase()));
+    
+    if (!targetUser) {
+      targetUser = {
+        id: userId || `user_${Date.now()}`,
+        name: req.body.name || 'Líder Lidacta',
+        email: email || 'usuario@lidacta.com',
+        role: req.body.role || 'leader',
+        companyId: req.body.companyId || 'comp_nexus',
+        companyName: req.body.companyName || 'Industrias Nexus Automotriz',
+        position: req.body.position || 'Líder Operativo',
+        createdAt: new Date().toISOString(),
+      };
+    }
+    const result = await sendProfileInviteEmail(targetUser, inviteUrl);
+    return res.json({
+      success: true,
+      message: `Correo de invitación para completar perfil enviado exitosamente a ${targetUser.email}`,
+      realSent: result.realSent,
+      emailId: result.emailId,
+    });
+  } catch (error: any) {
+    console.error('Error sending profile invite email:', error);
+    return res.status(500).json({ success: false, message: error?.message || 'Error al enviar invitación' });
   }
 });
 

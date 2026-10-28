@@ -373,6 +373,7 @@ class UserService {
     if (targetIdx !== -1) {
       updatedUser = {
         ...cached[targetIdx],
+        name: payload.name || cached[targetIdx].name,
         companyName: payload.companyName || cached[targetIdx].companyName,
         area: payload.area || cached[targetIdx].area,
         position: payload.position || cached[targetIdx].position,

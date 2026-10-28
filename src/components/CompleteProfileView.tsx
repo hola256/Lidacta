@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   UserCheck,
   Layers,
+  User,
 } from 'lucide-react';
 
 export const CompleteProfileView: React.FC = () => {
@@ -24,6 +25,7 @@ export const CompleteProfileView: React.FC = () => {
   const isHR = currentUser.role === 'hr';
 
   // Form states initialized with existing values if available, never undefined
+  const [name, setName] = useState<string>(currentUser.name || '');
   const [companyName, setCompanyName] = useState<string>(currentUser.companyName || '');
   const [area, setArea] = useState<string>(currentUser.area || '');
   const [position, setPosition] = useState<string>(currentUser.position || '');
@@ -48,6 +50,7 @@ export const CompleteProfileView: React.FC = () => {
   }, [isSuccess, currentUser.id, forceCompleteProfile]);
 
   // Field validation helpers
+  const isNameValid = name.trim().length >= 2;
   const isCompanyValid = companyName.trim().length > 0;
   const isAreaValid = area.trim().length > 0;
   const isPositionValid = position.trim().length > 0;
@@ -64,6 +67,7 @@ export const CompleteProfileView: React.FC = () => {
 
     // Mark all touched
     setTouched({
+      name: true,
       companyName: true,
       area: true,
       position: true,
@@ -73,6 +77,11 @@ export const CompleteProfileView: React.FC = () => {
     });
 
     // Validate mandatory fields
+    if (!isNameValid) {
+      setErrorMessage('Por favor ingresa tu nombre completo.');
+      return;
+    }
+
     if (!isCompanyValid) {
       setErrorMessage('Por favor ingresa el nombre de tu empresa.');
       return;
@@ -150,6 +159,7 @@ export const CompleteProfileView: React.FC = () => {
       }
 
       await completeUserProfile({
+        name: name.trim(),
         companyName: cleanCompany,
         area: cleanArea,
         position: cleanPosition,
@@ -247,8 +257,35 @@ export const CompleteProfileView: React.FC = () => {
             </div>
           )}
 
-          {/* Form with all 5 mandatory fields */}
+          {/* Form with all mandatory onboarding fields */}
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* 0. Nombre Completo */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#2D1B4E]">
+                Nombre Completo <span className="text-[#BF3A1B]">*</span>
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#4A3F55]/50">
+                  <User className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                  onBlur={() => setTouched((p) => ({ ...p, name: true }))}
+                  placeholder="ej. Roberto Gómez Padierna"
+                  className={`w-full pl-10 pr-4 py-2.5 bg-white border ${
+                    touched.name && !isNameValid
+                      ? 'border-[#BF3A1B] ring-1 ring-[#BF3A1B]'
+                      : 'border-[#493447]/20 focus:border-[#BF3A1B]'
+                  } rounded-xl text-sm text-[#2D1B4E] placeholder-[#4A3F55]/40 outline-none transition-all shadow-xs`}
+                />
+              </div>
+            </div>
+
             {/* 1. Empresa */}
             <div className="space-y-1.5">
               <label className="block text-xs font-bold uppercase tracking-wider text-[#2D1B4E]">

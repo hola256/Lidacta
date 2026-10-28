@@ -44,6 +44,7 @@ interface LidactaContextType {
   login: (email: string, password?: string) => { success: boolean; message?: string };
   logout: () => void;
   completeUserProfile: (data: {
+    name?: string;
     companyName: string;
     area?: string;
     position?: string;
@@ -53,6 +54,13 @@ interface LidactaContextType {
     personasACargo?: number;
     whatsapp: string;
   }) => Promise<{ success: boolean; message?: string }>;
+  sendProfileInvite: (user: {
+    id?: string;
+    email: string;
+    name: string;
+    companyName?: string;
+    role?: string;
+  }) => Promise<{ success: boolean; message: string }>;
   updateUserProfile: (
     userId: string,
     updates: Partial<UserProfile>
@@ -1271,7 +1279,7 @@ El Equipo de Lidacta`;
     if (!currentUser) return false;
     if (currentUser.role === 'admin') return true;
 
-    // Check force completed map immediately
+    // 1. Force completed map (triggered when user submits "Guardar Perfil")
     if (
       forceCompletedUserIds[currentUser.id] ||
       (currentUser.email && forceCompletedUserIds[currentUser.email.toLowerCase()])
@@ -1279,7 +1287,7 @@ El Equipo de Lidacta`;
       return true;
     }
 
-    // Check direct persistent localStorage flags
+    // 2. Direct persistent localStorage flags (saved when user completes profile)
     try {
       if (
         localStorage.getItem(`lidacta_profile_completed_${currentUser.id}`) === 'true' ||
@@ -1289,33 +1297,38 @@ El Equipo de Lidacta`;
       }
     } catch {}
 
-    // Check explicit localStorage flag for Carlos Mendoza
-    const isCarlos = currentUser.id === 'user_leader_carlos' || (currentUser.email && currentUser.email.toLowerCase().includes('carlos.mendoza'));
-    let carlosStoredComplete = false;
-    try {
-      carlosStoredComplete = Boolean(
-        isCarlos && (
-          localStorage.getItem('carlosProfileCompleted') === 'true' ||
-          localStorage.getItem(`${STORAGE_KEY_PREFIX}carlosProfileCompleted`) === 'true'
-        )
-      );
-    } catch {}
-
-    if (currentUser.isProfileCompleted === true || currentUser.isProfileComplete === true || carlosStoredComplete) {
+    // 3. Demo seed users (Roberto Gómez and Sofía Valenzuela start with completed profiles)
+    if (currentUser.id === 'user_leader_roberto' || currentUser.id === 'user_hr_sofia') {
       return true;
     }
 
-    if (currentUser.isProfileCompleted === false && !currentUser.isProfileComplete && !carlosStoredComplete) {
+    // 4. Carlos Mendoza seed demo check
+    const isCarlos = currentUser.id === 'user_leader_carlos' || (currentUser.email && currentUser.email.toLowerCase().includes('carlos.mendoza'));
+    if (isCarlos) {
+      try {
+        if (
+          localStorage.getItem('carlosProfileCompleted') === 'true' ||
+          localStorage.getItem(`${STORAGE_KEY_PREFIX}carlosProfileCompleted`) === 'true'
+        ) {
+          return true;
+        }
+      } catch {}
+    }
+
+    // 5. If user has not completed onboarding, strictly return false
+    if (!currentUser.isProfileCompleted && !currentUser.isProfileComplete) {
       return false;
     }
 
+    // 6. Even if marked completed in DB, ensure non-placeholder values
+    const cleanPhone = (currentUser.whatsapp || '').trim();
+    const hasRealPhone = cleanPhone !== '' && cleanPhone !== 'Sin especificar' && cleanPhone !== '+52 55 0000 0000';
+    const cleanDate = (currentUser.birthDate || '').trim();
+    const hasRealDate = cleanDate !== '' && cleanDate !== '1990-01-01';
     const hasCompany = Boolean(currentUser.companyName && currentUser.companyName.trim() && currentUser.companyName !== 'Empresa Sin especificar');
-    const hasBirthDate = Boolean(currentUser.birthDate && currentUser.birthDate.trim());
-    const hasWhatsapp = Boolean(currentUser.whatsapp && currentUser.whatsapp.trim());
-    const isFlaggedComplete = Boolean(currentUser.isProfileCompleted || currentUser.isProfileComplete || carlosStoredComplete);
 
     if (currentUser.role === 'hr') {
-      return isFlaggedComplete || (hasCompany && hasBirthDate && hasWhatsapp);
+      return hasCompany && hasRealPhone && hasRealDate;
     }
 
     if (currentUser.role === 'leader') {
@@ -1325,13 +1338,14 @@ El Equipo de Lidacta`;
         currentUser.directReports !== null &&
         !isNaN(Number(currentUser.directReports)) &&
         Number(currentUser.directReports) >= 0;
-      return isFlaggedComplete || (hasCompany && hasArea && hasBirthDate && hasReports && hasWhatsapp);
+      return hasCompany && hasArea && hasReports && hasRealPhone && hasRealDate;
     }
 
-    return true;
+    return false;
   }, [currentUser, forceCompletedUserIds]);
 
   const completeUserProfile = async (data: {
+    name?: string;
     companyName: string;
     area?: string;
     position?: string;
@@ -1341,8 +1355,9 @@ El Equipo de Lidacta`;
     personasACargo?: number;
     whatsapp: string;
   }): Promise<{ success: boolean; message?: string }> => {
-    const { companyName, area, position, birthDate, fechaNacimiento, directReports, personasACargo, whatsapp } = data;
+    const { name, companyName, area, position, birthDate, fechaNacimiento, directReports, personasACargo, whatsapp } = data;
 
+    const cleanName = String(name || currentUser.name || '').trim() || 'Usuario Lidacta';
     const cleanCompany = String(companyName || currentUser.companyName || '').trim() || 'Empresa Sin especificar';
 
     // Normalize date: accepts YYYY-MM-DD or DD/MM/YYYY without throwing
@@ -1371,6 +1386,7 @@ El Equipo de Lidacta`;
 
     const updatedUser: UserProfile = {
       ...currentUser,
+      name: cleanName,
       companyName: cleanCompany,
       area: cleanArea,
       position: cleanPosition,
@@ -1771,6 +1787,23 @@ El Equipo de Lidacta`;
     sessionUserRef.current = createdUser;
     setCurrentUserId(createdUser.id);
     currentUserIdRef.current = createdUser.id;
+
+    // Strictly ensure new user profile is NOT marked complete until onboarding form is submitted
+    if (assignedRole !== 'admin') {
+      try {
+        localStorage.removeItem(`lidacta_profile_completed_${createdUser.id}`);
+        localStorage.removeItem(`lidacta_profile_completed_${cleanEmail}`);
+        sessionStorage.removeItem(`lidacta_profile_completed_${createdUser.id}`);
+        sessionStorage.removeItem(`lidacta_profile_completed_${cleanEmail}`);
+      } catch {}
+      setForceCompletedUserIds((prev) => {
+        const next = { ...prev };
+        delete next[createdUser.id];
+        delete next[cleanEmail];
+        return next;
+      });
+    }
+
     try {
       sessionStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, createdUser.id);
       sessionStorage.setItem(`${STORAGE_KEY_PREFIX}session_user`, JSON.stringify(createdUser));
@@ -1787,6 +1820,25 @@ El Equipo de Lidacta`;
     if (assignedRole === 'leader') {
       setActiveMentorshipIdState(null);
     }
+
+    // Dispatch automatic welcome notification for new auto-registered user
+    const welcomeNotif: NotificationItem = {
+      id: `notif_welcome_${Date.now()}`,
+      recipientRole: assignedRole,
+      recipientUserId: createdUser.id,
+      companyId: targetCompId,
+      title: `¡Te damos la bienvenida a Lidacta, ${cleanName}!`,
+      message: `Tu cuenta ha sido creada exitosamente. Hemos enviado un correo de bienvenida a ${cleanEmail}.`,
+      type: 'registration',
+      timestamp: new Date().toISOString(),
+      read: false,
+      emailSimulated: {
+        to: cleanEmail,
+        subject: `¡Te damos la bienvenida a Lidacta, ${cleanName}!`,
+        bodyText: `¡Hola ${cleanName}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nTu cuenta ha sido creada exitosamente asociada a ${targetCompName}.\nEn Lidacta cuentas con un espacio 100% seguro y confidencial donde podrás analizar situaciones reales de tu día a día, practicar tus conversaciones y tomar acciones que fortalezcan tu autonomía como líder.\n\nRecursos Humanos únicamente recibirá indicadores agregados de uso, sin acceso a tus conversaciones privadas.\n\n¡Estamos listos para acompañarte en tu próximo reto!\n\nAtentamente,\nEl Equipo de Lidacta`,
+      },
+    };
+    setNotifications((prev) => [welcomeNotif, ...prev]);
 
     return { success: true, user: createdUser };
   };
@@ -1933,6 +1985,56 @@ El Equipo de Lidacta`;
     return { success: true, message: res.message };
   };
 
+  const sendProfileInvite = async (user: {
+    id?: string;
+    email: string;
+    name: string;
+    companyName?: string;
+    role?: string;
+  }): Promise<{ success: boolean; message: string }> => {
+    const inviteUrl = window.location.origin;
+    try {
+      await fetch('/api/mail/send-profile-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          email: user.email,
+          name: user.name,
+          companyName: user.companyName,
+          role: user.role,
+          inviteUrl,
+        }),
+      });
+    } catch (err) {
+      console.warn('Could not reach backend to send profile invite email:', err);
+    }
+
+    const inviteNotif: NotificationItem = {
+      id: `notif_invite_${Date.now()}`,
+      recipientRole: (user.role as UserRole) || 'leader',
+      recipientUserId: user.id,
+      companyId: user.companyName || 'comp_nexus',
+      title: `Invitación de perfil enviada a ${user.name}`,
+      message: `Se envió correo a ${user.email} con enlace directo para completar su perfil de liderazgo.`,
+      type: 'registration',
+      timestamp: new Date().toISOString(),
+      read: false,
+      emailSimulated: {
+        to: user.email,
+        subject: '🎯 Invitación para completar tu perfil de liderazgo en Lidacta',
+        bodyText: `¡Hola ${user.name}!\n\nLa administración de ${user.companyName || 'tu empresa'} te ha invitado a formar parte del programa directivo en Lidacta.\n\nPara habilitar tu acceso seguro y comenzar tu proceso de acompañamiento directivo personalizado, por favor ingresa al siguiente enlace y completa los datos de tu entorno operativo (Área, Puesto, WhatsApp y Personas a Cargo):\n\n${inviteUrl}\n\nDatos de acceso:\nUsuario: ${user.email}\nEmpresa: ${user.companyName || 'Lidacta'}\n\nEl contenido de tus conversaciones es privado y confidencial.\n\nAtentamente,\nEl Equipo de Lidacta`,
+      },
+    };
+    setNotifications((prev) => [inviteNotif, ...prev]);
+    showToast(`Correo de invitación para completar perfil enviado a ${user.email}`, 'success');
+
+    return {
+      success: true,
+      message: `Correo de invitación para completar perfil enviado a ${user.email}`,
+    };
+  };
+
   return (
     <LidactaContext.Provider
       value={{
@@ -1962,6 +2064,7 @@ El Equipo de Lidacta`;
         isAuthenticated,
         isProfileComplete,
         forceCompleteProfile,
+        sendProfileInvite,
         login,
         logout,
         completeUserProfile,
