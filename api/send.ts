@@ -149,14 +149,14 @@ export default async function handler(req: any, res: any) {
     const resendResult = await resend.emails.send({
       from: fromEmail,
       to: [targetEmail],
-      replyTo: replyToEmail,
+      replyTo: 'hola@taniapadierna.com',
       subject: emailSubject,
       html: emailHtmlBody,
       text: emailTextBody,
     });
 
     if (resendResult.error) {
-      console.error('[API /api/send (Vercel)] ❌ Error de Resend API:', JSON.stringify(resendResult.error, null, 2));
+      console.error('Resend delivery failed:', resendResult.error);
       return res.status(400).json({
         success: false,
         error: resendResult.error.message || 'Error al enviar a través de Resend API',

@@ -1,5 +1,23 @@
 [
   {
+    "id": "user_1793213224430",
+    "name": "Equipo Coaching",
+    "email": "proyectos.coaching@gmail.com",
+    "role": "leader",
+    "companyId": "comp_nexus",
+    "companyName": "Nexus Coaching",
+    "position": "Director de Formación",
+    "area": "Desarrollo de Liderazgo",
+    "birthDate": "1990-01-01",
+    "directReports": 10,
+    "whatsapp": "+525511223344",
+    "status": "active",
+    "password": "",
+    "isProfileCompleted": false,
+    "isProfileComplete": false,
+    "createdAt": "2026-10-28T18:47:04.430Z"
+  },
+  {
     "id": "user_1793212148612",
     "name": "Ing. Andrés Navarro",
     "email": "andres.navarro.lidacta@gmail.com",
@@ -85,7 +103,7 @@
     "isProfileCompleted": true,
     "isProfileComplete": true,
     "createdAt": "2026-01-01",
-    "updatedAt": "2026-10-28T18:29:30.124Z"
+    "updatedAt": "2026-10-28T18:47:26.848Z"
   },
   {
     "id": "user_leader_roberto",

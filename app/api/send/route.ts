@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     const data = await resend.emails.send({
       from: fromEmail,
       to: [targetEmail],
-      replyTo: replyToEmail,
+      replyTo: 'hola@taniapadierna.com',
       subject,
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #FFF7EF; border: 1px solid #FFD3BF; border-radius: 16px; color: #2D1B4E;">

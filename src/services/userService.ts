@@ -1,4 +1,5 @@
 import { UserProfile } from '../types/lidacta';
+import { emailService } from './emailService';
 
 export interface UserServiceResponse {
   success: boolean;
