@@ -42,9 +42,13 @@ export async function POST(request: Request) {
     const resend = new Resend(apiKey);
     const subject = `🚨 [Asesoría 1:1] Solicitud de ${effectiveLeaderName} - ${effectiveDate}`;
 
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
+    const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com';
+
     const data = await resend.emails.send({
-      from: 'Lidacta <onboarding@resend.dev>',
+      from: fromEmail,
       to: [targetEmail],
+      replyTo: replyToEmail,
       subject,
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #FFF7EF; border: 1px solid #FFD3BF; border-radius: 16px; color: #2D1B4E;">

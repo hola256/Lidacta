@@ -144,9 +144,13 @@ export interface NotificationItem {
   timestamp: string;
   read: boolean;
   emailSimulated?: {
+    from?: string;
     to: string;
+    replyTo?: string;
     subject: string;
     bodyText: string;
+    realEmailSent?: boolean;
+    realEmailId?: string;
   };
   mentorRequestDetails?: MentorRequestDetails;
 }

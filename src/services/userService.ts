@@ -54,8 +54,16 @@ export interface CompleteProfilePayload {
 
 const LOCAL_USERS_KEY = 'lidacta_users_cache_v3';
 
+function getApiBaseUrl(): string {
+  if (typeof window !== 'undefined' && window.location) {
+    return '';
+  }
+  return process.env.API_BASE_URL || 'http://localhost:3000';
+}
+
 function getLocalCachedUsers(): UserProfile[] {
   try {
+    if (typeof localStorage === 'undefined') return [];
     const raw = localStorage.getItem(LOCAL_USERS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -67,6 +75,7 @@ function getLocalCachedUsers(): UserProfile[] {
 
 function saveLocalCachedUsers(users: UserProfile[]) {
   try {
+    if (typeof localStorage === 'undefined') return;
     localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
   } catch {}
 }
@@ -93,7 +102,7 @@ class UserService {
    */
   async getUsers(): Promise<UserServiceResponse> {
     try {
-      const response = await fetch('/api/users', {
+      const response = await fetch(`${getApiBaseUrl()}/api/users`, {
         method: 'GET',
         cache: 'no-store',
         headers: {
@@ -173,7 +182,7 @@ class UserService {
     saveLocalCachedUsers(updatedCache);
 
     try {
-      const response = await fetch('/api/users', {
+      const response = await fetch(`${getApiBaseUrl()}/api/users`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -230,7 +239,7 @@ class UserService {
 
     try {
       // 1. Primary method: PUT /api/users/:id
-      let response = await fetch(`/api/users/${encodeURIComponent(userId)}`, {
+      let response = await fetch(`${getApiBaseUrl()}/api/users/${encodeURIComponent(userId)}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -241,7 +250,7 @@ class UserService {
 
       // 2. Fallback methods
       if (response.status === 404 || response.status === 405) {
-        response = await fetch('/api/users', {
+        response = await fetch(`${getApiBaseUrl()}/api/users`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -252,7 +261,7 @@ class UserService {
       }
 
       if (response.status === 404 || response.status === 405) {
-        response = await fetch('/api/users/update', {
+        response = await fetch(`${getApiBaseUrl()}/api/users/update`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -301,13 +310,13 @@ class UserService {
     saveLocalCachedUsers(filtered);
 
     try {
-      let response = await fetch(`/api/users/${encodeURIComponent(userId)}`, {
+      let response = await fetch(`${getApiBaseUrl()}/api/users/${encodeURIComponent(userId)}`, {
         method: 'DELETE',
         headers: { Accept: 'application/json' },
       });
 
       if (response.status === 404 || response.status === 405) {
-        response = await fetch('/api/users', {
+        response = await fetch(`${getApiBaseUrl()}/api/users`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -318,7 +327,7 @@ class UserService {
       }
 
       if (response.status === 404 || response.status === 405) {
-        response = await fetch('/api/users/delete', {
+        response = await fetch(`${getApiBaseUrl()}/api/users/delete`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -411,14 +420,16 @@ class UserService {
 
     // Also persist completion flag directly in localStorage
     try {
-      localStorage.setItem(`lidacta_profile_completed_${updatedUser.id}`, 'true');
-      if (cleanEmail) {
-        localStorage.setItem(`lidacta_profile_completed_${cleanEmail}`, 'true');
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(`lidacta_profile_completed_${updatedUser.id}`, 'true');
+        if (cleanEmail) {
+          localStorage.setItem(`lidacta_profile_completed_${cleanEmail}`, 'true');
+        }
       }
     } catch {}
 
     try {
-      const response = await fetch('/api/user/complete-profile', {
+      const response = await fetch(`${getApiBaseUrl()}/api/user/complete-profile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -464,7 +475,7 @@ class UserService {
   async checkDbHealth(): Promise<DbHealthStatus> {
     const startTime = performance.now();
     try {
-      const response = await fetch('/api/health', {
+      const response = await fetch(`${getApiBaseUrl()}/api/health`, {
         method: 'GET',
         cache: 'no-store',
         headers: { Accept: 'application/json' },
@@ -484,7 +495,7 @@ class UserService {
       }
 
       // Fallback ping to /api/users
-      const usersRes = await fetch('/api/users', { cache: 'no-store' });
+      const usersRes = await fetch(`${getApiBaseUrl()}/api/users`, { cache: 'no-store' });
       const latencyMs2 = Math.round(performance.now() - startTime);
 
       if (usersRes.ok) {

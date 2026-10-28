@@ -44,8 +44,16 @@ export const EmailSimulatorDrawer: React.FC = () => {
             <div className="space-y-4">
               <div className="p-3.5 sm:p-4 bg-[#FFF7EF]/60 rounded-xl border border-[#493447]/10 space-y-2 text-xs">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#493447]/10 pb-2 gap-1">
+                  <span className="font-bold text-[#2D1B4E]">De (Remitente):</span>
+                  <span className="font-mono text-[#2D1B4E] break-all">{currentEmail.emailSimulated.from || 'Lidacta <notificaciones@taniapadierna.com>'}</span>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#493447]/10 pb-2 gap-1">
                   <span className="font-bold text-[#2D1B4E]">Para:</span>
                   <span className="font-mono text-[#BF3A1B] break-all">{currentEmail.emailSimulated.to}</span>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#493447]/10 pb-2 gap-1">
+                  <span className="font-bold text-[#2D1B4E]">Responder a (Reply-To):</span>
+                  <span className="font-mono text-[#246B2A] font-semibold break-all">{currentEmail.emailSimulated.replyTo || 'hola@taniapadierna.com'}</span>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#493447]/10 pb-2 gap-1">
                   <span className="font-bold text-[#2D1B4E]">Asunto:</span>

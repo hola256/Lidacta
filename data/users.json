@@ -1,5 +1,41 @@
 [
   {
+    "id": "user_1793210783992",
+    "name": "Mateo Silva",
+    "email": "mateo.silva@externa-test.com",
+    "role": "leader",
+    "companyId": "comp_nexus",
+    "companyName": "Distribuidora Silva",
+    "position": "Coordinador Regional",
+    "area": "Logística",
+    "birthDate": "1990-01-01",
+    "directReports": 6,
+    "whatsapp": "+525599887766",
+    "status": "active",
+    "password": "",
+    "isProfileCompleted": false,
+    "isProfileComplete": false,
+    "createdAt": "2026-10-28T18:06:23.992Z"
+  },
+  {
+    "id": "user_1793210770397",
+    "name": "Valentina Ríos",
+    "email": "valentina.rios@empresaexterna.com",
+    "role": "leader",
+    "companyId": "comp_nexus",
+    "companyName": "Grupo Industrial Norte",
+    "position": "Líder de Operaciones",
+    "area": "Producción",
+    "birthDate": "1990-01-01",
+    "directReports": 8,
+    "whatsapp": "+525512345678",
+    "status": "active",
+    "password": "",
+    "isProfileCompleted": false,
+    "isProfileComplete": false,
+    "createdAt": "2026-10-28T18:06:10.398Z"
+  },
+  {
     "id": "user_1793207684558",
     "name": "Valeria Rivas",
     "email": "valeria.rivas@nexus-auto.com",
@@ -24,14 +60,14 @@
     "role": "admin",
     "companyId": "comp_nexus",
     "companyName": "Lidacta Platform",
-    "position": "Directora y Creadora de Plataforma",
+    "position": "Directora & Creadora Lidacta",
     "area": "Dirección de Producto y Mentoría",
     "whatsapp": "+52 55 1234 5678",
     "status": "active",
     "isProfileCompleted": true,
     "isProfileComplete": true,
     "createdAt": "2026-01-01",
-    "updatedAt": "2026-10-26T16:28:34.766Z"
+    "updatedAt": "2026-10-28T18:06:05.649Z"
   },
   {
     "id": "user_leader_roberto",

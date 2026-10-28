@@ -140,18 +140,23 @@ export default async function handler(req: any, res: any) {
 </html>
     `;
 
-    const emailTextBody = `🚨 Solicitud de Asesoría 1:1 en Lidacta\n\nLíder: ${effectiveLeaderName}\nFecha: ${effectiveDate}\nEmpresa: ${effectiveCompany}\nEtapa: ${effectiveStage}\nCaso: ${effectiveCase}\n\nMensaje/Transcripción:\n"${effectiveMessage}"\n\nDestinatario: ${targetEmail}`;
+    const emailTextBody = `🚨 Solicitud de Asesoría 1:1 en Lidacta\n\nLíder: ${effectiveLeaderName}\nFecha: ${effectiveDate}\nEmpresa: ${effectiveCompany}\nEtapa: ${effectiveStage}\nCaso: ${effectiveCase}\n\nMensaje/Transcripción:\n"${effectiveMessage}"\n\nDestinatario: ${targetEmail}\nResponder a: ${process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com'}`;
 
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
+    const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com';
+
+    console.log(`[API /api/send (Vercel)] 🚀 Despachando con Resend: De: ${fromEmail}, Para: ${targetEmail}, Reply-To: ${replyToEmail}`);
     const resendResult = await resend.emails.send({
-      from: 'Lidacta <onboarding@resend.dev>',
+      from: fromEmail,
       to: [targetEmail],
+      replyTo: replyToEmail,
       subject: emailSubject,
       html: emailHtmlBody,
       text: emailTextBody,
     });
 
     if (resendResult.error) {
-      console.error('[API /api/send (Vercel)] ❌ Error de Resend API:', resendResult.error);
+      console.error('[API /api/send (Vercel)] ❌ Error de Resend API:', JSON.stringify(resendResult.error, null, 2));
       return res.status(400).json({
         success: false,
         error: resendResult.error.message || 'Error al enviar a través de Resend API',
@@ -161,6 +166,7 @@ export default async function handler(req: any, res: any) {
 
     const emailId = resendResult.data?.id;
     console.log('[API /api/send (Vercel)] ✅ Correo enviado exitosamente con Resend. ID:', emailId);
+    console.log('[API /api/send (Vercel)] 📩 Respuesta Resend API:', JSON.stringify(resendResult.data));
 
     return res.status(200).json({
       success: true,

@@ -573,7 +573,9 @@ interface ServerNotificationItem {
   timestamp: string;
   read: boolean;
   emailSimulated?: {
+    from?: string;
     to: string;
+    replyTo?: string;
     subject: string;
     bodyText: string;
     realEmailSent?: boolean;
@@ -997,6 +999,7 @@ async function sendTransactionalEmail(options: {
   subject: string;
   html: string;
   text: string;
+  replyTo?: string;
   recipientRole?: string;
   recipientUserId?: string;
   companyId?: string;
@@ -1006,7 +1009,8 @@ async function sendTransactionalEmail(options: {
 }): Promise<{ realSent: boolean; emailId?: string; error?: string; deliveryNote?: string }> {
   const currentKey = process.env.RESEND_API_KEY;
   const adminOwner = process.env.ADMIN_EMAIL || 'hola@taniapadierna.com';
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <onboarding@resend.dev>';
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
+  const replyToEmail = options.replyTo || process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com';
   const cleanTo = options.to.trim().toLowerCase();
 
   let realSent = false;
@@ -1016,8 +1020,9 @@ async function sendTransactionalEmail(options: {
 
   console.log(`[LIDACTA MAILING 📧] ==========================================`);
   console.log(`[LIDACTA MAILING 📧] Timestamp: ${new Date().toISOString()}`);
-  console.log(`[LIDACTA MAILING 📧] Destinatario objetivo: ${cleanTo}`);
-  console.log(`[LIDACTA MAILING 📧] Remitente configurado: ${fromEmail}`);
+  console.log(`[LIDACTA MAILING 📧] Remitente Oficial (From): ${fromEmail}`);
+  console.log(`[LIDACTA MAILING 📧] Destinatario (To): ${cleanTo}`);
+  console.log(`[LIDACTA MAILING 📧] Responder a (Reply-To): ${replyToEmail}`);
   console.log(`[LIDACTA MAILING 📧] Asunto: ${options.subject}`);
   console.log(`[LIDACTA MAILING 📧] Proveedor: Resend (API Key activa: ${currentKey ? 'SÍ [longitud ' + currentKey.length + ']' : 'NO'})`);
 
@@ -1025,14 +1030,17 @@ async function sendTransactionalEmail(options: {
     const client = new Resend(currentKey);
     try {
       // 1. Intentar envío directo a la dirección objetivo
-      console.log(`[LIDACTA MAILING 📧] 🚀 Despachando llamada a Resend API para ${cleanTo}...`);
+      console.log(`[LIDACTA MAILING 📧] 🚀 Despachando llamada a Resend API para ${cleanTo} desde ${fromEmail} (Reply-To: ${replyToEmail})...`);
       const res = await client.emails.send({
         from: fromEmail,
         to: [cleanTo],
+        replyTo: replyToEmail,
         subject: options.subject,
         html: options.html,
         text: options.text,
       });
+
+      console.log(`[LIDACTA MAILING 📧] 📥 Respuesta de Resend API:`, JSON.stringify(res, null, 2));
 
       if (res.data?.id) {
         realSent = true;
@@ -1041,7 +1049,7 @@ async function sendTransactionalEmail(options: {
         console.log(`[LIDACTA MAILING 📧] ✅ ¡ÉXITO! Correo entregado directamente a ${cleanTo}. ID de Resend: ${emailId}`);
       } else if (res.error) {
         errorMsg = res.error.message;
-        console.warn(`[LIDACTA MAILING 📧] ⚠️ Resend reportó aviso/error:`, res.error);
+        console.error(`[LIDACTA MAILING ERROR ❌] Resend reportó aviso/error:`, JSON.stringify(res.error, null, 2));
 
         // Detectar si la causa es la restricción del Sandbox de Resend (dominio de prueba onboarding@resend.dev)
         const isSandboxRestricted =
@@ -1050,26 +1058,27 @@ async function sendTransactionalEmail(options: {
           (res.error.message && res.error.message.includes('verify a domain'));
 
         if (isSandboxRestricted) {
-          console.warn(`[LIDACTA MAILING 📧] ⚠️ [MODO SANDBOX ACTIVO] El remitente 'onboarding@resend.dev' de Resend restringe el envío al correo del propietario (${adminOwner}).`);
-          console.log(`[LIDACTA MAILING 📧] 🔄 Reenviando copia de verificación a la bandeja de ${adminOwner}...`);
+          console.warn(`[LIDACTA MAILING 📧] ⚠️ [MODO SANDBOX DETECTADO] Reenviando copia de verificación a la bandeja de ${adminOwner}...`);
 
           const sandboxBanner = `
             <div style="background-color: #FFF3CD; border: 2px solid #FFEEBA; color: #856404; padding: 14px 18px; border-radius: 10px; margin: 0 0 24px 0; font-family: sans-serif; font-size: 13px; line-height: 1.5;">
-              <strong style="color: #664D03; font-size: 14px;">ℹ️ Notificación de Modo de Pruebas (Sandbox de Resend):</strong><br>
+              <strong style="color: #664D03; font-size: 14px;">ℹ️ Notificación de Modo de Pruebas:</strong><br>
               Este correo fue generado originalmente para el usuario: <strong>${cleanTo}</strong>.<br>
-              Debido a que el remitente actual es <code>onboarding@resend.dev</code>, Resend entrega los correos de prueba exclusivamente al propietario de la cuenta registrada (<strong>${adminOwner}</strong>).<br><br>
-              <strong>💡 Para enviar directamente a cualquier correo externo:</strong><br>
-              Agrega y verifica un dominio propio en <a href="https://resend.com/domains" target="_blank" style="color: #BF3A1B; font-weight: bold;">resend.com/domains</a> y configura la variable de entorno <code>RESEND_FROM_EMAIL="Lidacta &lt;notificaciones@tudominio.com&gt;"</code>.
+              Copia entregada a: <strong>${adminOwner}</strong>.<br>
+              Responder a: <strong>${replyToEmail}</strong>
             </div>
           `;
 
           const fallbackRes = await client.emails.send({
             from: fromEmail,
             to: [adminOwner],
+            replyTo: replyToEmail,
             subject: `[Copia para: ${cleanTo}] ${options.subject}`,
             html: `${sandboxBanner}${options.html}`,
-            text: `[Copia de prueba para: ${cleanTo}]\n\nAVISO SANDBOX RESEND: Entregado a ${adminOwner} porque el dominio remitente es onboarding@resend.dev.\nPara entregar a cualquier correo, configura RESEND_FROM_EMAIL con tu dominio verificado.\n\n${options.text}`,
+            text: `[Copia de prueba para: ${cleanTo}]\n\nResponder a: ${replyToEmail}\n\n${options.text}`,
           });
+
+          console.log(`[LIDACTA MAILING 📧] 📥 Respuesta de Fallback Resend API:`, JSON.stringify(fallbackRes, null, 2));
 
           if (fallbackRes.data?.id) {
             realSent = true;
@@ -1077,7 +1086,7 @@ async function sendTransactionalEmail(options: {
             deliveryNote = `Entregado en bandeja de ${adminOwner} (copia de prueba para ${cleanTo})`;
             console.log(`[LIDACTA MAILING 📧] ✅ Copia de verificación entregada exitosamente a ${adminOwner}. ID de Resend: ${emailId}`);
           } else {
-            console.error(`[LIDACTA MAILING ERROR ❌] Fallo al entregar copia de prueba a ${adminOwner}:`, fallbackRes.error);
+            console.error(`[LIDACTA MAILING ERROR ❌] Fallo al entregar copia de prueba a ${adminOwner}:`, JSON.stringify(fallbackRes.error, null, 2));
           }
         }
       }
@@ -1093,10 +1102,12 @@ async function sendTransactionalEmail(options: {
           const fallbackRes = await client.emails.send({
             from: fromEmail,
             to: [adminOwner],
+            replyTo: replyToEmail,
             subject: `[Copia para: ${cleanTo}] ${options.subject}`,
             html: options.html,
             text: options.text,
           });
+          console.log(`[LIDACTA MAILING 📧] 📥 Respuesta de Reintento Resend API:`, JSON.stringify(fallbackRes, null, 2));
           if (fallbackRes.data?.id) {
             realSent = true;
             emailId = fallbackRes.data.id;
@@ -1126,7 +1137,9 @@ async function sendTransactionalEmail(options: {
     timestamp: new Date().toISOString(),
     read: false,
     emailSimulated: {
+      from: fromEmail,
       to: options.to,
+      replyTo: replyToEmail,
       subject: options.subject,
       bodyText: options.text,
       realEmailSent: realSent,
@@ -1143,7 +1156,7 @@ async function sendTransactionalEmail(options: {
 
 async function sendWelcomeEmail(user: ServerUserProfile): Promise<{ realSent: boolean; emailId?: string; deliveryNote?: string }> {
   const subject = `¡Te damos la bienvenida a Lidacta, ${user.name}!`;
-  const text = `¡Hola ${user.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nTu cuenta ha sido creada exitosamente asociada a ${user.companyName}.\nEn Lidacta cuentas con un espacio 100% seguro y confidencial donde podrás analizar situaciones reales de tu día a día, practicar tus conversaciones y tomar acciones que fortalezcan tu autonomía como líder.\n\nRecursos Humanos únicamente recibirá indicadores agregados de uso, sin acceso a tus conversaciones privadas.\n\nPuedes acceder en: https://ais-dev-5pctfozdv244x3okeqjryq-710027895954.us-east1.run.app\n\n¡Estamos listos para acompañarte en tu próximo reto!\n\nAtentamente,\nEl Equipo de Lidacta`;
+  const text = `¡Hola ${user.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nTu cuenta ha sido creada exitosamente asociada a ${user.companyName}.\nEn Lidacta cuentas con un espacio 100% seguro y confidencial donde podrás analizar situaciones reales de tu día a día, practicar tus conversaciones y tomar acciones que fortalezcan tu autonomía como líder.\n\nRecursos Humanos únicamente recibirá indicadores agregados de uso, sin acceso a tus conversaciones privadas.\n\nPuedes acceder en: https://ais-dev-5pctfozdv244x3okeqjryq-710027895954.us-east1.run.app\n\nSi tienes alguna pregunta, puedes responder directamente a este correo o escribir a hola@taniapadierna.com.\n\n¡Estamos listos para acompañarte en tu próximo reto!\n\nAtentamente,\nEl Equipo de Lidacta`;
   const html = generateWelcomeEmailHtml(user);
 
   return sendTransactionalEmail({
@@ -1151,6 +1164,7 @@ async function sendWelcomeEmail(user: ServerUserProfile): Promise<{ realSent: bo
     subject,
     html,
     text,
+    replyTo: process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com',
     recipientRole: user.role,
     recipientUserId: user.id,
     companyId: user.companyId,
@@ -1163,7 +1177,7 @@ async function sendWelcomeEmail(user: ServerUserProfile): Promise<{ realSent: bo
 async function sendProfileInviteEmail(user: ServerUserProfile, inviteUrl?: string): Promise<{ realSent: boolean; emailId?: string; deliveryNote?: string }> {
   const subject = `🎯 Invitación para completar tu perfil de liderazgo en Lidacta`;
   const directUrl = inviteUrl || 'https://ais-dev-5pctfozdv244x3okeqjryq-710027895954.us-east1.run.app';
-  const text = `¡Hola ${user.name}!\n\nLa administración de ${user.companyName} te ha invitado a formar parte del programa directivo en Lidacta.\n\nPara habilitar tu acceso seguro y comenzar tu proceso de acompañamiento directivo personalizado, por favor ingresa al siguiente enlace y completa los datos de tu entorno operativo (Área, Puesto, WhatsApp y Personas a Cargo):\n\n${directUrl}\n\nDatos de acceso:\nUsuario: ${user.email}\nEmpresa: ${user.companyName}\n\nEl contenido de tus conversaciones es privado y confidencial.\n\nAtentamente,\nEl Equipo de Lidacta`;
+  const text = `¡Hola ${user.name}!\n\nLa administración de ${user.companyName} te ha invitado a formar parte del programa directivo en Lidacta.\n\nPara habilitar tu acceso seguro y comenzar tu proceso de acompañamiento directivo personalizado, por favor ingresa al siguiente enlace y completa los datos de tu entorno operativo (Área, Puesto, WhatsApp y Personas a Cargo):\n\n${directUrl}\n\nDatos de acceso:\nUsuario: ${user.email}\nEmpresa: ${user.companyName}\n\nEl contenido de tus conversaciones es privado y confidencial.\nPuedes responder directamente a este correo o escribir a hola@taniapadierna.com para resolver cualquier inquietud.\n\nAtentamente,\nEl Equipo de Lidacta`;
   const html = generateProfileInviteEmailHtml(user, directUrl);
 
   return sendTransactionalEmail({
@@ -1171,6 +1185,7 @@ async function sendProfileInviteEmail(user: ServerUserProfile, inviteUrl?: strin
     subject,
     html,
     text,
+    replyTo: process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com',
     recipientRole: user.role,
     recipientUserId: user.id,
     companyId: user.companyId,
@@ -1761,7 +1776,7 @@ app.post('/api/send', async (req: Request, res: Response) => {
           </p>
         </div>
         <p style="font-size: 12px; color: #4A3F55; text-align: center; margin: 0;">
-          Correo enviado automáticamente desde <strong>Lidacta &lt;onboarding@resend.dev&gt;</strong> para <strong>${targetEmail}</strong>.
+          Correo enviado automáticamente desde <strong>${process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>'}</strong> para <strong>${targetEmail}</strong>. Respuestas dirigidas a <strong>${process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com'}</strong>.
         </p>
       </td>
     </tr>
@@ -1770,18 +1785,23 @@ app.post('/api/send', async (req: Request, res: Response) => {
 </html>
     `;
 
-    const emailTextBody = `🚨 Solicitud de Asesoría 1:1 en Lidacta\n\nLíder: ${effectiveLeaderName}\nFecha: ${effectiveDate}\nEmpresa: ${effectiveCompany}\nEtapa: ${effectiveStage}\nCaso: ${effectiveCaseTitle}\n\nMensaje/Transcripción:\n"${effectiveMessage}"\n\nDestinatario: ${targetEmail}`;
+    const emailTextBody = `🚨 Solicitud de Asesoría 1:1 en Lidacta\n\nLíder: ${effectiveLeaderName}\nFecha: ${effectiveDate}\nEmpresa: ${effectiveCompany}\nEtapa: ${effectiveStage}\nCaso: ${effectiveCaseTitle}\n\nMensaje/Transcripción:\n"${effectiveMessage}"\n\nDestinatario: ${targetEmail}\nResponder a: ${process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com'}`;
 
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
+    const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com';
+
+    console.log(`[API /api/send] 🚀 Despachando con Resend: De: ${fromEmail}, Para: ${targetEmail}, Reply-To: ${replyToEmail}`);
     const resendResponse = await resendClient.emails.send({
-      from: 'Lidacta <onboarding@resend.dev>',
+      from: fromEmail,
       to: [targetEmail],
+      replyTo: replyToEmail,
       subject: emailSubject,
       html: emailHtmlBody,
       text: emailTextBody,
     });
 
     if (resendResponse.error) {
-      console.error('[API /api/send] ❌ Error devuelto por Resend API:', resendResponse.error);
+      console.error('[API /api/send] ❌ Error devuelto por Resend API:', JSON.stringify(resendResponse.error, null, 2));
       return res.status(400).json({
         success: false,
         error: resendResponse.error.message || 'Error en Resend API',
@@ -1790,6 +1810,7 @@ app.post('/api/send', async (req: Request, res: Response) => {
     }
 
     console.log('[API /api/send] ✅ Correo enviado exitosamente con Resend. ID:', resendResponse.data?.id);
+    console.log('[API /api/send] 📩 Respuesta Resend API:', JSON.stringify(resendResponse.data));
 
     // Also register in centralized serverNotifications for instant multi-device admin dashboard sync
     const requestId = `req_send_${Date.now()}`;
@@ -1804,7 +1825,9 @@ app.post('/api/send', async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
       read: false,
       emailSimulated: {
+        from: fromEmail,
         to: targetEmail,
+        replyTo: replyToEmail,
         subject: emailSubject,
         bodyText: emailTextBody,
         realEmailSent: true,
@@ -2007,7 +2030,7 @@ app.post('/api/mentor/request', async (req: Request, res: Response) => {
         </table>
         <hr style="border: none; border-top: 1px solid rgba(73, 52, 71, 0.1); margin: 24px 0;" />
         <p style="font-size: 11px; color: #4A3F55; text-align: center; margin: 0;">
-          Correo generado automáticamente por Lidacta para la administradora principal <strong>${targetAdminName}</strong> (${targetAdminEmail}).
+          Correo generado automáticamente por Lidacta para la administradora principal <strong>${targetAdminName}</strong> (${targetAdminEmail}). Respuestas dirigidas a <strong>${process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com'}</strong>.
         </p>
       </td>
     </tr>
@@ -2016,28 +2039,35 @@ app.post('/api/mentor/request', async (req: Request, res: Response) => {
 </html>`;
 
     const currentResendKey = process.env.RESEND_API_KEY;
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
+    const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com';
+
     if (currentResendKey) {
       try {
         const dynamicResend = new Resend(currentResendKey);
+        console.log(`[LIDACTA RESEND] 🚀 Despachando asesoría: De: ${fromEmail}, Para: ${targetAdminEmail}, Reply-To: ${replyToEmail}`);
         const resendRes = await dynamicResend.emails.send({
-          from: 'Lidacta <onboarding@resend.dev>',
+          from: fromEmail,
           to: [targetAdminEmail],
+          replyTo: replyToEmail,
           subject: emailSubject,
           html: emailHtmlBody,
           text: emailTextBody,
         });
 
+        console.log('[LIDACTA RESEND] 📥 Respuesta Resend API:', JSON.stringify(resendRes, null, 2));
+
         if (resendRes.data?.id) {
           realEmailSent = true;
           realEmailId = resendRes.data.id;
-          console.log(`[LIDACTA RESEND] Real email dispatched to ${targetAdminEmail}. Resend ID: ${realEmailId}`);
+          console.log(`[LIDACTA RESEND] ✅ Real email dispatched to ${targetAdminEmail}. Resend ID: ${realEmailId}`);
         } else if (resendRes.error) {
           realEmailError = resendRes.error.message;
-          console.warn('[LIDACTA RESEND] Resend API reported error:', resendRes.error);
+          console.error('[LIDACTA RESEND] ❌ Resend API reported error:', JSON.stringify(resendRes.error, null, 2));
         }
       } catch (err: any) {
         realEmailError = err?.message || 'Error sending via Resend';
-        console.warn('[LIDACTA RESEND] Exception sending email:', err);
+        console.error('[LIDACTA RESEND] ❌ Exception sending email:', err);
       }
     } else {
       console.log(`[LIDACTA EMAIL] RESEND_API_KEY not configured in env. Alert recorded in centralized database for ${targetAdminEmail}`);
@@ -2055,7 +2085,9 @@ app.post('/api/mentor/request', async (req: Request, res: Response) => {
       timestamp,
       read: false,
       emailSimulated: {
+        from: fromEmail,
         to: targetAdminEmail,
+        replyTo: replyToEmail,
         subject: emailSubject,
         bodyText: emailTextBody,
         realEmailSent,
