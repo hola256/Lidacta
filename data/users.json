@@ -1,5 +1,24 @@
 [
   {
+    "id": "user_1793282277256",
+    "name": "Rodrigo Morales",
+    "email": "proyectos.coaching+test2026@gmail.com",
+    "role": "leader",
+    "companyId": "comp_nexus",
+    "companyName": "Industrias Nexus Automotriz",
+    "position": "Gerente de Planta",
+    "area": "Operaciones",
+    "birthDate": "1990-01-01",
+    "directReports": 0,
+    "whatsapp": "+525598765432",
+    "status": "active",
+    "password": "Password123!",
+    "isProfileCompleted": true,
+    "isProfileComplete": true,
+    "createdAt": "2026-10-29T13:57:57.256Z",
+    "updatedAt": "2026-10-29T13:58:07.789Z"
+  },
+  {
     "id": "user_1793276193261",
     "name": "Equipo Coaching Lidacta",
     "email": "proyectos.coaching@gmail.com",

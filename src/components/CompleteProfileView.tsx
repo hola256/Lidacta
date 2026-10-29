@@ -20,22 +20,36 @@ import {
 export const CompleteProfileView: React.FC = () => {
   const { currentUser, completeUserProfile, forceCompleteProfile, logout, companies } = useLidacta();
 
+  const safeUser = currentUser || {
+    id: '',
+    name: '',
+    email: '',
+    role: 'leader' as const,
+    companyId: '',
+    companyName: '',
+    position: '',
+    area: '',
+    birthDate: '1990-01-01',
+    directReports: 0,
+    whatsapp: '',
+  };
+
   // Role identification
-  const isLeader = currentUser.role === 'leader';
-  const isHR = currentUser.role === 'hr';
+  const isLeader = safeUser.role === 'leader';
+  const isHR = safeUser.role === 'hr';
 
   // Form states initialized with existing values if available, never undefined
-  const [name, setName] = useState<string>(currentUser.name || '');
-  const [companyName, setCompanyName] = useState<string>(currentUser.companyName || '');
-  const [area, setArea] = useState<string>(currentUser.area || '');
-  const [position, setPosition] = useState<string>(currentUser.position || '');
+  const [name, setName] = useState<string>(safeUser.name || '');
+  const [companyName, setCompanyName] = useState<string>(safeUser.companyName || '');
+  const [area, setArea] = useState<string>(safeUser.area || '');
+  const [position, setPosition] = useState<string>(safeUser.position || '');
   const [directReports, setDirectReports] = useState<string>(
-    currentUser.directReports !== undefined && currentUser.directReports !== null
-      ? String(currentUser.directReports)
+    safeUser.directReports !== undefined && safeUser.directReports !== null
+      ? String(safeUser.directReports)
       : isLeader ? '6' : '0'
   );
-  const [whatsapp, setWhatsapp] = useState<string>(currentUser.whatsapp || '');
-  const [birthDate, setBirthDate] = useState<string>(currentUser.birthDate || '1990-01-01');
+  const [whatsapp, setWhatsapp] = useState<string>(safeUser.whatsapp || '');
+  const [birthDate, setBirthDate] = useState<string>(safeUser.birthDate || '1990-01-01');
 
   // Validation states
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -44,10 +58,10 @@ export const CompleteProfileView: React.FC = () => {
   const [isSuccess, setIsSuccess] = useState(false);
 
   React.useEffect(() => {
-    if (isSuccess) {
-      forceCompleteProfile(currentUser.id);
+    if (isSuccess && safeUser.id) {
+      forceCompleteProfile(safeUser.id);
     }
-  }, [isSuccess, currentUser.id, forceCompleteProfile]);
+  }, [isSuccess, safeUser.id, forceCompleteProfile]);
 
   // Field validation helpers
   const isNameValid = name.trim().length >= 2;
@@ -117,17 +131,21 @@ export const CompleteProfileView: React.FC = () => {
     try {
       // Immediately set persistent completed flags in localStorage and context
       try {
-        localStorage.setItem(`lidacta_profile_completed_${currentUser.id}`, 'true');
-        if (currentUser.email) {
-          localStorage.setItem(`lidacta_profile_completed_${currentUser.email.toLowerCase()}`, 'true');
+        if (safeUser.id) {
+          localStorage.setItem(`lidacta_profile_completed_${safeUser.id}`, 'true');
+        }
+        if (safeUser.email) {
+          localStorage.setItem(`lidacta_profile_completed_${safeUser.email.toLowerCase()}`, 'true');
         }
       } catch {}
-      forceCompleteProfile(currentUser.id);
+      if (safeUser.id) {
+        forceCompleteProfile(safeUser.id);
+      }
 
       // Explicitly register carlosProfileCompleted = true in localStorage if Carlos
       if (
-        currentUser.id === 'user_leader_carlos' ||
-        currentUser.email.toLowerCase().includes('carlos.mendoza')
+        safeUser.id === 'user_leader_carlos' ||
+        (safeUser.email && safeUser.email.toLowerCase().includes('carlos.mendoza'))
       ) {
         try {
           localStorage.setItem('carlosProfileCompleted', 'true');
@@ -171,8 +189,8 @@ export const CompleteProfileView: React.FC = () => {
       });
 
       if (
-        currentUser.id === 'user_leader_carlos' ||
-        currentUser.email.toLowerCase().includes('carlos.mendoza')
+        safeUser.id === 'user_leader_carlos' ||
+        (safeUser.email && safeUser.email.toLowerCase().includes('carlos.mendoza'))
       ) {
         try {
           localStorage.setItem('carlosProfileCompleted', 'true');
@@ -182,11 +200,15 @@ export const CompleteProfileView: React.FC = () => {
       }
 
       // Immediate 0ms transition to dashboard
-      forceCompleteProfile(currentUser.id);
+      if (safeUser.id) {
+        forceCompleteProfile(safeUser.id);
+      }
       setIsSuccess(true);
     } catch (err: any) {
       console.warn('Handling local synchronous continuity on profile submit:', err);
-      forceCompleteProfile(currentUser.id);
+      if (safeUser.id) {
+        forceCompleteProfile(safeUser.id);
+      }
       setIsSuccess(true);
     }
   };
@@ -236,7 +258,7 @@ export const CompleteProfileView: React.FC = () => {
               </span>
             </div>
             <span className="text-xs text-[#4A3F55]/70 font-medium">
-              Hola, <strong className="text-[#2D1B4E]">{currentUser.name || 'Líder'}</strong>
+              Hola, <strong className="text-[#2D1B4E]">{safeUser.name || 'Líder'}</strong>
             </span>
           </div>
 
@@ -481,7 +503,7 @@ export const CompleteProfileView: React.FC = () => {
               {isSuccess ? (
                 <button
                   type="button"
-                  onClick={() => forceCompleteProfile(currentUser.id)}
+                  onClick={() => safeUser.id && forceCompleteProfile(safeUser.id)}
                   className="w-full py-3.5 px-6 rounded-xl bg-[#2D1B4E] hover:bg-[#3D2666] text-[#FFFDF9] font-heading font-extrabold text-sm sm:text-base tracking-wide flex items-center justify-center gap-2.5 shadow-lg transition-all cursor-pointer"
                 >
                   <CheckCircle2 className="w-5 h-5 text-[#F7B538]" />

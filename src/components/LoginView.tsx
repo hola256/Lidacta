@@ -162,29 +162,23 @@ export const LoginView: React.FC = () => {
         return;
       }
 
-      // Explicitly await sendWelcomeEmail immediately after user creation
-      console.log(`[PortalDeAcceso] 🚀 Ejecutando llamada esperada (await) a emailService.sendWelcomeEmail para ${cleanEmail}...`);
-      const emailResult = await emailService.sendWelcomeEmail({
-        email: cleanEmail,
-        name: cleanName,
-        role,
-        companyName: targetCompanyName,
-      });
-
-      if (!emailResult.success) {
-        console.error('Resend delivery failed:', emailResult.error);
-        setEmailStatus({
-          type: 'error',
-          message: `⚠️ Tu usuario fue registrado exitosamente, pero la API de Resend no pudo entregar el correo de bienvenida a ${cleanEmail}: "${emailResult.error || 'Aviso de entrega'}". Revisa la configuración de Resend.`,
-        });
-        showToast(`Aviso: Error en Resend: ${emailResult.error || 'Fallo de entrega'}`, 'warning');
-      } else {
-        console.log(`[PortalDeAcceso] ✅ Correo de bienvenida entregado exitosamente vía Resend. ID: ${emailResult.emailId}`);
+      // Inspect Resend dispatch result returned by registerOrSetPassword
+      if (res.emailSent) {
+        console.log(`[PortalDeAcceso] ✅ Correo de bienvenida entregado exitosamente vía Resend. ID: ${res.emailId}`);
         setEmailStatus({
           type: 'success',
-          message: `✅ ¡Usuario registrado! Correo de bienvenida entregado con éxito a ${cleanEmail} (ID Resend: ${emailResult.emailId || 'OK'}).`,
+          message: `✅ ¡Usuario registrado! Correo de bienvenida entregado con éxito a ${cleanEmail} (ID Resend: ${res.emailId || 'OK'}).`,
         });
         showToast(`¡Bienvenida entregada a ${cleanEmail}!`, 'success');
+      } else if (res.emailError) {
+        console.error('Resend delivery note:', res.emailError);
+        setEmailStatus({
+          type: 'error',
+          message: `⚠️ Tu usuario fue registrado exitosamente. Aviso Resend: "${res.emailError}".`,
+        });
+        showToast(`Usuario registrado (Aviso Resend: ${res.emailError})`, 'warning');
+      } else {
+        showToast(`¡Usuario registrado exitosamente!`, 'success');
       }
     } catch (err: any) {
       console.error('Error durante el registro:', err);

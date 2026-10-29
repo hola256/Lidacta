@@ -95,19 +95,16 @@ export default async function handler(req: any, res: any) {
     console.log(`[API /api/register] Responder a (Reply-To): ${replyToEmail}`);
     console.log(`[API /api/register] RESEND_API_KEY activa: ${resendApiKey ? 'SÍ' : 'NO'}`);
 
-    if (!resendApiKey) {
-      console.error('[API /api/register] ❌ ERROR CRÍTICO: RESEND_API_KEY no está configurada en las variables de entorno de Vercel.');
-      return res.status(500).json({
-        success: false,
-        error: 'RESEND_API_KEY no está configurada en las variables de entorno de Vercel.',
-        message: 'Error de configuración: Falta definir la variable RESEND_API_KEY en Vercel para autorizar el despacho de correos.',
-      });
-    }
+    // Persist new user first so user account is created with 100% guarantee
+    users.unshift(newUser);
+    await persistUsers(users);
 
-    const resend = new Resend(resendApiKey);
-    const emailSubject = `¡Te damos la bienvenida a Lidacta, ${newUser.name}!`;
+    // Asynchronous non-blocking Resend dispatch
+    if (resendApiKey) {
+      const resend = new Resend(resendApiKey);
+      const emailSubject = `¡Te damos la bienvenida a Lidacta, ${newUser.name}!`;
 
-    const emailHtml = `<!DOCTYPE html>
+      const emailHtml = `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="utf-8"><title>${emailSubject}</title></head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8F6F4; margin: 0; padding: 24px; color: #2D1B4E;">
@@ -144,44 +141,37 @@ export default async function handler(req: any, res: any) {
 </body>
 </html>`;
 
-    const emailText = `¡Hola ${newUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\nTu cuenta ha sido creada exitosamente asociada a ${newUser.companyName}.\n\nAtentamente,\nEl Equipo de Lidacta\nResponder a: ${replyToEmail}`;
+      const emailText = `¡Hola ${newUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\nTu cuenta ha sido creada exitosamente asociada a ${newUser.companyName}.\n\nAtentamente,\nEl Equipo de Lidacta\nResponder a: ${replyToEmail}`;
 
-    console.log(`[API /api/register] 🚀 Invocando resend.emails.send() obligatorio para: ${cleanEmail}...`);
-    const resendResult = await resend.emails.send({
-      from: fromEmail,
-      to: [cleanEmail],
-      replyTo: replyToEmail,
-      subject: emailSubject,
-      html: emailHtml,
-      text: emailText,
-    });
-
-    console.log('[API /api/register] 📥 Respuesta directa de Resend API:', JSON.stringify(resendResult, null, 2));
-
-    // Si Resend falla, devolver HTTP 500 con el error exacto
-    if (resendResult.error) {
-      console.error('[API /api/register] ❌ Error retornado por Resend API:', resendResult.error);
-      return res.status(500).json({
-        success: false,
-        error: resendResult.error.message || 'Error al enviar correo con Resend',
-        details: resendResult.error,
-        message: `Fallo en Resend: ${resendResult.error.message || 'Error desconocido al entregar el correo a ' + cleanEmail}`,
+      console.log(`[API /api/register] 🚀 Disparando correo asíncrono con Resend para: ${cleanEmail}...`);
+      resend.emails.send({
+        from: fromEmail,
+        to: [cleanEmail],
+        replyTo: replyToEmail,
+        subject: emailSubject,
+        html: emailHtml,
+        text: emailText,
+      }).then((resendResult) => {
+        if (resendResult.error) {
+          console.error('[API /api/register] ⚠️ Resend delivery failed:', resendResult.error);
+        } else {
+          console.log(`[API /api/register] ✅ Correo entregado vía Resend con ID: ${resendResult.data?.id}`);
+        }
+      }).catch((emailErr) => {
+        console.error('[API /api/register] ⚠️ Error en envío asíncrono de Resend:', emailErr);
       });
+    } else {
+      console.warn('[API /api/register] ⚠️ RESEND_API_KEY no presente en entorno; correo registrado localmente.');
     }
 
-    // Persistir usuario solo si el correo fue aceptado por Resend
-    users.unshift(newUser);
-    await persistUsers(users);
-
-    console.log(`[API /api/register] ✅ Usuario creado y correo enviado con ID de Resend: ${resendResult.data?.id}`);
+    console.log(`[API /api/register] ✅ Usuario creado exitosamente: ${newUser.name} (${newUser.email})`);
     console.log(`[API /api/register] ==========================================`);
 
     return res.status(201).json({
       success: true,
       user: newUser,
       users,
-      emailId: resendResult.data?.id,
-      message: 'Usuario registrado exitosamente y correo de bienvenida despachado.',
+      message: 'Usuario registrado exitosamente en Lidacta.',
     });
   } catch (error: any) {
     console.error('[API /api/register] ❌ Excepción crítica en el servidor:', error);

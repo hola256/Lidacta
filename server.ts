@@ -1277,71 +1277,56 @@ app.post('/api/users', async (req: Request, res: Response) => {
     console.log(`[LIDACTA MAILING 📧] Responder a (Reply-To): ${replyToEmail}`);
     console.log(`[LIDACTA MAILING 📧] RESEND_API_KEY activa: ${resendApiKey ? 'SÍ' : 'NO'}`);
 
-    if (!resendApiKey) {
-      console.error('[LIDACTA MAILING 📧] ❌ ERROR CRÍTICO: RESEND_API_KEY no está definida en las variables de entorno.');
-      return res.status(500).json({
-        success: false,
-        error: 'RESEND_API_KEY no está configurada en las variables de entorno del servidor.',
-        message: 'Error de configuración: Falta definir RESEND_API_KEY en el servidor para autorizar el despacho de correos.',
-      });
-    }
+    // Persist user first to guarantee seamless registration
+    serverUsers.unshift(newUser);
+    writePersistentUsers(serverUsers);
+    console.log(`[SERVER DB] ✅ Nuevo usuario registrado: ${newUser.name} (${newUser.email}) - Rol: ${newUser.role}`);
 
-    try {
-      const resendClient = new Resend(resendApiKey);
-      const emailSubject = `¡Te damos la bienvenida a Lidacta, ${newUser.name}!`;
-      const emailHtml = generateWelcomeEmailHtml(newUser);
-      const emailText = `¡Hola ${newUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nTu cuenta ha sido creada exitosamente asociada a ${newUser.companyName}.\n\nAtentamente,\nEl Equipo de Lidacta\nResponder a: ${replyToEmail}`;
+    // Asynchronous non-blocking Resend dispatch
+    if (resendApiKey) {
+      try {
+        const resendClient = new Resend(resendApiKey);
+        const emailSubject = `¡Te damos la bienvenida a Lidacta, ${newUser.name}!`;
+        const emailHtml = generateWelcomeEmailHtml(newUser);
+        const emailText = `¡Hola ${newUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nTu cuenta ha sido creada exitosamente asociada a ${newUser.companyName}.\n\nAtentamente,\nEl Equipo de Lidacta\nResponder a: ${replyToEmail}`;
 
-      console.log(`[LIDACTA MAILING 📧] 🚀 Despachando llamada obligatoria a Resend para ${newUser.email}...`);
-      const emailRes = await resendClient.emails.send({
-        from: fromEmail,
-        to: [newUser.email],
-        replyTo: replyToEmail,
-        subject: emailSubject,
-        html: emailHtml,
-        text: emailText,
-      });
-
-      console.log('[LIDACTA MAILING 📧] 📥 Respuesta directa de Resend API:', JSON.stringify(emailRes, null, 2));
-
-      if (emailRes.error) {
-        console.error('[LIDACTA MAILING 📧] ❌ Resend respondió con error:', emailRes.error);
-        return res.status(500).json({
-          success: false,
-          error: emailRes.error.message || 'Error al enviar correo con Resend',
-          details: emailRes.error,
-          message: `Fallo en Resend: ${emailRes.error.message || 'Error desconocido al entregar el correo a ' + newUser.email}`,
+        console.log(`[LIDACTA MAILING 📧] 🚀 Disparando correo asíncrono con Resend para ${newUser.email}...`);
+        resendClient.emails.send({
+          from: fromEmail,
+          to: [newUser.email],
+          replyTo: replyToEmail,
+          subject: emailSubject,
+          html: emailHtml,
+          text: emailText,
+        }).then((emailRes) => {
+          if (emailRes.error) {
+            console.error('[LIDACTA MAILING 📧] ⚠️ Resend delivery failed in background:', emailRes.error);
+          } else {
+            console.log(`[LIDACTA MAILING 📧] ✅ Correo entregado vía Resend con ID: ${emailRes.data?.id}`);
+          }
+        }).catch((emailErr) => {
+          console.error('[LIDACTA MAILING 📧] ⚠️ Error en envío asíncrono de Resend:', emailErr);
         });
+      } catch (err) {
+        console.error('[LIDACTA MAILING 📧] ⚠️ Excepción preparando Resend:', err);
       }
-
-      // Persistir usuario únicamente tras el despacho exitoso en Resend
-      serverUsers.unshift(newUser);
-      writePersistentUsers(serverUsers);
-      console.log(`[SERVER DB] ✅ Nuevo usuario registrado y correo enviado: ${newUser.name} (${newUser.email}) - ID Resend: ${emailRes.data?.id}`);
-      console.log(`[LIDACTA MAILING 📧] ==========================================`);
-
-      return res.status(201).json({
-        success: true,
-        message: 'Usuario registrado exitosamente y correo de bienvenida entregado vía Resend',
-        user: newUser,
-        users: serverUsers,
-        emailId: emailRes.data?.id,
-      });
-    } catch (emailErr: any) {
-      console.error('[LIDACTA MAILING 📧] ❌ Excepción al invocar Resend:', emailErr);
-      return res.status(500).json({
-        success: false,
-        error: emailErr?.message || 'Error de conexión con Resend API',
-        message: `Fallo al despachar correo vía Resend: ${emailErr?.message || 'Error desconocido'}`,
-      });
+    } else {
+      console.warn('[LIDACTA MAILING 📧] ⚠️ RESEND_API_KEY no presente; correo registrado en bandeja simulada.');
     }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Usuario registrado exitosamente en Lidacta',
+      user: newUser,
+      users: serverUsers,
+    });
   } catch (error: any) {
     console.error('Error creating user:', error);
     return res.status(500).json({ success: false, message: error?.message || 'Error al crear usuario' });
   }
 });
 
-// POST /api/register - Dedicated Registration Route (Alias to /api/users with mandatory Resend)
+// POST /api/register - Dedicated Registration Route (Alias to /api/users with asynchronous Resend)
 app.post('/api/register', async (req: Request, res: Response) => {
   try {
     serverUsers = readPersistentUsers();
@@ -1386,68 +1371,50 @@ app.post('/api/register', async (req: Request, res: Response) => {
       createdAt: new Date().toISOString(),
     };
 
+    serverUsers.unshift(newUser);
+    writePersistentUsers(serverUsers);
+
     const resendApiKey = process.env.RESEND_API_KEY;
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
     const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com';
 
-    console.log(`[API /api/register] 🚀 Registro en curso para: ${newUser.name} (${newUser.email})`);
-    console.log(`[API /api/register] Remitente: ${fromEmail}, Reply-To: ${replyToEmail}`);
+    if (resendApiKey) {
+      try {
+        const resendClient = new Resend(resendApiKey);
+        const emailSubject = `¡Te damos la bienvenida a Lidacta, ${newUser.name}!`;
+        const emailHtml = generateWelcomeEmailHtml(newUser);
+        const emailText = `¡Hola ${newUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nAtentamente,\nEl Equipo de Lidacta\nResponder a: ${replyToEmail}`;
 
-    if (!resendApiKey) {
-      console.error('[API /api/register] ❌ ERROR CRÍTICO: RESEND_API_KEY no está definida.');
-      return res.status(500).json({
-        success: false,
-        error: 'RESEND_API_KEY no está configurada en las variables de entorno del servidor.',
-        message: 'Error de configuración: Falta definir RESEND_API_KEY en el servidor para autorizar el despacho de correos.',
-      });
-    }
-
-    try {
-      const resendClient = new Resend(resendApiKey);
-      const emailSubject = `¡Te damos la bienvenida a Lidacta, ${newUser.name}!`;
-      const emailHtml = generateWelcomeEmailHtml(newUser);
-      const emailText = `¡Hola ${newUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nAtentamente,\nEl Equipo de Lidacta\nResponder a: ${replyToEmail}`;
-
-      console.log(`[API /api/register] 🚀 Despachando llamada obligatoria a Resend para ${newUser.email}...`);
-      const emailRes = await resendClient.emails.send({
-        from: fromEmail,
-        to: [newUser.email],
-        replyTo: replyToEmail,
-        subject: emailSubject,
-        html: emailHtml,
-        text: emailText,
-      });
-
-      console.log('[API /api/register] 📥 Respuesta Resend API:', JSON.stringify(emailRes, null, 2));
-
-      if (emailRes.error) {
-        console.error('[API /api/register] ❌ Resend respondió con error:', emailRes.error);
-        return res.status(500).json({
-          success: false,
-          error: emailRes.error.message || 'Error al enviar correo con Resend',
-          details: emailRes.error,
-          message: `Fallo en Resend: ${emailRes.error.message || 'Error al entregar correo'}`,
+        console.log(`[API /api/register] 🚀 Disparando correo asíncrono con Resend para ${newUser.email}...`);
+        resendClient.emails.send({
+          from: fromEmail,
+          to: [newUser.email],
+          replyTo: replyToEmail,
+          subject: emailSubject,
+          html: emailHtml,
+          text: emailText,
+        }).then((emailRes) => {
+          if (emailRes.error) {
+            console.error('[API /api/register] ⚠️ Resend delivery failed in background:', emailRes.error);
+          } else {
+            console.log(`[API /api/register] ✅ Correo entregado vía Resend con ID: ${emailRes.data?.id}`);
+          }
+        }).catch((emailErr) => {
+          console.error('[API /api/register] ⚠️ Error en envío asíncrono de Resend:', emailErr);
         });
+      } catch (err) {
+        console.error('[API /api/register] ⚠️ Excepción preparando Resend:', err);
       }
-
-      serverUsers.unshift(newUser);
-      writePersistentUsers(serverUsers);
-
-      return res.status(201).json({
-        success: true,
-        message: 'Usuario registrado exitosamente y correo de bienvenida entregado vía Resend',
-        user: newUser,
-        users: serverUsers,
-        emailId: emailRes.data?.id,
-      });
-    } catch (emailErr: any) {
-      console.error('[API /api/register] ❌ Excepción Resend:', emailErr);
-      return res.status(500).json({
-        success: false,
-        error: emailErr?.message || 'Error de conexión con Resend API',
-        message: `Fallo al despachar correo vía Resend: ${emailErr?.message || 'Error'}`,
-      });
+    } else {
+      console.warn('[API /api/register] ⚠️ RESEND_API_KEY no presente; correo registrado en bandeja simulada.');
     }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Usuario registrado exitosamente en Lidacta',
+      user: newUser,
+      users: serverUsers,
+    });
   } catch (error: any) {
     console.error('[API /api/register] Error:', error);
     return res.status(500).json({ success: false, message: error?.message || 'Error interno' });
