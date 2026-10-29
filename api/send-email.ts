@@ -1,5 +1,4 @@
 import { Resend } from 'resend';
-import { loadUsers } from './users';
 
 export const config = {
   maxDuration: 15,
