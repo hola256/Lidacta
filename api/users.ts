@@ -1,3 +1,5 @@
+import { Resend } from 'resend';
+
 // Vercel Serverless Function for /api/users
 // Supports Vercel KV (Upstash Redis), Supabase, and central serverless persistence.
 
@@ -432,15 +434,108 @@ export default async function handler(req: any, res: any) {
         status: body.status || 'active',
       };
 
-      users.unshift(newUser);
-      await persistUsers(users);
+      // Resend Transactional Email Dispatch (Mandatory & Non-Bypassed)
+      const resendApiKey = process.env.RESEND_API_KEY;
+      const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
+      const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com';
 
-      return res.status(200).json({
-        success: true,
-        user: newUser,
-        users,
-        message: 'Usuario creado correctamente en la Base de Datos Central',
-      });
+      console.log(`[API /api/users] 📧 Verificando configuración de correo para ${cleanEmail}...`);
+      console.log(`[API /api/users] Remitente (From): ${fromEmail}`);
+      console.log(`[API /api/users] Responder a (Reply-To): ${replyToEmail}`);
+      console.log(`[API /api/users] RESEND_API_KEY presente: ${resendApiKey ? 'SÍ' : 'NO'}`);
+
+      if (!resendApiKey) {
+        console.error('[API /api/users] ❌ ERROR: RESEND_API_KEY no está configurada en las variables de entorno.');
+        return res.status(500).json({
+          success: false,
+          error: 'RESEND_API_KEY no está configurada en las variables de entorno de Vercel.',
+          message: 'Error de servidor: Falta configurar la variable RESEND_API_KEY en Vercel para autorizar el envío de correos.',
+        });
+      }
+
+      try {
+        const resend = new Resend(resendApiKey);
+        const emailSubject = `¡Te damos la bienvenida a Lidacta, ${newUser.name}!`;
+        const emailHtml = `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><title>${emailSubject}</title></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8F6F4; margin: 0; padding: 24px; color: #2D1B4E;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(45, 27, 78, 0.08); border: 1px solid #EADBCE;">
+    <tr>
+      <td style="background-color: #2D1B4E; padding: 32px 24px; text-align: center;">
+        <h1 style="color: #FFF7EF; font-size: 24px; margin: 0 0 8px 0; font-weight: 800;">LIDACTA</h1>
+        <p style="color: #F7B538; font-size: 13px; margin: 0; font-weight: 600; text-transform: uppercase;">Desarrollo de Liderazgo en Acción</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 32px 28px;">
+        <h2 style="font-size: 20px; color: #2D1B4E; margin: 0 0 16px 0;">¡Hola ${newUser.name}!</h2>
+        <p style="font-size: 14px; line-height: 1.6; color: #4A3F55; margin: 0 0 16px 0;">
+          Te damos una cálida bienvenida a <strong>Lidacta</strong>. Tu cuenta ha sido creada exitosamente asociada a <strong>${newUser.companyName}</strong>.
+        </p>
+        <p style="font-size: 14px; line-height: 1.6; color: #4A3F55; margin: 0 0 20px 0;">
+          Lidacta es tu espacio seguro, confidencial y práctico para abordar retos reales de liderazgo, entrenar conversaciones difíciles y consolidar planes de acción con autonomía.
+        </p>
+        <div style="background-color: #FFF7EF; border-left: 4px solid #F7B538; padding: 16px; border-radius: 8px; margin: 0 0 24px 0;">
+          <p style="font-size: 13px; font-weight: 700; color: #2D1B4E; margin: 0 0 6px 0;">🔒 Confidencialidad Absoluta Garantizada</p>
+          <p style="font-size: 12px; line-height: 1.5; color: #4A3F55; margin: 0;">
+            El contenido de tus conversaciones y casos es estrictamente privado.
+          </p>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="background-color: #FFF7EF; padding: 20px 24px; text-align: center; border-top: 1px solid #EADBCE;">
+        <p style="font-size: 11px; color: #4A3F55; margin: 0;">Lidacta © ${new Date().getFullYear()} · Desarrollo de Liderazgo Operativo</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+        const emailText = `¡Hola ${newUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\nTu cuenta ha sido creada exitosamente asociada a ${newUser.companyName}.\n\nAtentamente,\nEl Equipo de Lidacta\nResponder a: ${replyToEmail}`;
+
+        console.log(`[API /api/users] 🚀 Despachando llamada obligatoria a Resend para ${cleanEmail}...`);
+        const resendResult = await resend.emails.send({
+          from: fromEmail,
+          to: [cleanEmail],
+          replyTo: replyToEmail,
+          subject: emailSubject,
+          html: emailHtml,
+          text: emailText,
+        });
+
+        console.log('[API /api/users] 📥 Respuesta de Resend API:', JSON.stringify(resendResult, null, 2));
+
+        if (resendResult.error) {
+          console.error('[API /api/users] ❌ Resend respondió con error:', resendResult.error);
+          return res.status(500).json({
+            success: false,
+            error: resendResult.error.message || 'Error al enviar correo con Resend',
+            details: resendResult.error,
+            message: `Resend falló al enviar correo a ${cleanEmail}: ${resendResult.error.message || 'Error desconocido'}`,
+          });
+        }
+
+        // Only persist user after Resend dispatch succeeds
+        users.unshift(newUser);
+        await persistUsers(users);
+
+        return res.status(200).json({
+          success: true,
+          user: newUser,
+          users,
+          emailId: resendResult.data?.id,
+          message: 'Usuario creado correctamente y correo de bienvenida enviado exitosamente',
+        });
+      } catch (emailErr: any) {
+        console.error('[API /api/users] ❌ Excepción al invocar Resend:', emailErr);
+        return res.status(500).json({
+          success: false,
+          error: emailErr?.message || 'Error inesperado al conectar con Resend API',
+          message: `Fallo crítico de entrega de correo: ${emailErr?.message || 'Error en Resend'}`,
+        });
+      }
     }
 
     return res.status(405).json({ success: false, message: 'Método HTTP no permitido.' });

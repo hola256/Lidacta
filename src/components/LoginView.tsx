@@ -97,6 +97,7 @@ export const LoginView: React.FC = () => {
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setEmailStatus(null);
 
     const cleanName = name.trim();
     const cleanEmail = email.trim().toLowerCase();
@@ -295,11 +296,14 @@ export const LoginView: React.FC = () => {
             </button>
           </div>
 
-          {/* Error / Alert notification banner in Coral Profundo (#BF3A1B) */}
+          {/* Error / Alert notification banner - Alerta roja visible de error en registro o Resend */}
           {errorMessage && (
-            <div className="p-3 bg-[#BF3A1B]/25 border border-[#BF3A1B] text-[#FFF7EF] rounded-xl text-xs flex items-start gap-2.5 animate-in fade-in">
-              <AlertCircle className="w-4 h-4 text-[#FFD3BF] shrink-0 mt-0.5" />
-              <span className="leading-relaxed">{errorMessage}</span>
+            <div className="p-3.5 bg-rose-950/90 border-2 border-rose-500 text-rose-100 rounded-xl text-xs sm:text-sm flex items-start gap-3 shadow-lg animate-in fade-in" role="alert">
+              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-0.5">
+                <span className="font-bold text-rose-200 block text-xs uppercase tracking-wider">Error en la Solicitud / Envío</span>
+                <span className="leading-relaxed block text-rose-100 font-medium">{errorMessage}</span>
+              </div>
             </div>
           )}
 

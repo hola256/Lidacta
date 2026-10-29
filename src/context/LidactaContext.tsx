@@ -1765,11 +1765,23 @@ El Equipo de Lidacta`;
         ),
       ]);
 
+      if (res && !res.success) {
+        console.error('[registerOrSetPassword] ❌ Falla en la creación de usuario o despacho de correo:', res.message || res.error);
+        return {
+          success: false,
+          message: res.message || res.error || 'Error al procesar el registro en el servidor.',
+        };
+      }
+
       if (res && res.success && res.user) {
         remoteUser = res.user;
       }
-    } catch (err) {
-      console.warn('[Lidacta] Base de datos central lenta o con latencia al registrar; creando síncronamente en almacenamiento local:', err);
+    } catch (err: any) {
+      console.error('[Lidacta] Error en la petición de registro:', err);
+      return {
+        success: false,
+        message: err?.message || 'Error de conexión al intentar registrar tu cuenta en el servidor.',
+      };
     }
 
     const createdUser: UserProfile = remoteUser ? {

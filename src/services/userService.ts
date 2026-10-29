@@ -188,7 +188,8 @@ class UserService {
     saveLocalCachedUsers(updatedCache);
 
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/users`, {
+      console.log(`[userService.createUser] 🚀 Enviando petición de registro a /api/register para: ${payload.email}...`);
+      let response = await fetch(`${getApiBaseUrl()}/api/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -197,7 +198,21 @@ class UserService {
         body: JSON.stringify(payload),
       });
 
+      // Fallback to /api/users if /api/register returned 404 or 405
+      if (response.status === 404 || response.status === 405) {
+        console.log(`[userService.createUser] /api/register no disponible (${response.status}), intentando /api/users...`);
+        response = await fetch(`${getApiBaseUrl()}/api/users`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+      }
+
       const data = await response.json().catch(() => ({}));
+      console.log(`[userService.createUser] 📥 Respuesta del servidor (HTTP ${response.status}):`, data);
 
       if (response.ok && data.success) {
         const finalUsers = (data.users as UserProfile[]) || updatedCache;
@@ -206,24 +221,26 @@ class UserService {
           success: true,
           user: data.user || localUser,
           users: finalUsers,
-          message: 'Usuario creado y persistido en la Base de Datos Central',
+          message: data.message || 'Usuario creado y correo despachado exitosamente.',
         };
       }
 
-      // Return local user with success so UI never fails
+      // If server returned an error (e.g. HTTP 500 with Resend error or 400), propagate it visibly!
+      const errorDetail = data.error || data.message || `Error del servidor HTTP ${response.status}`;
+      console.error(`[userService.createUser] ❌ El servidor rechazó el registro:`, errorDetail);
       return {
-        success: true,
-        user: localUser,
-        users: updatedCache,
-        message: 'Usuario guardado localmente de forma persistente.',
+        success: false,
+        error: errorDetail,
+        message: errorDetail,
+        users: cached,
       };
     } catch (err: any) {
-      console.warn('[userService.createUser] Guardado local exitoso:', err);
+      console.error('[userService.createUser] ❌ Error de red al registrar usuario:', err);
       return {
-        success: true,
-        user: localUser,
-        users: updatedCache,
-        message: 'Usuario creado y guardado localmente de forma segura.',
+        success: false,
+        error: err?.message || 'Error de conexión con el servidor de registro.',
+        message: err?.message || 'No se pudo conectar con el servidor para registrar el usuario.',
+        users: cached,
       };
     }
   }
