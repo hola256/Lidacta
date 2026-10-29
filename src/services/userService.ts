@@ -59,7 +59,12 @@ function getApiBaseUrl(): string {
   if (typeof window !== 'undefined' && window.location) {
     return '';
   }
-  return process.env.API_BASE_URL || 'http://localhost:3000';
+  try {
+    if (typeof process !== 'undefined' && process?.env && process.env.API_BASE_URL) {
+      return process.env.API_BASE_URL;
+    }
+  } catch {}
+  return 'http://localhost:3000';
 }
 
 function getLocalCachedUsers(): UserProfile[] {

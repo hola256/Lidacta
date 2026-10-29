@@ -20,7 +20,7 @@ describe('Servicio de Correo Electrónico y Notificaciones Resend - Lidacta', ()
       subject: '¡Te damos la bienvenida a Lidacta, Andrea!',
       bodyText: 'Bienvenida a Lidacta',
       realEmailSent: true,
-      realEmailId: 're_test_123456',
+      realEmailId: 'mock_email_id_123456',
     };
 
     assert.ok(testEmailPayload.from.includes('notificaciones@taniapadierna.com'));

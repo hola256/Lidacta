@@ -15,6 +15,7 @@ import {
   DEFAULT_ADMIN_PROFILE,
 } from '../data/mockData';
 import { userService, UserServiceResponse } from '../services/userService';
+import { emailService } from '../services/emailService';
 
 interface LidactaContextType {
   currentUser: UserProfile;
@@ -73,8 +74,15 @@ interface LidactaContextType {
     role?: UserRole,
     position?: string,
     companyId?: string,
-    customCompanyName?: string
-  ) => Promise<{ success: boolean; message?: string; user?: UserProfile }>;
+    customCompanyName?: string,
+  ) => Promise<{
+    success: boolean;
+    message?: string;
+    user?: UserProfile;
+    emailSent?: boolean;
+    emailId?: string;
+    emailError?: string;
+  }>;
   
   // Actions
   switchUser: (userId: string) => void;
@@ -1618,7 +1626,14 @@ El Equipo de Lidacta`;
     position?: string,
     companyId?: string,
     customCompanyName?: string
-  ): Promise<{ success: boolean; message?: string; user?: UserProfile }> => {
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    user?: UserProfile;
+    emailSent?: boolean;
+    emailId?: string;
+    emailError?: string;
+  }> => {
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) {
       return { success: false, message: 'Por favor, ingresa un correo electrónico corporativo válido.' };
@@ -1840,21 +1855,29 @@ El Equipo de Lidacta`;
     };
     setNotifications((prev) => [welcomeNotif, ...prev]);
 
-    // Garantizar disparo de correo de bienvenida de forma asíncrona y no bloqueante
-    fetch('/api/send-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: createdUser.id,
+    // Disparo explícito y esperado (await) de bienvenida a través de emailService
+    let emailDispatchResult: { success: boolean; emailId?: string; error?: string } = { success: false };
+    try {
+      console.log(`[LidactaContext] 🚀 Ejecutando llamada esperada (await) a emailService.sendWelcomeEmail para ${cleanEmail}...`);
+      emailDispatchResult = await emailService.sendWelcomeEmail({
         email: cleanEmail,
         name: cleanName,
         role: assignedRole,
         companyName: targetCompName,
-        type: 'welcome',
-      }),
-    }).catch((err) => console.warn('[LIDACTA] Envío asíncrono desde cliente registrado:', err));
+      });
+      console.log(`[LidactaContext] Resultado de bienvenida para ${cleanEmail}:`, emailDispatchResult);
+    } catch (emailErr) {
+      console.error("Resend delivery failed:", emailErr);
+      emailDispatchResult = { success: false, error: (emailErr as any)?.message };
+    }
 
-    return { success: true, user: createdUser };
+    return {
+      success: true,
+      user: createdUser,
+      emailSent: emailDispatchResult.success,
+      emailId: emailDispatchResult.emailId,
+      emailError: emailDispatchResult.error,
+    };
   };
 
   const createUser = async (userData: {

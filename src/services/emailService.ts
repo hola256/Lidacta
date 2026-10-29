@@ -22,14 +22,28 @@ export interface EmailServiceResult {
   realSent?: boolean;
 }
 
-const DEFAULT_FROM = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
-const DEFAULT_REPLY_TO = process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com';
+function getEnvVar(key: string, defaultValue: string): string {
+  try {
+    if (typeof process !== 'undefined' && process?.env && process.env[key]) {
+      return process.env[key]!;
+    }
+  } catch {}
+  return defaultValue;
+}
+
+export const DEFAULT_FROM = getEnvVar('RESEND_FROM_EMAIL', 'Lidacta <notificaciones@taniapadierna.com>');
+export const DEFAULT_REPLY_TO = getEnvVar('RESEND_REPLY_TO', 'hola@taniapadierna.com');
 
 function getApiBaseUrl(): string {
   if (typeof window !== 'undefined' && window.location) {
     return '';
   }
-  return process.env.API_BASE_URL || 'http://localhost:3000';
+  try {
+    if (typeof process !== 'undefined' && process?.env && process.env.API_BASE_URL) {
+      return process.env.API_BASE_URL;
+    }
+  } catch {}
+  return 'http://localhost:3000';
 }
 
 /**

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useLidacta } from '../context/LidactaContext';
 import { UserRole } from '../types/lidacta';
+import { emailService } from '../services/emailService';
 import {
   Lock,
   Mail,
@@ -14,10 +15,11 @@ import {
   ArrowRight,
   AlertCircle,
   Building2,
+  CheckCircle2,
 } from 'lucide-react';
 
 export const LoginView: React.FC = () => {
-  const { registerOrSetPassword, login, allUsers, companies } = useLidacta();
+  const { registerOrSetPassword, login, allUsers, companies, showToast } = useLidacta();
 
   // Mode: Iniciar Sesión vs Registrar Nuevo Usuario
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -34,6 +36,10 @@ export const LoginView: React.FC = () => {
 
   // Status & feedback
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [emailStatus, setEmailStatus] = useState<{
+    type: 'success' | 'warning' | 'error';
+    message: string;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   // Auto-fill profile helpers when typing recognizable emails in login mode
@@ -133,6 +139,12 @@ export const LoginView: React.FC = () => {
     setIsLoading(true);
 
     try {
+      const targetCompanyName =
+        companyId === 'other'
+          ? (customCompanyName.trim() || 'Mi Empresa')
+          : (companies.find((c) => c.id === companyId)?.name || 'Industrias Nexus Automotriz');
+
+      console.log(`[PortalDeAcceso] 📝 Registrando usuario en la Base de Datos Central: ${cleanName} (${cleanEmail})...`);
       const res = await registerOrSetPassword(
         cleanEmail,
         cleanPassword,
@@ -145,10 +157,36 @@ export const LoginView: React.FC = () => {
 
       if (!res.success) {
         setErrorMessage(res.message || 'Error al procesar el registro en la base de datos central.');
+        setIsLoading(false);
+        return;
       }
-      // If success, LidactaProvider automatically switches to CompleteProfileView for leaders/HR,
-      // strictly protected against background polling overrides and session leakage.
+
+      // Explicitly await sendWelcomeEmail immediately after user creation
+      console.log(`[PortalDeAcceso] 🚀 Ejecutando llamada esperada (await) a emailService.sendWelcomeEmail para ${cleanEmail}...`);
+      const emailResult = await emailService.sendWelcomeEmail({
+        email: cleanEmail,
+        name: cleanName,
+        role,
+        companyName: targetCompanyName,
+      });
+
+      if (!emailResult.success) {
+        console.error('Resend delivery failed:', emailResult.error);
+        setEmailStatus({
+          type: 'error',
+          message: `⚠️ Tu usuario fue registrado exitosamente, pero la API de Resend no pudo entregar el correo de bienvenida a ${cleanEmail}: "${emailResult.error || 'Aviso de entrega'}". Revisa la configuración de Resend.`,
+        });
+        showToast(`Aviso: Error en Resend: ${emailResult.error || 'Fallo de entrega'}`, 'warning');
+      } else {
+        console.log(`[PortalDeAcceso] ✅ Correo de bienvenida entregado exitosamente vía Resend. ID: ${emailResult.emailId}`);
+        setEmailStatus({
+          type: 'success',
+          message: `✅ ¡Usuario registrado! Correo de bienvenida entregado con éxito a ${cleanEmail} (ID Resend: ${emailResult.emailId || 'OK'}).`,
+        });
+        showToast(`¡Bienvenida entregada a ${cleanEmail}!`, 'success');
+      }
     } catch (err: any) {
+      console.error('Error durante el registro:', err);
       setErrorMessage(err?.message || 'Error al conectar con la base de datos central.');
     } finally {
       setIsLoading(false);
@@ -262,6 +300,29 @@ export const LoginView: React.FC = () => {
             <div className="p-3 bg-[#BF3A1B]/25 border border-[#BF3A1B] text-[#FFF7EF] rounded-xl text-xs flex items-start gap-2.5 animate-in fade-in">
               <AlertCircle className="w-4 h-4 text-[#FFD3BF] shrink-0 mt-0.5" />
               <span className="leading-relaxed">{errorMessage}</span>
+            </div>
+          )}
+
+          {/* Email Notification Status Banner: Advertencia visible si Resend falla o Éxito */}
+          {emailStatus && (
+            <div
+              className={`p-3 rounded-xl text-xs flex items-start gap-2.5 animate-in fade-in ${
+                emailStatus.type === 'success'
+                  ? 'bg-emerald-950/60 border border-emerald-500/80 text-emerald-200'
+                  : 'bg-rose-950/70 border border-rose-500/90 text-rose-200'
+              }`}
+            >
+              {emailStatus.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+              ) : (
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+              )}
+              <div className="flex-1 space-y-0.5">
+                <span className="font-bold block">
+                  {emailStatus.type === 'success' ? 'Correo de Bienvenida Enviado' : 'Alerta de Entrega de Correo (Resend)'}
+                </span>
+                <span className="leading-relaxed block">{emailStatus.message}</span>
+              </div>
             </div>
           )}
 

@@ -1,21 +1,21 @@
 [
   {
-    "id": "user_1793213224430",
-    "name": "Equipo Coaching",
+    "id": "user_1793276193261",
+    "name": "Equipo Coaching Lidacta",
     "email": "proyectos.coaching@gmail.com",
     "role": "leader",
     "companyId": "comp_nexus",
-    "companyName": "Nexus Coaching",
-    "position": "Director de Formación",
-    "area": "Desarrollo de Liderazgo",
+    "companyName": "Industrias Nexus Automotriz",
+    "position": "Director de Coaching",
+    "area": "Operaciones",
     "birthDate": "1990-01-01",
-    "directReports": 10,
-    "whatsapp": "+525511223344",
+    "directReports": 5,
+    "whatsapp": "Sin especificar",
     "status": "active",
-    "password": "",
+    "password": "Password123!",
     "isProfileCompleted": false,
     "isProfileComplete": false,
-    "createdAt": "2026-10-28T18:47:04.430Z"
+    "createdAt": "2026-10-29T12:16:33.261Z"
   },
   {
     "id": "user_1793212148612",
