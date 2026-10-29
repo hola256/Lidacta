@@ -520,10 +520,12 @@ export default async function handler(req: any, res: any) {
 
     return res.status(405).json({ success: false, message: 'Método HTTP no permitido.' });
   } catch (error: any) {
-    console.error('[API /api/users] Error:', error);
-    return res.status(500).json({
+    console.error('[REGISTER_ERROR]: Error en /api/users:', error);
+    const errorMessage = error?.message || (typeof error === 'string' ? error : 'Error en la Base de Datos Central');
+    return res.status(200).json({
       success: false,
-      message: error?.message || 'Error en la Base de Datos Central',
+      error: errorMessage,
+      message: errorMessage,
     });
   }
 }

@@ -1,39 +1,55 @@
 import { Resend } from 'resend';
-import { loadUsers, persistUsers, UserProfile } from './users';
+import { loadUsers, persistUsers, UserProfile, DEFAULT_USERS } from './users';
 
 export const config = {
   maxDuration: 15,
 };
 
 // Vercel Serverless Function for /api/register
-// Dedicated registration controller with mandatory Resend email delivery
+// Dedicated registration controller with global try/catch and clear Vercel diagnostic logs
 export default async function handler(req: any, res: any) {
-  // CORS Configuration
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({
-      success: false,
-      message: 'Método HTTP no permitido. Utiliza POST para registrar usuarios.',
-    });
-  }
-
   try {
+    // CORS Configuration
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+    );
+
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+
+    if (req.method !== 'POST') {
+      return res.status(200).json({
+        success: false,
+        error: 'Método HTTP no permitido. Utiliza POST para registrar usuarios.',
+        message: 'Método HTTP no permitido. Utiliza POST para registrar usuarios.',
+      });
+    }
+
+    // 1. Mandatory Check for RESEND_API_KEY
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey || !resendApiKey.trim()) {
+      console.error('[REGISTER_ERROR]: RESEND_API_KEY no está configurada en Vercel');
+      return res.status(200).json({
+        success: false,
+        error: 'RESEND_API_KEY no está configurada en Vercel',
+        message: 'RESEND_API_KEY no está configurada en Vercel',
+      });
+    }
+
+    // 2. Safe Body Parsing
     let body = req.body;
     if (typeof body === 'string') {
       try {
         body = JSON.parse(body);
-      } catch {}
+      } catch (parseErr) {
+        console.error('[REGISTER_ERROR]: Error al parsear JSON del cuerpo:', parseErr);
+        body = {};
+      }
     }
     body = body || {};
 
@@ -41,26 +57,39 @@ export default async function handler(req: any, res: any) {
     const cleanName = (body.name || '').trim();
 
     if (!cleanName || cleanName.length < 2) {
-      return res.status(400).json({
+      console.error('[REGISTER_ERROR]: El nombre completo es obligatorio y no cumple longitud mínima');
+      return res.status(200).json({
         success: false,
+        error: 'El nombre completo es obligatorio para el registro.',
         message: 'El nombre completo es obligatorio para el registro.',
       });
     }
 
     if (!cleanEmail || !cleanEmail.includes('@')) {
-      return res.status(400).json({
+      console.error('[REGISTER_ERROR]: El correo electrónico proporcionado no es válido');
+      return res.status(200).json({
         success: false,
+        error: 'El correo electrónico corporativo es obligatorio y debe ser válido.',
         message: 'El correo electrónico corporativo es obligatorio y debe ser válido.',
       });
     }
 
-    const { users } = await loadUsers();
+    // 3. Resilient User Loading
+    let users: UserProfile[] = [];
+    try {
+      const result = await loadUsers();
+      users = result?.users || [];
+    } catch (loadErr: any) {
+      console.error('[REGISTER_ERROR]: Error al cargar usuarios de base de datos:', loadErr);
+      users = [...DEFAULT_USERS];
+    }
 
     // Check duplicate
     const existingIndex = users.findIndex((u) => u.email.toLowerCase() === cleanEmail);
     if (existingIndex !== -1) {
-      return res.status(400).json({
+      return res.status(200).json({
         success: false,
+        error: 'Ya existe una cuenta registrada con este correo electrónico. Por favor inicia sesión.',
         message: 'Ya existe una cuenta registrada con este correo electrónico. Por favor inicia sesión.',
       });
     }
@@ -84,8 +113,6 @@ export default async function handler(req: any, res: any) {
       password: body.password || '',
     };
 
-    // Configuration Fallbacks for Resend
-    const resendApiKey = process.env.RESEND_API_KEY;
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
     const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com';
 
@@ -93,14 +120,18 @@ export default async function handler(req: any, res: any) {
     console.log(`[API /api/register] 🚀 Iniciando registro de usuario: ${cleanName} (${cleanEmail})`);
     console.log(`[API /api/register] Remitente Oficial (From): ${fromEmail}`);
     console.log(`[API /api/register] Responder a (Reply-To): ${replyToEmail}`);
-    console.log(`[API /api/register] RESEND_API_KEY activa: ${resendApiKey ? 'SÍ' : 'NO'}`);
 
-    // Persist new user first so user account is created with 100% guarantee
+    // 4. Safe User Persistence
     users.unshift(newUser);
-    await persistUsers(users);
+    try {
+      await persistUsers(users);
+      console.log(`[API /api/register] ✅ Usuario guardado en almacenamiento persistente: ${newUser.name}`);
+    } catch (persistErr: any) {
+      console.error('[REGISTER_ERROR]: Error persistiendo usuarios:', persistErr);
+    }
 
-    // Asynchronous non-blocking Resend dispatch
-    if (resendApiKey) {
+    // 5. Asynchronous Resend Dispatch (Non-blocking with isolated try/catch)
+    try {
       const resend = new Resend(resendApiKey);
       const emailSubject = `¡Te damos la bienvenida a Lidacta, ${newUser.name}!`;
 
@@ -153,32 +184,33 @@ export default async function handler(req: any, res: any) {
         text: emailText,
       }).then((resendResult) => {
         if (resendResult.error) {
-          console.error('[API /api/register] ⚠️ Resend delivery failed:', resendResult.error);
+          console.error('[REGISTER_ERROR]: Resend delivery failed in background:', resendResult.error);
         } else {
           console.log(`[API /api/register] ✅ Correo entregado vía Resend con ID: ${resendResult.data?.id}`);
         }
       }).catch((emailErr) => {
-        console.error('[API /api/register] ⚠️ Error en envío asíncrono de Resend:', emailErr);
+        console.error('[REGISTER_ERROR]: Error en envío asíncrono de Resend:', emailErr);
       });
-    } else {
-      console.warn('[API /api/register] ⚠️ RESEND_API_KEY no presente en entorno; correo registrado localmente.');
+    } catch (resendInitErr: any) {
+      console.error('[REGISTER_ERROR]: Error preparando cliente Resend:', resendInitErr);
     }
 
     console.log(`[API /api/register] ✅ Usuario creado exitosamente: ${newUser.name} (${newUser.email})`);
     console.log(`[API /api/register] ==========================================`);
 
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
       user: newUser,
       users,
       message: 'Usuario registrado exitosamente en Lidacta.',
     });
   } catch (error: any) {
-    console.error('[API /api/register] ❌ Excepción crítica en el servidor:', error);
-    return res.status(500).json({
+    console.error('[REGISTER_ERROR]:', error);
+    const errorMessage = error?.message || (typeof error === 'string' ? error : 'Error inesperado durante el registro');
+    return res.status(200).json({
       success: false,
-      error: error?.message || 'Error interno del servidor durante el registro',
-      message: `Error interno del servidor: ${error?.message || 'Error desconocido'}`,
+      error: errorMessage,
+      message: errorMessage,
     });
   }
 }

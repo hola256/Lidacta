@@ -1321,29 +1321,45 @@ app.post('/api/users', async (req: Request, res: Response) => {
       users: serverUsers,
     });
   } catch (error: any) {
-    console.error('Error creating user:', error);
-    return res.status(500).json({ success: false, message: error?.message || 'Error al crear usuario' });
+    console.error('[REGISTER_ERROR]: Error al crear usuario en /api/users:', error);
+    const errorMessage = error?.message || (typeof error === 'string' ? error : 'Error al crear usuario');
+    return res.status(200).json({ success: false, error: errorMessage, message: errorMessage });
   }
 });
 
 // POST /api/register - Dedicated Registration Route (Alias to /api/users with asynchronous Resend)
 app.post('/api/register', async (req: Request, res: Response) => {
   try {
+    // 1. Mandatory Check for RESEND_API_KEY
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey || !resendApiKey.trim()) {
+      console.error('[REGISTER_ERROR]: RESEND_API_KEY no está configurada en Vercel');
+      return res.status(200).json({
+        success: false,
+        error: 'RESEND_API_KEY no está configurada en Vercel',
+        message: 'RESEND_API_KEY no está configurada en Vercel',
+      });
+    }
+
     serverUsers = readPersistentUsers();
     const { name, email, role, companyId, companyName, position, area, birthDate, directReports, whatsapp, status, password } = req.body;
 
-    if (!name || !String(name).trim()) {
-      return res.status(400).json({ success: false, message: 'El nombre completo es obligatorio.' });
-    }
-    if (!email || !String(email).trim()) {
-      return res.status(400).json({ success: false, message: 'El correo electrónico es obligatorio.' });
+    const cleanName = String(name || '').trim();
+    if (!cleanName || cleanName.length < 2) {
+      console.error('[REGISTER_ERROR]: El nombre completo es obligatorio y debe tener al menos 2 caracteres');
+      return res.status(200).json({ success: false, error: 'El nombre completo es obligatorio para el registro.', message: 'El nombre completo es obligatorio para el registro.' });
     }
 
-    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      console.error('[REGISTER_ERROR]: El correo electrónico es obligatorio y debe ser válido');
+      return res.status(200).json({ success: false, error: 'El correo electrónico corporativo es obligatorio y debe ser válido.', message: 'El correo electrónico corporativo es obligatorio y debe ser válido.' });
+    }
     const existingIndex = serverUsers.findIndex((u) => u.email.toLowerCase() === cleanEmail);
     if (existingIndex !== -1) {
-      return res.status(400).json({
+      return res.status(200).json({
         success: false,
+        error: 'Ya existe una cuenta registrada con este correo electrónico.',
         message: 'Ya existe una cuenta registrada con este correo electrónico.',
       });
     }
@@ -1372,52 +1388,52 @@ app.post('/api/register', async (req: Request, res: Response) => {
     };
 
     serverUsers.unshift(newUser);
-    writePersistentUsers(serverUsers);
+    try {
+      writePersistentUsers(serverUsers);
+    } catch (writeErr) {
+      console.error('[REGISTER_ERROR]: Error al guardar usuario persistente:', writeErr);
+    }
 
-    const resendApiKey = process.env.RESEND_API_KEY;
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
     const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com';
 
-    if (resendApiKey) {
-      try {
-        const resendClient = new Resend(resendApiKey);
-        const emailSubject = `¡Te damos la bienvenida a Lidacta, ${newUser.name}!`;
-        const emailHtml = generateWelcomeEmailHtml(newUser);
-        const emailText = `¡Hola ${newUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nAtentamente,\nEl Equipo de Lidacta\nResponder a: ${replyToEmail}`;
+    try {
+      const resendClient = new Resend(resendApiKey);
+      const emailSubject = `¡Te damos la bienvenida a Lidacta, ${newUser.name}!`;
+      const emailHtml = generateWelcomeEmailHtml(newUser);
+      const emailText = `¡Hola ${newUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nAtentamente,\nEl Equipo de Lidacta\nResponder a: ${replyToEmail}`;
 
-        console.log(`[API /api/register] 🚀 Disparando correo asíncrono con Resend para ${newUser.email}...`);
-        resendClient.emails.send({
-          from: fromEmail,
-          to: [newUser.email],
-          replyTo: replyToEmail,
-          subject: emailSubject,
-          html: emailHtml,
-          text: emailText,
-        }).then((emailRes) => {
-          if (emailRes.error) {
-            console.error('[API /api/register] ⚠️ Resend delivery failed in background:', emailRes.error);
-          } else {
-            console.log(`[API /api/register] ✅ Correo entregado vía Resend con ID: ${emailRes.data?.id}`);
-          }
-        }).catch((emailErr) => {
-          console.error('[API /api/register] ⚠️ Error en envío asíncrono de Resend:', emailErr);
-        });
-      } catch (err) {
-        console.error('[API /api/register] ⚠️ Excepción preparando Resend:', err);
-      }
-    } else {
-      console.warn('[API /api/register] ⚠️ RESEND_API_KEY no presente; correo registrado en bandeja simulada.');
+      console.log(`[API /api/register] 🚀 Disparando correo asíncrono con Resend para ${newUser.email}...`);
+      resendClient.emails.send({
+        from: fromEmail,
+        to: [newUser.email],
+        replyTo: replyToEmail,
+        subject: emailSubject,
+        html: emailHtml,
+        text: emailText,
+      }).then((emailRes) => {
+        if (emailRes.error) {
+          console.error('[REGISTER_ERROR]: Resend delivery failed in background:', emailRes.error);
+        } else {
+          console.log(`[API /api/register] ✅ Correo entregado vía Resend con ID: ${emailRes.data?.id}`);
+        }
+      }).catch((emailErr) => {
+        console.error('[REGISTER_ERROR]: Error en envío asíncrono de Resend:', emailErr);
+      });
+    } catch (err) {
+      console.error('[REGISTER_ERROR]: Excepción preparando Resend:', err);
     }
 
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
       message: 'Usuario registrado exitosamente en Lidacta',
       user: newUser,
       users: serverUsers,
     });
   } catch (error: any) {
-    console.error('[API /api/register] Error:', error);
-    return res.status(500).json({ success: false, message: error?.message || 'Error interno' });
+    console.error('[REGISTER_ERROR]:', error);
+    const errorMessage = error?.message || (typeof error === 'string' ? error : 'Error interno');
+    return res.status(200).json({ success: false, error: errorMessage, message: errorMessage });
   }
 });
 

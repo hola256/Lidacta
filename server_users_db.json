@@ -1,5 +1,23 @@
 [
   {
+    "id": "user_1793305728868",
+    "name": "A",
+    "email": "invalido",
+    "role": "leader",
+    "companyId": "comp_nexus",
+    "companyName": "Industrias Nexus Automotriz",
+    "position": "Líder de Equipo",
+    "area": "Operaciones",
+    "birthDate": "1990-01-01",
+    "directReports": 0,
+    "whatsapp": "Sin especificar",
+    "status": "active",
+    "password": "",
+    "isProfileCompleted": false,
+    "isProfileComplete": false,
+    "createdAt": "2026-10-29T20:28:48.868Z"
+  },
+  {
     "id": "user_1793304000944",
     "name": "Carlos Mendoza Test",
     "email": "carlos.test.mailing@taniapadierna.com",
