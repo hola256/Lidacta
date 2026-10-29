@@ -1,5 +1,23 @@
 [
   {
+    "id": "user_1793313009809",
+    "name": "Laura Sánchez",
+    "email": "laura.test.template@taniapadierna.com",
+    "role": "leader",
+    "companyId": "comp_nexus",
+    "companyName": "Nexus Auto",
+    "position": "Líder de Equipo",
+    "area": "Operaciones",
+    "birthDate": "1990-01-01",
+    "directReports": 0,
+    "whatsapp": "Sin especificar",
+    "status": "active",
+    "password": "",
+    "isProfileCompleted": false,
+    "isProfileComplete": false,
+    "createdAt": "2026-10-29T22:30:09.809Z"
+  },
+  {
     "id": "user_1793310062629",
     "name": "Prueba Vercel Module",
     "email": "prueba.module@taniapadierna.com",

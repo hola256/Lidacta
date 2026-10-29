@@ -62,9 +62,39 @@ export default async function handler(req: any, res: any) {
     }
 
     const resend = new Resend(resendApiKey);
-    const finalSubject = subject || `¡Te damos la bienvenida a Lidacta, ${name || 'Líder'}!`;
-    const finalHtml = html || `<!DOCTYPE html><html><body><h2>¡Hola ${name || 'Líder'}!</h2><p>Bienvenido/a a Lidacta.</p></body></html>`;
-    const finalText = text || `¡Hola ${name || 'Líder'}!\n\nBienvenido/a a Lidacta.`;
+    const recipientName = name || 'Líder';
+    const finalSubject = subject || `¡Te damos la bienvenida a Lidacta, ${recipientName}!`;
+    const finalHtml = html || `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><title>${finalSubject}</title></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8F6F4; margin: 0; padding: 24px; color: #2D1B4E;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(45, 27, 78, 0.08); border: 1px solid #EADBCE;">
+    <tr>
+      <td style="background-color: #2D1B4E; padding: 32px 24px; text-align: center;">
+        <h1 style="color: #FFF7EF; font-size: 24px; margin: 0 0 8px 0; font-weight: 800;">LIDACTA</h1>
+        <p style="color: #F7B538; font-size: 13px; margin: 0; font-weight: 600; text-transform: uppercase;">Desarrollo de Liderazgo en Acción</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 32px 28px;">
+        <h2 style="font-size: 20px; color: #2D1B4E; margin: 0 0 16px 0;">¡Hola ${recipientName}!</h2>
+        <p style="font-size: 14px; line-height: 1.6; color: #4A3F55; margin: 0 0 16px 0;">
+          Te damos una cálida bienvenida a <strong>Lidacta</strong>. Tu cuenta ha sido creada exitosamente.
+        </p>
+        <p style="font-size: 14px; line-height: 1.6; color: #4A3F55; margin: 0 0 20px 0;">
+          Lidacta es tu espacio seguro, confidencial y práctico en el que tendrás un mentor para acompañarte y ayudarte a resolver los retos relacionados con el manejo de personas. Podrás también encontrar herramientas y establecer acciones que fortalezcan tu autonomía como líder.
+        </p>
+      </td>
+    </tr>
+    <tr>
+      <td style="background-color: #FFF7EF; padding: 20px 24px; text-align: center; border-top: 1px solid #EADBCE;">
+        <p style="font-size: 11px; color: #4A3F55; margin: 0;">Lidacta © ${new Date().getFullYear()} · Desarrollo de Liderazgo Operativo</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+    const finalText = text || `¡Hola ${recipientName}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nLidacta es tu espacio seguro, confidencial y práctico en el que tendrás un mentor para acompañarte y ayudarte a resolver los retos relacionados con el manejo de personas. Podrás también encontrar herramientas y establecer acciones que fortalezcan tu autonomía como líder.\n\nAtentamente,\nEl Equipo de Lidacta\nResponder a: ${replyToEmail}`;
 
     const resendResult = await resend.emails.send({
       from: fromEmail,

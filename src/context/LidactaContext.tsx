@@ -1865,25 +1865,12 @@ El Equipo de Lidacta`;
       emailSimulated: {
         to: cleanEmail,
         subject: `¡Te damos la bienvenida a Lidacta, ${cleanName}!`,
-        bodyText: `¡Hola ${cleanName}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nTu cuenta ha sido creada exitosamente asociada a ${targetCompName}.\nEn Lidacta cuentas con un espacio 100% seguro y confidencial donde podrás analizar situaciones reales de tu día a día, practicar tus conversaciones y tomar acciones que fortalezcan tu autonomía como líder.\n\nRecursos Humanos únicamente recibirá indicadores agregados de uso, sin acceso a tus conversaciones privadas.\n\n¡Estamos listos para acompañarte en tu próximo reto!\n\nAtentamente,\nEl Equipo de Lidacta`,
+        bodyText: `¡Hola ${cleanName}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nTu cuenta ha sido creada exitosamente asociada a ${targetCompName}.\n\nLidacta es tu espacio seguro, confidencial y práctico en el que tendrás un mentor para acompañarte y ayudarte a resolver los retos relacionados con el manejo de personas. Podrás también encontrar herramientas y establecer acciones que fortalezcan tu autonomía como líder.\n\nRecursos Humanos únicamente recibirá indicadores agregados de uso, sin acceso a tus conversaciones privadas.\n\n¡Estamos listos para acompañarte en tu próximo reto!\n\nAtentamente,\nEl Equipo de Lidacta`,
       },
     };
     setNotifications((prev) => [welcomeNotif, ...prev]);
 
-    // Despacho asíncrono e independiente de bienvenida (fire-and-forget sin bloquear navegación)
-    emailService
-      .sendWelcomeEmail({
-        email: cleanEmail,
-        name: cleanName,
-        role: assignedRole,
-        companyName: targetCompName,
-      })
-      .then((emailRes) => {
-        console.log(`[LidactaContext] ✅ Envío asíncrono de bienvenida completado para ${cleanEmail}:`, emailRes);
-      })
-      .catch((emailErr) => {
-        console.warn(`[LidactaContext] ⚠️ Aviso en entrega secundaria de correo:`, emailErr);
-      });
+    // Correo oficial único despachado directamente por /api/register en el backend con plantilla estilizada HTML
 
     return {
       success: true,
