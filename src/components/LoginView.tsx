@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useLidacta } from '../context/LidactaContext';
 import { UserRole } from '../types/lidacta';
 import { emailService } from '../services/emailService';
+import { safeString, extractErrorMessage } from '../utils/safeError';
 import {
   Lock,
   Mail,
@@ -83,11 +84,11 @@ export const LoginView: React.FC = () => {
             'No encontramos una cuenta con este correo. Puedes crear tu cuenta en la pestaña "Registrar Nuevo Usuario".'
           );
         } else {
-          setErrorMessage(res.message || 'No se pudo iniciar sesión. Verifica tus credenciales.');
+          setErrorMessage(extractErrorMessage(res.message, 'No se pudo iniciar sesión. Verifica tus credenciales.'));
         }
       }
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Error inesperado al iniciar sesión.');
+      setErrorMessage(extractErrorMessage(err, 'Error inesperado al iniciar sesión.'));
     } finally {
       setIsLoading(false);
     }
@@ -140,11 +141,6 @@ export const LoginView: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const targetCompanyName =
-        companyId === 'other'
-          ? (customCompanyName.trim() || 'Mi Empresa')
-          : (companies.find((c) => c.id === companyId)?.name || 'Industrias Nexus Automotriz');
-
       console.log(`[PortalDeAcceso] 📝 Registrando usuario en la Base de Datos Central: ${cleanName} (${cleanEmail})...`);
       const res = await registerOrSetPassword(
         cleanEmail,
@@ -157,32 +153,17 @@ export const LoginView: React.FC = () => {
       );
 
       if (!res.success) {
-        setErrorMessage(res.message || 'Error al procesar el registro en la base de datos central.');
+        setErrorMessage(extractErrorMessage(res.message, 'Error al procesar el registro en la base de datos central.'));
         setIsLoading(false);
         return;
       }
 
-      // Inspect Resend dispatch result returned by registerOrSetPassword
-      if (res.emailSent) {
-        console.log(`[PortalDeAcceso] ✅ Correo de bienvenida entregado exitosamente vía Resend. ID: ${res.emailId}`);
-        setEmailStatus({
-          type: 'success',
-          message: `✅ ¡Usuario registrado! Correo de bienvenida entregado con éxito a ${cleanEmail} (ID Resend: ${res.emailId || 'OK'}).`,
-        });
-        showToast(`¡Bienvenida entregada a ${cleanEmail}!`, 'success');
-      } else if (res.emailError) {
-        console.error('Resend delivery note:', res.emailError);
-        setEmailStatus({
-          type: 'error',
-          message: `⚠️ Tu usuario fue registrado exitosamente. Aviso Resend: "${res.emailError}".`,
-        });
-        showToast(`Usuario registrado (Aviso Resend: ${res.emailError})`, 'warning');
-      } else {
-        showToast(`¡Usuario registrado exitosamente!`, 'success');
-      }
+      // Registro exitoso: Feedback amigable y transición automática fluida
+      console.log(`[PortalDeAcceso] ✅ Usuario registrado con éxito: ${cleanEmail}`);
+      showToast('¡Cuenta creada exitosamente! Bienvenido a Lidacta.', 'success');
     } catch (err: any) {
       console.error('Error durante el registro:', err);
-      setErrorMessage(err?.message || 'Error al conectar con la base de datos central.');
+      setErrorMessage(extractErrorMessage(err, 'Error al conectar con la base de datos central.'));
     } finally {
       setIsLoading(false);
     }
@@ -290,18 +271,18 @@ export const LoginView: React.FC = () => {
             </button>
           </div>
 
-          {/* Error / Alert notification banner - Alerta roja visible de error en registro o Resend */}
+          {/* Error / Alert notification banner - Alerta visible protegida contra error #31 de React */}
           {errorMessage && (
             <div className="p-3.5 bg-rose-950/90 border-2 border-rose-500 text-rose-100 rounded-xl text-xs sm:text-sm flex items-start gap-3 shadow-lg animate-in fade-in" role="alert">
               <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
               <div className="flex-1 space-y-0.5">
-                <span className="font-bold text-rose-200 block text-xs uppercase tracking-wider">Error en la Solicitud / Envío</span>
-                <span className="leading-relaxed block text-rose-100 font-medium">{errorMessage}</span>
+                <span className="font-bold text-rose-200 block text-xs uppercase tracking-wider">Aviso en la Solicitud</span>
+                <span className="leading-relaxed block text-rose-100 font-medium">{safeString(errorMessage)}</span>
               </div>
             </div>
           )}
 
-          {/* Email Notification Status Banner: Advertencia visible si Resend falla o Éxito */}
+          {/* Email Notification Status Banner */}
           {emailStatus && (
             <div
               className={`p-3 rounded-xl text-xs flex items-start gap-2.5 animate-in fade-in ${
@@ -317,9 +298,9 @@ export const LoginView: React.FC = () => {
               )}
               <div className="flex-1 space-y-0.5">
                 <span className="font-bold block">
-                  {emailStatus.type === 'success' ? 'Correo de Bienvenida Enviado' : 'Alerta de Entrega de Correo (Resend)'}
+                  {emailStatus.type === 'success' ? 'Notificación de Correo' : 'Aviso de Envío'}
                 </span>
-                <span className="leading-relaxed block">{emailStatus.message}</span>
+                <span className="leading-relaxed block">{safeString(emailStatus.message)}</span>
               </div>
             </div>
           )}

@@ -2,6 +2,8 @@ import React from 'react';
 import { useLidacta } from '../context/LidactaContext';
 import { CheckCircle2, AlertTriangle, AlertCircle, Info, X } from 'lucide-react';
 
+import { safeString } from '../utils/safeError';
+
 export const GlobalToast: React.FC = () => {
   const { toast, hideToast } = useLidacta();
 
@@ -41,7 +43,7 @@ export const GlobalToast: React.FC = () => {
                 : 'Notificación'}
             </h4>
             <p className="text-xs sm:text-sm text-[#FFF7EF] font-medium leading-relaxed">
-              {toast.message}
+              {safeString(toast.message)}
             </p>
           </div>
         </div>

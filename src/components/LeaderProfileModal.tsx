@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Sparkles,
 } from 'lucide-react';
+import { safeString, extractErrorMessage } from '../utils/safeError';
 
 export const LeaderProfileModal: React.FC = () => {
   const {
@@ -200,14 +201,14 @@ export const LeaderProfileModal: React.FC = () => {
           {errorMsg && (
             <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 flex items-start gap-2 animate-in fade-in">
               <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-              <div className="flex-1 break-words whitespace-normal">{errorMsg}</div>
+              <div className="flex-1 break-words whitespace-normal">{safeString(errorMsg)}</div>
             </div>
           )}
 
           {successMsg && (
             <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-start gap-2 animate-in fade-in">
               <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-              <div className="flex-1 font-semibold break-words whitespace-normal">{successMsg}</div>
+              <div className="flex-1 font-semibold break-words whitespace-normal">{safeString(successMsg)}</div>
             </div>
           )}
 

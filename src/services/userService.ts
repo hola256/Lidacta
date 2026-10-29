@@ -1,5 +1,6 @@
 import { UserProfile } from '../types/lidacta';
 import { emailService } from './emailService';
+import { safeString } from '../utils/safeError';
 
 export interface UserServiceResponse {
   success: boolean;
@@ -221,12 +222,13 @@ class UserService {
           success: true,
           user: data.user || localUser,
           users: finalUsers,
-          message: data.message || 'Usuario creado y correo despachado exitosamente.',
+          message: safeString(data.message, 'Usuario registrado exitosamente.'),
         };
       }
 
-      // If server returned an error (e.g. HTTP 500 with Resend error or 400), propagate it visibly!
-      const errorDetail = data.error || data.message || `Error del servidor HTTP ${response.status}`;
+      // If server returned an error (e.g. 400 or 500), extract string safely without passing raw objects
+      const rawError = data?.error || data?.message;
+      const errorDetail = safeString(rawError, `Error en el servidor al registrar el usuario (HTTP ${response.status})`);
       console.error(`[userService.createUser] ❌ El servidor rechazó el registro:`, errorDetail);
       return {
         success: false,
@@ -236,10 +238,11 @@ class UserService {
       };
     } catch (err: any) {
       console.error('[userService.createUser] ❌ Error de red al registrar usuario:', err);
+      const networkError = safeString(err?.message, 'No se pudo conectar con el servidor para registrar el usuario.');
       return {
         success: false,
-        error: err?.message || 'Error de conexión con el servidor de registro.',
-        message: err?.message || 'No se pudo conectar con el servidor para registrar el usuario.',
+        error: networkError,
+        message: networkError,
         users: cached,
       };
     }

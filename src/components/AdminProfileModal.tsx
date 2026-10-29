@@ -13,6 +13,7 @@ import {
   ExternalLink,
   MessageSquare,
 } from 'lucide-react';
+import { safeString, extractErrorMessage } from '../utils/safeError';
 
 export const AdminProfileModal: React.FC = () => {
   const {
@@ -132,14 +133,14 @@ export const AdminProfileModal: React.FC = () => {
           {errorMsg && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2 animate-in fade-in">
               <AlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
-              <span>{errorMsg}</span>
+              <span>{safeString(errorMsg)}</span>
             </div>
           )}
 
           {successMsg && (
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-start gap-2 animate-in fade-in">
               <Check className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
-              <span>{successMsg}</span>
+              <span>{safeString(successMsg)}</span>
             </div>
           )}
 

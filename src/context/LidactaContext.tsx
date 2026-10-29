@@ -16,6 +16,7 @@ import {
 } from '../data/mockData';
 import { userService, UserServiceResponse } from '../services/userService';
 import { emailService } from '../services/emailService';
+import { safeString, extractErrorMessage } from '../utils/safeError';
 
 interface LidactaContextType {
   currentUser: UserProfile;
@@ -430,11 +431,12 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   } | null>(null);
 
   const showToast = (
-    message: string,
+    message: any,
     type: 'success' | 'info' | 'warning' | 'error' = 'success'
   ) => {
     const id = `toast_${Date.now()}`;
-    setToast({ id, message, type });
+    const safeMsg = safeString(message, 'Notificación del sistema');
+    setToast({ id, message: safeMsg, type });
     setTimeout(() => {
       setToast((curr) => (curr?.id === id ? null : curr));
     }, 4500);
@@ -1766,10 +1768,11 @@ El Equipo de Lidacta`;
       ]);
 
       if (res && !res.success) {
-        console.error('[registerOrSetPassword] ❌ Falla en la creación de usuario o despacho de correo:', res.message || res.error);
+        const errorMsg = extractErrorMessage(res.message || res.error, 'Error al procesar el registro en el servidor.');
+        console.error('[registerOrSetPassword] ❌ Falla en la creación de usuario:', errorMsg);
         return {
           success: false,
-          message: res.message || res.error || 'Error al procesar el registro en el servidor.',
+          message: errorMsg,
         };
       }
 
@@ -1780,7 +1783,7 @@ El Equipo de Lidacta`;
       console.error('[Lidacta] Error en la petición de registro:', err);
       return {
         success: false,
-        message: err?.message || 'Error de conexión al intentar registrar tu cuenta en el servidor.',
+        message: extractErrorMessage(err, 'Error de conexión al intentar registrar tu cuenta en el servidor.'),
       };
     }
 
@@ -1848,7 +1851,7 @@ El Equipo de Lidacta`;
       setActiveMentorshipIdState(null);
     }
 
-    // Dispatch automatic welcome notification for new auto-registered user
+    // Dispatch automatic welcome notification for new auto-registered user in UI
     const welcomeNotif: NotificationItem = {
       id: `notif_welcome_${Date.now()}`,
       recipientRole: assignedRole,
@@ -1867,28 +1870,25 @@ El Equipo de Lidacta`;
     };
     setNotifications((prev) => [welcomeNotif, ...prev]);
 
-    // Disparo explícito y esperado (await) de bienvenida a través de emailService
-    let emailDispatchResult: { success: boolean; emailId?: string; error?: string } = { success: false };
-    try {
-      console.log(`[LidactaContext] 🚀 Ejecutando llamada esperada (await) a emailService.sendWelcomeEmail para ${cleanEmail}...`);
-      emailDispatchResult = await emailService.sendWelcomeEmail({
+    // Despacho asíncrono e independiente de bienvenida (fire-and-forget sin bloquear navegación)
+    emailService
+      .sendWelcomeEmail({
         email: cleanEmail,
         name: cleanName,
         role: assignedRole,
         companyName: targetCompName,
+      })
+      .then((emailRes) => {
+        console.log(`[LidactaContext] ✅ Envío asíncrono de bienvenida completado para ${cleanEmail}:`, emailRes);
+      })
+      .catch((emailErr) => {
+        console.warn(`[LidactaContext] ⚠️ Aviso en entrega secundaria de correo:`, emailErr);
       });
-      console.log(`[LidactaContext] Resultado de bienvenida para ${cleanEmail}:`, emailDispatchResult);
-    } catch (emailErr) {
-      console.error("Resend delivery failed:", emailErr);
-      emailDispatchResult = { success: false, error: (emailErr as any)?.message };
-    }
 
     return {
       success: true,
       user: createdUser,
-      emailSent: emailDispatchResult.success,
-      emailId: emailDispatchResult.emailId,
-      emailError: emailDispatchResult.error,
+      message: 'Usuario registrado exitosamente',
     };
   };
 

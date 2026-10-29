@@ -1,5 +1,24 @@
 [
   {
+    "id": "user_1793304000944",
+    "name": "Carlos Mendoza Test",
+    "email": "carlos.test.mailing@taniapadierna.com",
+    "role": "leader",
+    "companyId": "comp_nexus",
+    "companyName": "Empresa Innovadora SA",
+    "position": "Jefe de Almacén",
+    "area": "Logística",
+    "birthDate": "1992-08-15",
+    "directReports": 15,
+    "whatsapp": "+525511223344",
+    "status": "active",
+    "password": "",
+    "isProfileCompleted": true,
+    "isProfileComplete": true,
+    "createdAt": "2026-10-29T20:00:00.944Z",
+    "updatedAt": "2026-10-29T20:00:06.205Z"
+  },
+  {
     "id": "user_1793282277256",
     "name": "Rodrigo Morales",
     "email": "proyectos.coaching+test2026@gmail.com",

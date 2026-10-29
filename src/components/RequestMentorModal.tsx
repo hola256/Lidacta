@@ -15,6 +15,7 @@ import {
 import { WhatsAppVoiceRecorder } from './WhatsAppVoiceRecorder';
 import { STAGE_META } from './LeaderView';
 import { StageNumber } from '../types/lidacta';
+import { safeString, extractErrorMessage } from '../utils/safeError';
 
 interface RequestMentorModalProps {
   isOpen: boolean;
@@ -326,12 +327,12 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                     )}
                   </div>
                   <p className="text-xs text-red-700 leading-relaxed font-medium break-words">
-                    {apiError.message}
+                    {safeString(apiError.message)}
                   </p>
                   {apiError.hint && (
                     <div className="flex items-start gap-1.5 p-2 bg-white/70 rounded-lg text-[11px] text-red-800 border border-red-200 mt-2 break-words">
                       <Info className="w-3.5 h-3.5 text-red-600 shrink-0 mt-0.5" />
-                      <span>{apiError.hint}</span>
+                      <span>{safeString(apiError.hint)}</span>
                     </div>
                   )}
                 </div>

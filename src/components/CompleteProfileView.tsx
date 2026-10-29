@@ -16,6 +16,7 @@ import {
   Layers,
   User,
 } from 'lucide-react';
+import { safeString, extractErrorMessage } from '../utils/safeError';
 
 export const CompleteProfileView: React.FC = () => {
   const { currentUser, completeUserProfile, forceCompleteProfile, logout, companies } = useLidacta();
@@ -275,7 +276,7 @@ export const CompleteProfileView: React.FC = () => {
           {errorMessage && (
             <div className="p-3.5 mb-4 bg-[#BF3A1B]/10 border border-[#BF3A1B]/30 rounded-xl flex items-center gap-3 text-xs text-[#BF3A1B] font-semibold animate-in fade-in duration-200">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{errorMessage}</span>
+              <span>{safeString(errorMessage)}</span>
             </div>
           )}
 

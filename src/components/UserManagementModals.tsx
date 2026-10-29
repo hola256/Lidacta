@@ -20,6 +20,7 @@ import {
   Check,
   Layers,
 } from 'lucide-react';
+import { safeString, extractErrorMessage } from '../utils/safeError';
 
 interface AddUserModalProps {
   isOpen: boolean;
@@ -153,7 +154,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({ isOpen, onClose, com
         {validationError && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2 animate-in fade-in">
             <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
-            <span>{validationError}</span>
+            <span>{safeString(validationError)}</span>
           </div>
         )}
 
@@ -541,7 +542,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({ user, onClose, com
         {validationError && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2 animate-in fade-in">
             <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
-            <span>{validationError}</span>
+            <span>{safeString(validationError)}</span>
           </div>
         )}
 
@@ -827,7 +828,7 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose 
         {errorMsg && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
-            <span>{errorMsg}</span>
+            <span>{safeString(errorMsg)}</span>
           </div>
         )}
 
