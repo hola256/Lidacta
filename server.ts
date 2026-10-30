@@ -1413,15 +1413,23 @@ app.post('/api/register', async (req: Request, res: Response) => {
         text: emailText,
       }).then((emailRes) => {
         if (emailRes.error) {
-          console.error('[REGISTER_ERROR]: Resend delivery failed in background:', emailRes.error);
+          const resendErr: any = emailRes.error;
+          const resendErrMsg = typeof resendErr === 'string'
+            ? resendErr
+            : (resendErr?.message || String(resendErr));
+          console.error('[REGISTER_ERROR]: Resend delivery failed in background:', resendErrMsg);
         } else {
           console.log(`[API /api/register] ✅ Correo entregado vía Resend con ID: ${emailRes.data?.id}`);
         }
       }).catch((emailErr) => {
-        console.error('[REGISTER_ERROR]: Error en envío asíncrono de Resend:', emailErr);
+        const emailErrMsg = typeof emailErr === 'string'
+          ? emailErr
+          : (emailErr?.message || String(emailErr));
+        console.error('[REGISTER_ERROR]: Error en envío asíncrono de Resend:', emailErrMsg);
       });
     } catch (err) {
-      console.error('[REGISTER_ERROR]: Excepción preparando Resend:', err);
+      const initErr = typeof err === 'string' ? err : ((err as any)?.message || String(err));
+      console.error('[REGISTER_ERROR]: Excepción preparando Resend:', initErr);
     }
 
     return res.status(200).json({
@@ -1432,7 +1440,9 @@ app.post('/api/register', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('[REGISTER_ERROR]:', error);
-    const errorMessage = error?.message || (typeof error === 'string' ? error : 'Error interno');
+    const errorMessage = typeof error?.message === 'string'
+      ? error.message
+      : (typeof error === 'string' ? error : 'Error interno');
     return res.status(200).json({ success: false, error: errorMessage, message: errorMessage });
   }
 });

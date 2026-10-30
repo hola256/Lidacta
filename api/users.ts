@@ -438,78 +438,7 @@ export default async function handler(req: any, res: any) {
       users.unshift(newUser);
       await persistUsers(users);
 
-      // Asynchronous non-blocking Resend dispatch
-      const resendApiKey = process.env.RESEND_API_KEY;
-      const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
-      const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com';
-
-      if (resendApiKey) {
-        try {
-          const resend = new Resend(resendApiKey);
-          const emailSubject = `¡Te damos la bienvenida a Lidacta, ${newUser.name}!`;
-          const emailHtml = `<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="utf-8"><title>${emailSubject}</title></head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8F6F4; margin: 0; padding: 24px; color: #2D1B4E;">
-  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(45, 27, 78, 0.08); border: 1px solid #EADBCE;">
-    <tr>
-      <td style="background-color: #2D1B4E; padding: 32px 24px; text-align: center;">
-        <h1 style="color: #FFF7EF; font-size: 24px; margin: 0 0 8px 0; font-weight: 800;">LIDACTA</h1>
-        <p style="color: #F7B538; font-size: 13px; margin: 0; font-weight: 600; text-transform: uppercase;">Desarrollo de Liderazgo en Acción</p>
-      </td>
-    </tr>
-    <tr>
-      <td style="padding: 32px 28px;">
-        <h2 style="font-size: 20px; color: #2D1B4E; margin: 0 0 16px 0;">¡Hola ${newUser.name}!</h2>
-        <p style="font-size: 14px; line-height: 1.6; color: #4A3F55; margin: 0 0 16px 0;">
-          Te damos una cálida bienvenida a <strong>Lidacta</strong>. Tu cuenta ha sido creada exitosamente asociada a <strong>${newUser.companyName}</strong>.
-        </p>
-        <p style="font-size: 14px; line-height: 1.6; color: #4A3F55; margin: 0 0 20px 0;">
-          Lidacta es tu espacio seguro, confidencial y práctico en el que tendrás un mentor para acompañarte y ayudarte a resolver los retos relacionados con el manejo de personas. Podrás también encontrar herramientas y establecer acciones que fortalezcan tu autonomía como líder.
-        </p>
-        <div style="background-color: #FFF7EF; border-left: 4px solid #F7B538; padding: 16px; border-radius: 8px; margin: 0 0 24px 0;">
-          <p style="font-size: 13px; font-weight: 700; color: #2D1B4E; margin: 0 0 6px 0;">🔒 Confidencialidad Absoluta Garantizada</p>
-          <p style="font-size: 12px; line-height: 1.5; color: #4A3F55; margin: 0;">
-            El contenido de tus conversaciones y casos es estrictamente privado.
-          </p>
-        </div>
-      </td>
-    </tr>
-    <tr>
-      <td style="background-color: #FFF7EF; padding: 20px 24px; text-align: center; border-top: 1px solid #EADBCE;">
-        <p style="font-size: 11px; color: #4A3F55; margin: 0;">Lidacta © ${new Date().getFullYear()} · Desarrollo de Liderazgo Operativo</p>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
-
-          const emailText = `¡Hola ${newUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\nTu cuenta ha sido creada exitosamente asociada a ${newUser.companyName}.\n\nAtentamente,\nEl Equipo de Lidacta\nResponder a: ${replyToEmail}`;
-
-          console.log(`[API /api/users] 🚀 Disparando correo asíncrono con Resend para: ${cleanEmail}...`);
-          resend.emails.send({
-            from: fromEmail,
-            to: [cleanEmail],
-            replyTo: replyToEmail,
-            subject: emailSubject,
-            html: emailHtml,
-            text: emailText,
-          }).then((resendResult) => {
-            if (resendResult.error) {
-              console.error('[API /api/users] ⚠️ Resend delivery failed in background:', resendResult.error);
-            } else {
-              console.log(`[API /api/users] ✅ Correo entregado vía Resend con ID: ${resendResult.data?.id}`);
-            }
-          }).catch((emailErr) => {
-            console.error('[API /api/users] ⚠️ Error en envío asíncrono de Resend:', emailErr);
-          });
-        } catch (err) {
-          console.error('[API /api/users] ⚠️ Excepción preparando Resend:', err);
-        }
-      } else {
-        console.warn('[API /api/users] ⚠️ RESEND_API_KEY no presente en entorno; correo registrado localmente.');
-      }
-
+      // Welcome email dispatch is strictly and exclusively handled by /api/register to prevent duplicate emails.
       return res.status(200).json({
         success: true,
         user: newUser,

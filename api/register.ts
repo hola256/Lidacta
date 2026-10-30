@@ -444,15 +444,25 @@ export default async function handler(req: any, res: any) {
         text: emailText,
       }).then((resendResult) => {
         if (resendResult.error) {
-          console.error('[REGISTER_ERROR]: Resend delivery failed in background:', resendResult.error);
+          const resendErr: any = resendResult.error;
+          const resendErrMsg = typeof resendErr === 'string'
+            ? resendErr
+            : (resendErr?.message || String(resendErr));
+          console.error('[REGISTER_ERROR]: Resend delivery failed in background:', resendErrMsg);
         } else {
           console.log(`[API /api/register] ✅ Correo entregado vía Resend con ID: ${resendResult.data?.id}`);
         }
       }).catch((emailErr) => {
-        console.error('[REGISTER_ERROR]: Error en envío asíncrono de Resend:', emailErr);
+        const emailErrMsg = typeof emailErr === 'string'
+          ? emailErr
+          : (emailErr?.message || String(emailErr));
+        console.error('[REGISTER_ERROR]: Error en envío asíncrono de Resend:', emailErrMsg);
       });
     } catch (resendInitErr: any) {
-      console.error('[REGISTER_ERROR]: Error preparando cliente Resend:', resendInitErr);
+      const initErrMsg = typeof resendInitErr === 'string'
+        ? resendInitErr
+        : (resendInitErr?.message || String(resendInitErr));
+      console.error('[REGISTER_ERROR]: Error preparando cliente Resend:', initErrMsg);
     }
 
     console.log(`[API /api/register] ✅ Usuario creado exitosamente: ${newUser.name} (${newUser.email})`);
@@ -466,7 +476,9 @@ export default async function handler(req: any, res: any) {
     });
   } catch (error: any) {
     console.error('[REGISTER_ERROR]:', error);
-    const errorMessage = error?.message || (typeof error === 'string' ? error : 'Error inesperado durante el registro');
+    const errorMessage = typeof error?.message === 'string'
+      ? error.message
+      : (typeof error === 'string' ? error : 'Error inesperado durante el registro');
     return res.status(200).json({
       success: false,
       error: errorMessage,

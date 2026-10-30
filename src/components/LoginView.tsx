@@ -94,20 +94,22 @@ export const LoginView: React.FC = () => {
     }
   };
 
-  // Registration handler with full field validation
+  // Registration handler with full field validation and mobile resilience
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setEmailStatus(null);
 
-    const cleanName = name.trim();
-    const cleanEmail = email.trim().toLowerCase();
+    // Mobile resilience: trim all input values immediately to eliminate accidental whitespace from mobile keyboard autocomplete
+    const cleanName = name.replace(/\s+/g, ' ').trim();
+    const cleanEmail = email.replace(/[\u200B-\u200D\uFEFF\s]/g, '').trim().toLowerCase();
     const cleanPassword = password.trim();
-    const cleanPosition = position.trim();
+    const cleanPosition = position.replace(/\s+/g, ' ').trim();
+    const cleanCustomCompany = customCompanyName.replace(/\s+/g, ' ').trim();
 
     // Required Field Validations
     if (!cleanName || cleanName.length < 2) {
-      setErrorMessage('Por favor, ingresa tu nombre completo.');
+      setErrorMessage('Por favor, ingresa tu nombre completo (mínimo 2 caracteres).');
       return;
     }
 
@@ -133,7 +135,7 @@ export const LoginView: React.FC = () => {
       return;
     }
 
-    if (companyId === 'other' && !customCompanyName.trim()) {
+    if (companyId === 'other' && !cleanCustomCompany) {
       setErrorMessage('Por favor, ingresa el nombre de tu empresa u organización.');
       return;
     }
@@ -149,7 +151,7 @@ export const LoginView: React.FC = () => {
         role,
         cleanPosition,
         companyId,
-        companyId === 'other' ? customCompanyName.trim() : undefined
+        companyId === 'other' ? cleanCustomCompany : undefined
       );
 
       if (!res.success) {
@@ -397,6 +399,8 @@ export const LoginView: React.FC = () => {
                   <input
                     type="text"
                     required
+                    autoCapitalize="words"
+                    autoCorrect="off"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Ej. Roberto Gómez o Carlos Mendoza"
@@ -414,7 +418,11 @@ export const LoginView: React.FC = () => {
                   <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-[#FFF7EF]/50 pointer-events-none" />
                   <input
                     type="email"
+                    inputMode="email"
                     required
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="tu.correo@empresa.com"
@@ -433,6 +441,9 @@ export const LoginView: React.FC = () => {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••••••"
@@ -503,6 +514,8 @@ export const LoginView: React.FC = () => {
                       <input
                         type="text"
                         required
+                        autoCapitalize="words"
+                        autoCorrect="off"
                         value={customCompanyName}
                         onChange={(e) => setCustomCompanyName(e.target.value)}
                         placeholder="Escribe el nombre de tu empresa..."
@@ -551,6 +564,7 @@ export const LoginView: React.FC = () => {
                   <input
                     type="text"
                     required
+                    autoCapitalize="sentences"
                     value={position}
                     onChange={(e) => setPosition(e.target.value)}
                     placeholder={
@@ -565,14 +579,17 @@ export const LoginView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Botón Confirmar Registro */}
+              {/* Botón Confirmar Registro con indicador visual de carga */}
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full min-h-[48px] py-3.5 px-6 bg-[#F7B538] hover:bg-[#e5a62f] text-[#2D1B4E] font-heading font-extrabold text-sm rounded-xl shadow-lg shadow-[#F7B538]/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 mt-3"
+                className="w-full min-h-[48px] py-3.5 px-6 bg-[#F7B538] hover:bg-[#e5a62f] text-[#2D1B4E] font-heading font-extrabold text-sm rounded-xl shadow-lg shadow-[#F7B538]/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-60 mt-3"
               >
                 {isLoading ? (
-                  <span>Registrando usuario en la Base de Datos Central...</span>
+                  <div className="flex items-center justify-center gap-2.5">
+                    <div className="w-4 h-4 border-2 border-[#2D1B4E] border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span>Registrando usuario en la Base de Datos Central...</span>
+                  </div>
                 ) : (
                   <>
                     <span>Confirmar Registro y Acceder</span>

@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertCircle, RefreshCw, LogOut } from 'lucide-react';
+import { safeString } from '../utils/safeError';
 
 interface Props {
   children: ReactNode;
@@ -62,7 +63,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
             {this.state.error && (
               <div className="p-3 bg-black/40 border border-white/10 rounded-xl text-left text-xs font-mono text-rose-300 max-h-32 overflow-y-auto">
-                {this.state.error.message || String(this.state.error)}
+                {safeString(this.state.error, 'Error no especificado')}
               </div>
             )}
 

@@ -1,5 +1,24 @@
 [
   {
+    "id": "user_1793398517132",
+    "name": "Elena Vázquez",
+    "email": "elena.vazquez+mobile@nexus-auto.com",
+    "role": "leader",
+    "companyId": "comp_nexus",
+    "companyName": "Industrias Nexus Automotriz",
+    "position": "Supervisora de Calidad",
+    "area": "Operaciones",
+    "birthDate": "1990-01-01",
+    "directReports": 0,
+    "whatsapp": "+525512349876",
+    "status": "active",
+    "password": "Password123!",
+    "isProfileCompleted": true,
+    "isProfileComplete": true,
+    "createdAt": "2026-10-30T22:15:17.132Z",
+    "updatedAt": "2026-10-30T22:15:29.776Z"
+  },
+  {
     "id": "user_1793313009809",
     "name": "Laura Sánchez",
     "email": "laura.test.template@taniapadierna.com",
