@@ -390,7 +390,8 @@ export default async function handler(req: any, res: any) {
       console.error('[REGISTER_ERROR]: Error persistiendo usuarios:', persistErr);
     }
 
-    // 5. Asynchronous Resend Dispatch (Non-blocking with isolated try/catch)
+    // 5. Envío nativo de correo con el SDK oficial de Resend (con await dentro de try/catch dedicado)
+    let emailDeliveryResult: { success: boolean; emailId?: string; error?: string } = { success: false };
     try {
       const resend = new Resend(resendApiKey);
       const emailSubject = `¡Te damos la bienvenida a Lidacta, ${newUser.name}!`;
@@ -434,35 +435,34 @@ export default async function handler(req: any, res: any) {
 
       const emailText = `¡Hola ${newUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\nTu cuenta ha sido creada exitosamente asociada a ${newUser.companyName}.\n\nLidacta es tu espacio seguro, confidencial y práctico en el que tendrás un mentor para acompañarte y ayudarte a resolver los retos relacionados con el manejo de personas. Podrás también encontrar herramientas y establecer acciones que fortalezcan tu autonomía como líder.\n\nAtentamente,\nEl Equipo de Lidacta\nResponder a: ${replyToEmail}`;
 
-      console.log(`[API /api/register] 🚀 Disparando correo asíncrono con Resend para: ${cleanEmail}...`);
-      resend.emails.send({
+      console.log(`[API /api/register] 🚀 Ejecutando envío oficial con Resend SDK para: ${cleanEmail}...`);
+      const resendResult = await resend.emails.send({
         from: fromEmail,
         to: [cleanEmail],
         replyTo: replyToEmail,
         subject: emailSubject,
         html: emailHtml,
         text: emailText,
-      }).then((resendResult) => {
-        if (resendResult.error) {
-          const resendErr: any = resendResult.error;
-          const resendErrMsg = typeof resendErr === 'string'
-            ? resendErr
-            : (resendErr?.message || String(resendErr));
-          console.error('[REGISTER_ERROR]: Resend delivery failed in background:', resendErrMsg);
-        } else {
-          console.log(`[API /api/register] ✅ Correo entregado vía Resend con ID: ${resendResult.data?.id}`);
-        }
-      }).catch((emailErr) => {
-        const emailErrMsg = typeof emailErr === 'string'
-          ? emailErr
-          : (emailErr?.message || String(emailErr));
-        console.error('[REGISTER_ERROR]: Error en envío asíncrono de Resend:', emailErrMsg);
       });
-    } catch (resendInitErr: any) {
-      const initErrMsg = typeof resendInitErr === 'string'
-        ? resendInitErr
-        : (resendInitErr?.message || String(resendInitErr));
-      console.error('[REGISTER_ERROR]: Error preparando cliente Resend:', initErrMsg);
+
+      if (resendResult.error) {
+        const resendErr: any = resendResult.error;
+        const resendErrMsg = typeof resendErr === 'string'
+          ? resendErr
+          : (resendErr?.message || String(resendErr));
+        console.error('[REGISTER_ERROR]: Resend delivery failed:', resendErrMsg);
+        emailDeliveryResult = { success: false, error: resendErrMsg };
+      } else {
+        const emailId = resendResult.data?.id;
+        console.log(`[API /api/register] ✅ Correo entregado exitosamente vía Resend con ID: ${emailId}`);
+        emailDeliveryResult = { success: true, emailId };
+      }
+    } catch (emailErr: any) {
+      const emailErrMsg = typeof emailErr === 'string'
+        ? emailErr
+        : (emailErr?.message || String(emailErr));
+      console.error('[REGISTER_ERROR]: Excepción en llamada a Resend SDK:', emailErrMsg);
+      emailDeliveryResult = { success: false, error: emailErrMsg };
     }
 
     console.log(`[API /api/register] ✅ Usuario creado exitosamente: ${newUser.name} (${newUser.email})`);
@@ -472,6 +472,9 @@ export default async function handler(req: any, res: any) {
       success: true,
       user: newUser,
       users,
+      emailSent: emailDeliveryResult.success,
+      emailId: emailDeliveryResult.emailId,
+      emailError: emailDeliveryResult.error,
       message: 'Usuario registrado exitosamente en Lidacta.',
     });
   } catch (error: any) {

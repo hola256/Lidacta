@@ -1397,39 +1397,39 @@ app.post('/api/register', async (req: Request, res: Response) => {
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
     const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com';
 
+    let emailDeliveryResult: { success: boolean; emailId?: string; error?: string } = { success: false };
     try {
       const resendClient = new Resend(resendApiKey);
       const emailSubject = `¡Te damos la bienvenida a Lidacta, ${newUser.name}!`;
       const emailHtml = generateWelcomeEmailHtml(newUser);
       const emailText = `¡Hola ${newUser.name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nTu cuenta ha sido creada exitosamente asociada a ${newUser.companyName}.\n\nLidacta es tu espacio seguro, confidencial y práctico en el que tendrás un mentor para acompañarte y ayudarte a resolver los retos relacionados con el manejo de personas. Podrás también encontrar herramientas y establecer acciones que fortalezcan tu autonomía como líder.\n\nAtentamente,\nEl Equipo de Lidacta\nResponder a: ${replyToEmail}`;
 
-      console.log(`[API /api/register] 🚀 Disparando correo asíncrono con Resend para ${newUser.email}...`);
-      resendClient.emails.send({
+      console.log(`[API /api/register] 🚀 Ejecutando envío oficial con Resend SDK para ${newUser.email}...`);
+      const emailRes = await resendClient.emails.send({
         from: fromEmail,
         to: [newUser.email],
         replyTo: replyToEmail,
         subject: emailSubject,
         html: emailHtml,
         text: emailText,
-      }).then((emailRes) => {
-        if (emailRes.error) {
-          const resendErr: any = emailRes.error;
-          const resendErrMsg = typeof resendErr === 'string'
-            ? resendErr
-            : (resendErr?.message || String(resendErr));
-          console.error('[REGISTER_ERROR]: Resend delivery failed in background:', resendErrMsg);
-        } else {
-          console.log(`[API /api/register] ✅ Correo entregado vía Resend con ID: ${emailRes.data?.id}`);
-        }
-      }).catch((emailErr) => {
-        const emailErrMsg = typeof emailErr === 'string'
-          ? emailErr
-          : (emailErr?.message || String(emailErr));
-        console.error('[REGISTER_ERROR]: Error en envío asíncrono de Resend:', emailErrMsg);
       });
-    } catch (err) {
-      const initErr = typeof err === 'string' ? err : ((err as any)?.message || String(err));
-      console.error('[REGISTER_ERROR]: Excepción preparando Resend:', initErr);
+
+      if (emailRes.error) {
+        const resendErr: any = emailRes.error;
+        const resendErrMsg = typeof resendErr === 'string'
+          ? resendErr
+          : (resendErr?.message || String(resendErr));
+        console.error('[REGISTER_ERROR]: Resend delivery failed:', resendErrMsg);
+        emailDeliveryResult = { success: false, error: resendErrMsg };
+      } else {
+        const emailId = emailRes.data?.id;
+        console.log(`[API /api/register] ✅ Correo entregado vía Resend con ID: ${emailId}`);
+        emailDeliveryResult = { success: true, emailId };
+      }
+    } catch (err: any) {
+      const initErr = typeof err === 'string' ? err : (err?.message || String(err));
+      console.error('[REGISTER_ERROR]: Excepción en llamada a Resend SDK:', initErr);
+      emailDeliveryResult = { success: false, error: initErr };
     }
 
     return res.status(200).json({
@@ -1437,6 +1437,9 @@ app.post('/api/register', async (req: Request, res: Response) => {
       message: 'Usuario registrado exitosamente en Lidacta',
       user: newUser,
       users: serverUsers,
+      emailSent: emailDeliveryResult.success,
+      emailId: emailDeliveryResult.emailId,
+      emailError: emailDeliveryResult.error,
     });
   } catch (error: any) {
     console.error('[REGISTER_ERROR]:', error);

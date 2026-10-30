@@ -1,5 +1,23 @@
 [
   {
+    "id": "user_1793399897662",
+    "name": "Gabriel Soto",
+    "email": "gabriel.soto@nexus-auto.com",
+    "role": "leader",
+    "companyId": "comp_nexus",
+    "companyName": "Industrias Nexus Automotriz",
+    "position": "Supervisor de Mantenimiento",
+    "area": "Operaciones",
+    "birthDate": "1990-01-01",
+    "directReports": 0,
+    "whatsapp": "Sin especificar",
+    "status": "active",
+    "password": "Password123!",
+    "isProfileCompleted": false,
+    "isProfileComplete": false,
+    "createdAt": "2026-10-30T22:38:17.662Z"
+  },
+  {
     "id": "user_1793398517132",
     "name": "Elena Vázquez",
     "email": "elena.vazquez+mobile@nexus-auto.com",
