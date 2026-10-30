@@ -34,6 +34,7 @@ import {
   UserPlus,
   Filter,
   RefreshCw,
+  Send,
 } from 'lucide-react';
 
 export const AdminView: React.FC = () => {
@@ -54,6 +55,7 @@ export const AdminView: React.FC = () => {
     lastDbSync,
     dbLatencyMs,
     updateUser,
+    sendProfileInvite,
   } = useLidacta();
 
   const adminProfile = allUsers.find((u) => u.role === 'admin') || currentUser;
@@ -73,6 +75,26 @@ export const AdminView: React.FC = () => {
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<UserProfile | null>(null);
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [sendingInviteUserId, setSendingInviteUserId] = useState<string | null>(null);
+  const [invitedUserIds, setInvitedUserIds] = useState<Record<string, boolean>>({});
+
+  const handleSendInviteToUser = async (u: UserProfile) => {
+    setSendingInviteUserId(u.id);
+    try {
+      await sendProfileInvite({
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        companyName: u.companyName,
+        role: u.role,
+      });
+      setInvitedUserIds((prev) => ({ ...prev, [u.id]: true }));
+    } catch (err) {
+      console.warn('Error al enviar invitación:', err);
+    } finally {
+      setSendingInviteUserId(null);
+    }
+  };
 
   // Auto-refresh users on initial mount and whenever the users directory tab is viewed
   useEffect(() => {
@@ -1213,24 +1235,47 @@ export const AdminView: React.FC = () => {
                       </div>
 
                       {/* Action buttons row */}
-                      <div className="pt-2 border-t border-[#493447]/10 flex items-center justify-end gap-2">
+                      <div className="pt-2 border-t border-[#493447]/10 flex flex-wrap items-center justify-between gap-2">
                         <button
                           type="button"
-                          onClick={() => setUserToEdit(u)}
-                          className="min-h-[38px] px-3 py-1.5 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 text-[#2D1B4E] font-bold text-xs rounded-xl border border-[#493447]/15 transition-colors cursor-pointer flex items-center gap-1.5 active:scale-95"
+                          onClick={() => handleSendInviteToUser(u)}
+                          disabled={sendingInviteUserId === u.id}
+                          className={`min-h-[38px] px-3 py-1.5 font-bold text-xs rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 ${
+                            invitedUserIds[u.id]
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : 'bg-[#FFF7EF] text-[#2D1B4E] border-[#493447]/15 hover:bg-[#FFD3BF]/40'
+                          }`}
+                          title="Enviar invitación para completar perfil"
                         >
-                          <Pencil className="w-3.5 h-3.5 text-[#BF3A1B]" />
-                          <span>Editar</span>
+                          {sendingInviteUserId === u.id ? (
+                            <div className="w-3.5 h-3.5 border-2 border-[#BF3A1B] border-t-transparent rounded-full animate-spin" />
+                          ) : invitedUserIds[u.id] ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Send className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                          )}
+                          <span>{invitedUserIds[u.id] ? 'Invitación enviada' : 'Enviar invitación para completar perfil'}</span>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setUserToDelete(u)}
-                          disabled={u.id === 'user_admin_tania'}
-                          className="min-h-[38px] px-3 py-1.5 bg-white hover:bg-red-50 text-red-600 font-bold text-xs rounded-xl border border-red-200 transition-colors cursor-pointer flex items-center gap-1.5 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Eliminar</span>
-                        </button>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setUserToEdit(u)}
+                            className="min-h-[38px] px-3 py-1.5 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 text-[#2D1B4E] font-bold text-xs rounded-xl border border-[#493447]/15 transition-colors cursor-pointer flex items-center gap-1.5 active:scale-95"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                            <span>Editar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setUserToDelete(u)}
+                            disabled={u.id === 'user_admin_tania'}
+                            className="min-h-[38px] px-3 py-1.5 bg-white hover:bg-red-50 text-red-600 font-bold text-xs rounded-xl border border-red-200 transition-colors cursor-pointer flex items-center gap-1.5 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Eliminar</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -1310,6 +1355,34 @@ export const AdminView: React.FC = () => {
                           </td>
                           <td className="p-3.5 text-right">
                             <div className="flex items-center justify-end gap-1.5">
+                              {/* Send Profile Invite Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleSendInviteToUser(u)}
+                                disabled={sendingInviteUserId === u.id}
+                                className={`min-h-[36px] px-2.5 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 border ${
+                                  invitedUserIds[u.id]
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                                    : 'bg-[#FFF7EF] text-[#2D1B4E] border-[#493447]/15 hover:bg-[#FFD3BF]/40 hover:border-[#BF3A1B]/30'
+                                }`}
+                                title={`Enviar invitación para completar perfil a ${u.name}`}
+                              >
+                                {sendingInviteUserId === u.id ? (
+                                  <div className="w-3.5 h-3.5 border-2 border-[#BF3A1B] border-t-transparent rounded-full animate-spin" />
+                                ) : invitedUserIds[u.id] ? (
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                ) : (
+                                  <Send className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                                )}
+                                <span className="hidden xl:inline text-[11px]">
+                                  {sendingInviteUserId === u.id
+                                    ? 'Enviando...'
+                                    : invitedUserIds[u.id]
+                                    ? 'Invitación enviada'
+                                    : 'Enviar invitación'}
+                                </span>
+                              </button>
+
                               {/* Edit Button */}
                               <button
                                 type="button"

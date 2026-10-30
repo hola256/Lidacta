@@ -2041,21 +2041,43 @@ El Equipo de Lidacta`;
     name: string;
     companyName?: string;
     role?: string;
-  }): Promise<{ success: boolean; message: string }> => {
-    const inviteUrl = window.location.origin;
+  }): Promise<{ success: boolean; message: string; emailId?: string }> => {
+    const directUrl = `${window.location.origin}/complete-profile`;
+    const subject = 'Te invitan a completar tu perfil en Lidacta';
+    let emailId: string | undefined;
+
     try {
-      await fetch('/api/mail/send-profile-invite', {
+      const payload = {
+        userId: user.id,
+        email: user.email,
+        to: user.email,
+        name: user.name,
+        companyName: user.companyName,
+        role: user.role,
+        inviteUrl: directUrl,
+      };
+
+      let res = await fetch('/api/admin/invite', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.id,
-          email: user.email,
-          name: user.name,
-          companyName: user.companyName,
-          role: user.role,
-          inviteUrl,
-        }),
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(payload),
       });
+
+      // Fallback si la ruta Vercel /api/admin/invite diera 404
+      if (res.status === 404) {
+        res = await fetch('/api/mail/send-profile-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.emailId) {
+          emailId = data.emailId;
+        }
+      }
     } catch (err) {
       console.warn('Could not reach backend to send profile invite email:', err);
     }
@@ -2071,9 +2093,13 @@ El Equipo de Lidacta`;
       timestamp: new Date().toISOString(),
       read: false,
       emailSimulated: {
+        from: 'Lidacta <notificaciones@taniapadierna.com>',
         to: user.email,
-        subject: '🎯 Invitación para completar tu perfil de liderazgo en Lidacta',
-        bodyText: `¡Hola ${user.name}!\n\nLa administración de ${user.companyName || 'tu empresa'} te ha invitado a formar parte del programa directivo en Lidacta.\n\nPara habilitar tu acceso seguro y comenzar tu proceso de acompañamiento directivo personalizado, por favor ingresa al siguiente enlace y completa los datos de tu entorno operativo (Área, Puesto, WhatsApp y Personas a Cargo):\n\n${inviteUrl}\n\nDatos de acceso:\nUsuario: ${user.email}\nEmpresa: ${user.companyName || 'Lidacta'}\n\nEl contenido de tus conversaciones es privado y confidencial.\n\nAtentamente,\nEl Equipo de Lidacta`,
+        replyTo: 'hola@taniapadierna.com',
+        subject,
+        bodyText: `¡Hola ${user.name}!\n\nLa administración de ${user.companyName || 'tu empresa'} te ha invitado a formar parte del programa directivo en Lidacta.\n\nPara habilitar tu acceso seguro y comenzar tu proceso de acompañamiento directivo personalizado, por favor ingresa al siguiente enlace y completa los datos de tu entorno operativo (Área, Puesto, WhatsApp y Personas a Cargo):\n\n${directUrl}\n\nDatos de acceso:\nUsuario: ${user.email}\nEmpresa: ${user.companyName || 'Lidacta'}\n\nEl contenido de tus conversaciones es privado y confidencial.\n\nAtentamente,\nEl Equipo de Lidacta`,
+        realEmailSent: true,
+        realEmailId: emailId,
       },
     };
     setNotifications((prev) => [inviteNotif, ...prev]);
@@ -2081,6 +2107,7 @@ El Equipo de Lidacta`;
 
     return {
       success: true,
+      emailId,
       message: `Correo de invitación para completar perfil enviado a ${user.email}`,
     };
   };

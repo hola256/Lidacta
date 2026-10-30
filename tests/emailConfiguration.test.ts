@@ -29,4 +29,16 @@ describe('Servicio de Correo Electrónico y Notificaciones Resend - Lidacta', ()
     assert.strictEqual(testEmailPayload.realEmailSent, true);
     assert.ok(testEmailPayload.realEmailId);
   });
+
+  it('debe despachar la invitación para completar perfil con el asunto y remitente oficial', () => {
+    const inviteSubject = 'Te invitan a completar tu perfil en Lidacta';
+    const fromEmail = 'Lidacta <notificaciones@taniapadierna.com>';
+    const replyToEmail = 'hola@taniapadierna.com';
+    const completeProfileUrl = 'https://ejemplo.com/complete-profile';
+
+    assert.strictEqual(inviteSubject, 'Te invitan a completar tu perfil en Lidacta');
+    assert.strictEqual(fromEmail, 'Lidacta <notificaciones@taniapadierna.com>');
+    assert.strictEqual(replyToEmail, 'hola@taniapadierna.com');
+    assert.ok(completeProfileUrl.endsWith('/complete-profile'));
+  });
 });

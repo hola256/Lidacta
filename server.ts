@@ -1175,8 +1175,11 @@ async function sendWelcomeEmail(user: ServerUserProfile): Promise<{ realSent: bo
 }
 
 async function sendProfileInviteEmail(user: ServerUserProfile, inviteUrl?: string): Promise<{ realSent: boolean; emailId?: string; deliveryNote?: string }> {
-  const subject = `🎯 Invitación para completar tu perfil de liderazgo en Lidacta`;
-  const directUrl = inviteUrl || 'https://ais-dev-5pctfozdv244x3okeqjryq-710027895954.us-east1.run.app';
+  const subject = `Te invitan a completar tu perfil en Lidacta`;
+  let directUrl = inviteUrl || 'https://ais-dev-5pctfozdv244x3okeqjryq-710027895954.us-east1.run.app';
+  if (!directUrl.includes('/complete-profile')) {
+    directUrl = `${directUrl.replace(/\/+$/, '')}/complete-profile`;
+  }
   const text = `¡Hola ${user.name}!\n\nLa administración de ${user.companyName} te ha invitado a formar parte del programa directivo en Lidacta.\n\nPara habilitar tu acceso seguro y comenzar tu proceso de acompañamiento directivo personalizado, por favor ingresa al siguiente enlace y completa los datos de tu entorno operativo (Área, Puesto, WhatsApp y Personas a Cargo):\n\n${directUrl}\n\nDatos de acceso:\nUsuario: ${user.email}\nEmpresa: ${user.companyName}\n\nEl contenido de tus conversaciones es privado y confidencial.\nPuedes responder directamente a este correo o escribir a hola@taniapadierna.com para resolver cualquier inquietud.\n\nAtentamente,\nEl Equipo de Lidacta`;
   const html = generateProfileInviteEmailHtml(user, directUrl);
 
@@ -1185,7 +1188,7 @@ async function sendProfileInviteEmail(user: ServerUserProfile, inviteUrl?: strin
     subject,
     html,
     text,
-    replyTo: process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com',
+    replyTo: 'hola@taniapadierna.com',
     recipientRole: user.role,
     recipientUserId: user.id,
     companyId: user.companyId,
@@ -1575,8 +1578,8 @@ app.post('/api/mail/send-welcome', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/mail/send-profile-invite - Send invitation email to complete profile
-app.post('/api/mail/send-profile-invite', async (req: Request, res: Response) => {
+// POST /api/admin/invite & POST /api/mail/send-profile-invite - Send invitation email to complete profile
+const handleProfileInviteRequest = async (req: Request, res: Response) => {
   try {
     const { userId, email, inviteUrl } = req.body;
     serverUsers = readPersistentUsers();
@@ -1599,23 +1602,25 @@ app.post('/api/mail/send-profile-invite', async (req: Request, res: Response) =>
       };
     }
 
-    // Despacho asíncrono
-    setImmediate(() => {
-      sendProfileInviteEmail(targetUser, inviteUrl).catch((e) =>
-        console.error('[LIDACTA MAILING ERROR ❌] Error en sendProfileInviteEmail:', e)
-      );
-    });
+    // Despacho síncrono garantizado con await directo
+    console.log(`[LIDACTA MAILING 📧] Despachando invitación de perfil para ${targetUser.email}...`);
+    const mailResult = await sendProfileInviteEmail(targetUser, inviteUrl);
 
     return res.json({
       success: true,
-      message: `Correo de invitación para completar perfil programado para ${targetUser.email}`,
-      queued: true,
+      emailId: mailResult.emailId,
+      realSent: mailResult.realSent,
+      deliveryNote: mailResult.deliveryNote,
+      message: `Correo de invitación para completar perfil enviado a ${targetUser.email}`,
     });
   } catch (error: any) {
-    console.error('Error in /api/mail/send-profile-invite:', error);
+    console.error('Error in handleProfileInviteRequest:', error);
     return res.status(500).json({ success: false, message: error?.message || 'Error al enviar invitación' });
   }
-});
+};
+
+app.post('/api/admin/invite', handleProfileInviteRequest);
+app.post('/api/mail/send-profile-invite', handleProfileInviteRequest);
 
 // PUT /api/users/:id - Update user details, role, status and password
 app.put('/api/users/:id', (req: Request, res: Response) => {

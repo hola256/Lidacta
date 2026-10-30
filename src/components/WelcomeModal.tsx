@@ -94,12 +94,12 @@ export const WelcomeModal: React.FC = () => {
             ) : inviteSent ? (
               <>
                 <CheckCircle2 className="w-4 h-4 text-[#F7B538]" />
-                <span>¡Correo de invitación enviado con éxito! (Reenviar)</span>
+                <span>¡Invitación para completar perfil enviada! (Reenviar)</span>
               </>
             ) : (
               <>
                 <Send className="w-4 h-4 text-[#F7B538]" />
-                <span>Enviar correo al usuario para completar su perfil</span>
+                <span>Enviar invitación para completar perfil</span>
               </>
             )}
           </button>
