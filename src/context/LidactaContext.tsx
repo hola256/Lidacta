@@ -2048,6 +2048,7 @@ El Equipo de Lidacta`;
 
     try {
       const payload = {
+        action: 'invite',
         userId: user.id,
         email: user.email,
         to: user.email,
@@ -2057,15 +2058,15 @@ El Equipo de Lidacta`;
         inviteUrl: directUrl,
       };
 
-      let res = await fetch('/api/admin/invite', {
+      let res = await fetch('/api/user/complete-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      // Fallback si la ruta Vercel /api/admin/invite diera 404
-      if (res.status === 404) {
-        res = await fetch('/api/mail/send-profile-invite', {
+      // Fallback a /api/users o /api/admin/invite
+      if (!res.ok && res.status === 404) {
+        res = await fetch('/api/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify(payload),

@@ -232,7 +232,7 @@
     "isProfileCompleted": true,
     "isProfileComplete": true,
     "createdAt": "2026-01-01",
-    "updatedAt": "2026-10-30T23:06:10.155Z"
+    "updatedAt": "2026-10-30T23:21:53.388Z"
   },
   {
     "id": "user_leader_roberto",
@@ -241,17 +241,17 @@
     "role": "leader",
     "companyId": "comp_nexus",
     "companyName": "Industrias Nexus Automotriz",
-    "position": "Líder de Línea de Ensamble y Calidad Certificada",
-    "area": "Operaciones de Manufactura",
-    "birthDate": "1988-04-12",
-    "directReports": 14,
-    "whatsapp": "+52 55 4912 8841",
+    "position": "Líder de Calidad",
+    "area": "Manufactura Avanzada",
+    "birthDate": "1990-01-01",
+    "directReports": 0,
+    "whatsapp": "Sin especificar",
     "avatarUrl": "/src/assets/images/avatar_leader_roberto_1792074706592.jpg",
     "status": "active",
     "isProfileCompleted": true,
     "isProfileComplete": true,
     "createdAt": "2026-09-10",
-    "updatedAt": "2026-10-26T16:29:39.991Z"
+    "updatedAt": "2026-10-30T23:21:48.431Z"
   },
   {
     "id": "user_leader_carlos",

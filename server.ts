@@ -739,6 +739,10 @@ function sanitizeWhatsapp(raw?: any): string {
 // POST /api/user/complete-profile - Persistently mark profile as complete across PC, Mobile, Incognito (Permanent UPSERT)
 app.post('/api/user/complete-profile', (req: Request, res: Response) => {
   try {
+    if (req.body?.action === 'invite' || req.body?.action === 'send_invite' || req.body?.sendInvite === true) {
+      return handleProfileInviteRequest(req, res);
+    }
+
     serverUsers = readPersistentUsers();
     const {
       userId,
@@ -1198,9 +1202,53 @@ async function sendProfileInviteEmail(user: ServerUserProfile, inviteUrl?: strin
   });
 }
 
+async function handleProfileInviteRequest(req: Request, res: Response) {
+  try {
+    const { userId, email, inviteUrl } = req.body;
+    serverUsers = readPersistentUsers();
+    let targetUser = serverUsers.find(
+      (u) =>
+        (userId && u.id === userId) ||
+        (email && u.email.toLowerCase() === String(email).trim().toLowerCase())
+    );
+
+    if (!targetUser) {
+      targetUser = {
+        id: userId || `user_${Date.now()}`,
+        name: req.body.name || 'Líder Lidacta',
+        email: email || 'usuario@lidacta.com',
+        role: req.body.role || 'leader',
+        companyId: req.body.companyId || 'comp_nexus',
+        companyName: req.body.companyName || 'Industrias Nexus Automotriz',
+        position: req.body.position || 'Líder Operativo',
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    // Despacho síncrono garantizado con await directo
+    console.log(`[LIDACTA MAILING 📧] Despachando invitación de perfil para ${targetUser.email}...`);
+    const mailResult = await sendProfileInviteEmail(targetUser, inviteUrl);
+
+    return res.json({
+      success: true,
+      emailId: mailResult.emailId,
+      realSent: mailResult.realSent,
+      deliveryNote: mailResult.deliveryNote,
+      message: `Correo de invitación para completar perfil enviado a ${targetUser.email}`,
+    });
+  } catch (error: any) {
+    console.error('Error in handleProfileInviteRequest:', error);
+    return res.status(500).json({ success: false, message: error?.message || 'Error al enviar invitación' });
+  }
+}
+
 // POST /api/users - Create new user with backend persistence & guaranteed asynchronous welcome mailing
 app.post('/api/users', async (req: Request, res: Response) => {
   try {
+    if (req.body?.action === 'invite' || req.body?.action === 'send_invite' || req.body?.sendInvite === true) {
+      return handleProfileInviteRequest(req, res);
+    }
+
     serverUsers = readPersistentUsers();
     const {
       name,
@@ -1578,47 +1626,7 @@ app.post('/api/mail/send-welcome', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/admin/invite & POST /api/mail/send-profile-invite - Send invitation email to complete profile
-const handleProfileInviteRequest = async (req: Request, res: Response) => {
-  try {
-    const { userId, email, inviteUrl } = req.body;
-    serverUsers = readPersistentUsers();
-    let targetUser = serverUsers.find(
-      (u) =>
-        (userId && u.id === userId) ||
-        (email && u.email.toLowerCase() === String(email).trim().toLowerCase())
-    );
-
-    if (!targetUser) {
-      targetUser = {
-        id: userId || `user_${Date.now()}`,
-        name: req.body.name || 'Líder Lidacta',
-        email: email || 'usuario@lidacta.com',
-        role: req.body.role || 'leader',
-        companyId: req.body.companyId || 'comp_nexus',
-        companyName: req.body.companyName || 'Industrias Nexus Automotriz',
-        position: req.body.position || 'Líder Operativo',
-        createdAt: new Date().toISOString(),
-      };
-    }
-
-    // Despacho síncrono garantizado con await directo
-    console.log(`[LIDACTA MAILING 📧] Despachando invitación de perfil para ${targetUser.email}...`);
-    const mailResult = await sendProfileInviteEmail(targetUser, inviteUrl);
-
-    return res.json({
-      success: true,
-      emailId: mailResult.emailId,
-      realSent: mailResult.realSent,
-      deliveryNote: mailResult.deliveryNote,
-      message: `Correo de invitación para completar perfil enviado a ${targetUser.email}`,
-    });
-  } catch (error: any) {
-    console.error('Error in handleProfileInviteRequest:', error);
-    return res.status(500).json({ success: false, message: error?.message || 'Error al enviar invitación' });
-  }
-};
-
+// Legacy endpoints for backwards compatibility
 app.post('/api/admin/invite', handleProfileInviteRequest);
 app.post('/api/mail/send-profile-invite', handleProfileInviteRequest);
 
