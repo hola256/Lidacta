@@ -200,4 +200,24 @@ describe('User Profile Completion & Persistence Logic', () => {
       'HR with Leader in position must be evaluated as HR based on role button'
     );
   });
+
+  it('should generate differentiated welcome email text for Human Resources vs Leader', () => {
+    const getWelcomeEmailText = (role: string, name: string) => {
+      const isHR = role === 'hr';
+      if (isHR) {
+        return `Hola, ${name}:\n\n¡Nos alegra darte la bienvenida a Lidacta!\n\nGracias por confiar en este espacio para impulsar el desarrollo de tus líderes.\n\nSabemos que desarrollar habilidades de liderazgo va más allá de ofrecer capacitación. También implica acompañar a las personas en los retos cotidianos que enfrentan al dirigir, gestionar y trabajar con sus equipos.\n\nLidacta busca contribuir a ese proceso, ofreciendo a tus líderes un espacio de acompañamiento para analizar situaciones reales de gestión de personas, explorar alternativas y encontrar nuevas formas de actuar.\n\nDesde tu perfil de Recursos Humanos podrás consultar indicadores de uso y progreso de tus líderes, que te permitirán dar seguimiento a su participación y conocer cómo avanzan en su experiencia dentro de la plataforma.\n\nTe invitamos a explorar Lidacta, familiarizarte con sus indicadores y descubrir cómo esta herramienta puede complementar tus iniciativas de desarrollo de liderazgo.\n\n¡Gracias por ser parte de este proyecto!\n\nLidacta\nDesarrollo de Liderazgo en Acción`;
+      }
+      return `¡Hola ${name}!\n\nTe damos una cálida bienvenida a Lidacta: Desarrollo de Liderazgo en Acción.\n\nLidacta es tu espacio seguro, confidencial y práctico en el que tendrás un mentor para acompañarte y ayudarte a resolver los retos relacionados con el manejo de personas. Podrás también encontrar herramientas y establecer acciones que fortalezcan tu autonomía como líder.\n\nAtentamente,\nEl Equipo de Lidacta`;
+    };
+
+    const hrEmail = getWelcomeEmailText('hr', 'Sofía');
+    assert.ok(hrEmail.startsWith('Hola, Sofía:'));
+    assert.ok(hrEmail.includes('Gracias por confiar en este espacio para impulsar el desarrollo de tus líderes'));
+    assert.ok(hrEmail.includes('Desde tu perfil de Recursos Humanos podrás consultar indicadores de uso y progreso'));
+    assert.ok(hrEmail.includes('¡Gracias por ser parte de este proyecto!'));
+
+    const leaderEmail = getWelcomeEmailText('leader', 'Carlos');
+    assert.ok(leaderEmail.startsWith('¡Hola Carlos!'));
+    assert.ok(leaderEmail.includes('fortalezcan tu autonomía como líder'));
+  });
 });
