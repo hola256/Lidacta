@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLidacta } from '../context/LidactaContext';
 import { CompanyContext, MentorshipSession, UserProfile } from '../types/lidacta';
-import { AddUserModal, EditUserModal, DeleteUserModal } from './UserManagementModals';
+import { AddUserModal, EditUserModal, DeleteUserModal, ViewUserModal } from './UserManagementModals';
 import {
   Building2,
   Sliders,
@@ -75,6 +75,7 @@ export const AdminView: React.FC = () => {
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<UserProfile | null>(null);
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [userToView, setUserToView] = useState<UserProfile | null>(null);
   const [sendingInviteUserId, setSendingInviteUserId] = useState<string | null>(null);
   const [invitedUserIds, setInvitedUserIds] = useState<Record<string, boolean>>({});
 
@@ -1257,7 +1258,16 @@ export const AdminView: React.FC = () => {
                           <span>{invitedUserIds[u.id] ? 'Invitación enviada' : 'Enviar invitación para completar perfil'}</span>
                         </button>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setUserToView(u)}
+                            className="min-h-[38px] px-3 py-1.5 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 text-[#2D1B4E] font-bold text-xs rounded-xl border border-[#493447]/15 transition-colors cursor-pointer flex items-center gap-1.5 active:scale-95"
+                            title={`Ver perfil completo de ${u.name}`}
+                          >
+                            <Eye className="w-3.5 h-3.5 text-[#2D1B4E]" />
+                            <span>Ver Perfil</span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => setUserToEdit(u)}
@@ -1381,6 +1391,16 @@ export const AdminView: React.FC = () => {
                                     ? 'Invitación enviada'
                                     : 'Enviar invitación'}
                                 </span>
+                              </button>
+
+                              {/* View Profile Button */}
+                              <button
+                                type="button"
+                                onClick={() => setUserToView(u)}
+                                className="min-h-[36px] min-w-[36px] p-2 text-[#2D1B4E] hover:text-[#BF3A1B] hover:bg-[#FFD3BF]/40 rounded-xl transition-colors cursor-pointer flex items-center justify-center active:scale-95 border border-transparent hover:border-[#BF3A1B]/20"
+                                title={`Ver perfil detallado de ${u.name}`}
+                              >
+                                <Eye className="w-4 h-4 text-[#2D1B4E]" />
                               </button>
 
                               {/* Edit Button */}
@@ -1759,6 +1779,15 @@ export const AdminView: React.FC = () => {
       <DeleteUserModal
         user={userToDelete}
         onClose={() => setUserToDelete(null)}
+      />
+      <ViewUserModal
+        user={userToView}
+        onClose={() => setUserToView(null)}
+        onEdit={(u) => {
+          setUserToView(null);
+          setUserToEdit(u);
+        }}
+        onSendInvite={handleSendInviteToUser}
       />
     </div>
   </div>

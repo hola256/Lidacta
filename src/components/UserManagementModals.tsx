@@ -871,3 +871,226 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose 
     </div>
   );
 };
+
+interface ViewUserModalProps {
+  user: UserProfile | null;
+  onClose: () => void;
+  onEdit?: (user: UserProfile) => void;
+  onSendInvite?: (user: UserProfile) => void;
+}
+
+export const ViewUserModal: React.FC<ViewUserModalProps> = ({
+  user,
+  onClose,
+  onEdit,
+  onSendInvite,
+}) => {
+  if (!user) return null;
+
+  const initials = user.name
+    .split(' ')
+    .filter(Boolean)
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  const isActive = (user.status || 'active') === 'active';
+  const isProfileComplete = Boolean(user.isProfileCompleted || user.isProfileComplete);
+  const formattedCreationDate = user.createdAt
+    ? new Date(user.createdAt).toLocaleDateString('es-MX', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : 'No registrada';
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#2D1B4E]/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+      <div className="bg-white border border-[#493447]/20 rounded-2xl max-w-lg w-full shadow-2xl p-5 sm:p-7 space-y-5 max-h-[92vh] overflow-y-auto my-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-[#493447]/10 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-[#2D1B4E]/10 text-[#2D1B4E] flex items-center justify-center shrink-0">
+              <Eye className="w-5 h-5 text-[#2D1B4E]" />
+            </div>
+            <div>
+              <h2 className="font-heading font-extrabold text-base sm:text-lg text-[#2D1B4E]">
+                Ficha Detallada de Usuario
+              </h2>
+              <p className="text-[11px] text-[#4A3F55]/70">
+                Información de perfil registrada en la Base de Datos Central
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg hover:bg-[#FFF7EF] text-[#4A3F55] hover:text-[#2D1B4E] flex items-center justify-center transition-colors cursor-pointer"
+            title="Cerrar ficha"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* User Card Hero */}
+        <div className="p-4 bg-[#FFF7EF]/70 rounded-2xl border border-[#493447]/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-[#2D1B4E] text-[#FFF7EF] font-bold text-sm flex items-center justify-center shrink-0 shadow-xs">
+              {initials}
+            </div>
+            <div>
+              <h3 className="font-bold text-sm sm:text-base text-[#2D1B4E]">
+                {user.name}
+              </h3>
+              <p className="text-xs text-[#4A3F55]/80">{user.email}</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 sm:self-start">
+            <span
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                user.role === 'admin'
+                  ? 'bg-[#F7B538] text-[#2D1B4E]'
+                  : user.role === 'hr'
+                  ? 'bg-[#C9BDF2] text-[#2D1B4E]'
+                  : 'bg-[#FFD3BF] text-[#BF3A1B]'
+              }`}
+            >
+              {user.role}
+            </span>
+
+            {isActive ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Activo
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-900 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                Inactivo
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Profile Completion Status Banner */}
+        <div
+          className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+            isProfileComplete
+              ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+              : 'bg-amber-50/70 border-amber-200 text-amber-900'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {isProfileComplete ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            )}
+            <span className="font-semibold text-[11px]">
+              {isProfileComplete
+                ? 'Perfil de liderazgo completado y validado'
+                : 'Perfil pendiente de completar (onboarding inicial)'}
+            </span>
+          </div>
+          {!isProfileComplete && onSendInvite && (
+            <button
+              type="button"
+              onClick={() => onSendInvite(user)}
+              className="px-2.5 py-1 bg-[#2D1B4E] hover:bg-[#3D2666] text-white text-[10px] font-bold rounded-lg transition-colors cursor-pointer shrink-0"
+            >
+              Enviar Invitación
+            </button>
+          )}
+        </div>
+
+        {/* Detailed Fields Grid (Read-Only) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div className="p-3 bg-white border border-[#493447]/10 rounded-xl space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#4A3F55]/60 flex items-center gap-1">
+              <Building2 className="w-3 h-3 text-[#BF3A1B]" /> Empresa
+            </span>
+            <p className="font-semibold text-[#2D1B4E] text-xs sm:text-sm">
+              {user.companyName || 'Sin especificar'}
+            </p>
+          </div>
+
+          <div className="p-3 bg-white border border-[#493447]/10 rounded-xl space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#4A3F55]/60 flex items-center gap-1">
+              <Briefcase className="w-3 h-3 text-[#BF3A1B]" /> Puesto
+            </span>
+            <p className="font-semibold text-[#2D1B4E] text-xs sm:text-sm">
+              {user.position || 'Sin especificar'}
+            </p>
+          </div>
+
+          <div className="p-3 bg-white border border-[#493447]/10 rounded-xl space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#4A3F55]/60 flex items-center gap-1">
+              <Layers className="w-3 h-3 text-[#BF3A1B]" /> Área / Departamento
+            </span>
+            <p className="font-medium text-[#2D1B4E]">
+              {user.area || 'Sin especificar'}
+            </p>
+          </div>
+
+          <div className="p-3 bg-white border border-[#493447]/10 rounded-xl space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#4A3F55]/60 flex items-center gap-1">
+              <Phone className="w-3 h-3 text-[#BF3A1B]" /> WhatsApp / Teléfono
+            </span>
+            <p className="font-medium text-[#2D1B4E] tabular-nums">
+              {user.whatsapp || 'No registrado'}
+            </p>
+          </div>
+
+          <div className="p-3 bg-white border border-[#493447]/10 rounded-xl space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#4A3F55]/60 flex items-center gap-1">
+              <User className="w-3 h-3 text-[#BF3A1B]" /> Personas a Cargo
+            </span>
+            <p className="font-medium text-[#2D1B4E]">
+              {user.directReports !== undefined ? `${user.directReports} colaboradores directos` : 'No especificado'}
+            </p>
+          </div>
+
+          <div className="p-3 bg-white border border-[#493447]/10 rounded-xl space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#4A3F55]/60 flex items-center gap-1">
+              <Mail className="w-3 h-3 text-[#BF3A1B]" /> Correo Electrónico
+            </span>
+            <p className="font-medium text-[#2D1B4E] break-all">
+              {user.email}
+            </p>
+          </div>
+
+          <div className="p-3 bg-white border border-[#493447]/10 rounded-xl space-y-1 sm:col-span-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-[#4A3F55]/70">
+              <span>ID de Base de Datos: <code className="font-mono text-[#2D1B4E]">{user.id}</code></span>
+              <span>Registrado el: <strong>{formattedCreationDate}</strong></span>
+            </div>
+          </div>
+        </div>
+
+        {/* Modal Footer Actions */}
+        <div className="pt-2 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 border-t border-[#493447]/10">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full sm:w-auto min-h-[44px] px-4 py-2 border border-[#493447]/20 text-[#4A3F55] hover:text-[#2D1B4E] hover:bg-slate-50 font-bold rounded-xl transition-colors cursor-pointer text-xs"
+          >
+            Cerrar
+          </button>
+
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(user)}
+              className="w-full sm:w-auto min-h-[44px] px-4 py-2 bg-[#BF3A1B] hover:bg-[#a63014] text-white font-bold rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 text-xs"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              <span>Editar Perfil</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
