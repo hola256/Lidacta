@@ -144,4 +144,32 @@ describe('User Profile Completion & Persistence Logic', () => {
     assert.strictEqual(isHumanResourcesRole(null), false);
     assert.strictEqual(isHumanResourcesRole(undefined), false);
   });
+
+  it('should evaluate welcome modal strictly from the role selection button, ignoring free-text position/cargo', async () => {
+    const { isHumanResourcesRole } = await import('../src/utils/roleUtils.js');
+
+    // Case 1: Leader who typed "Director de Recursos Humanos" in their position field
+    // Because role is 'leader', they must get the Leader modal, NOT HR!
+    const leaderWithHRPosition = {
+      role: 'leader',
+      position: 'Director de Recursos Humanos y Cultura',
+    };
+    assert.strictEqual(
+      isHumanResourcesRole(leaderWithHRPosition.role),
+      false,
+      'Leader with HR in position must NOT be evaluated as HR'
+    );
+
+    // Case 2: HR who typed "Líder de Operaciones" in their position field
+    // Because role is 'hr', they must get the HR modal!
+    const hrWithLeaderPosition = {
+      role: 'hr',
+      position: 'Líder de Operaciones de Talento',
+    };
+    assert.strictEqual(
+      isHumanResourcesRole(hrWithLeaderPosition.role),
+      true,
+      'HR with Leader in position must be evaluated as HR based on role button'
+    );
+  });
 });

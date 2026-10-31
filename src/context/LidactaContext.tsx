@@ -1818,6 +1818,7 @@ El Equipo de Lidacta`;
 
     const createdUser: UserProfile = remoteUser ? {
       ...remoteUser,
+      role: assignedRole,
       companyId: targetCompId,
       companyName: targetCompName,
       isProfileCompleted: assignedRole === 'admin',
@@ -1840,6 +1841,14 @@ El Equipo de Lidacta`;
       status: 'active',
       password: password.trim(),
     };
+
+    // Persist registered role selection strictly
+    try {
+      localStorage.setItem(`lidacta_registered_role_${createdUser.id}`, assignedRole);
+      localStorage.setItem(`lidacta_registered_role_${createdUser.email.toLowerCase()}`, assignedRole);
+      sessionStorage.setItem(`lidacta_registered_role_${createdUser.id}`, assignedRole);
+      sessionStorage.setItem(`lidacta_registered_role_${createdUser.email.toLowerCase()}`, assignedRole);
+    } catch {}
 
     // Ensure session isolation: clear any lingering admin cache and bind session strictly to new user
     setSessionUser(createdUser);

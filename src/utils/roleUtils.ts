@@ -1,39 +1,44 @@
 /**
  * Homologación y Validación Universal de Roles en Lidacta.
- * Garantiza detección exhaustiva de Recursos Humanos en cualquier variante:
- * 'HR', 'RH', 'hr', 'rh', 'RECURSOS_HUMANOS', 'recursos_humanos', 'Recursos Humanos', etc.
+ * Vinculado estrictamente al campo "ROL EN LA PLATAFORMA" seleccionado
+ * en los botones de registro ('Líder' / 'Recursos Humanos').
+ * Ignora por completo el texto libre del campo "Puesto / Cargo".
  */
 
 export function isHumanResourcesRole(role?: string | null): boolean {
   if (!role) return false;
-  const r = String(role).trim().toUpperCase();
+  const r = String(role).trim().toLowerCase();
   return (
-    r === 'HR' ||
-    r === 'RH' ||
-    r === 'RECURSOS_HUMANOS' ||
-    r === 'RECURSOS HUMANOS' ||
-    r === 'RECURSOSHUMANOS' ||
-    r === 'HUMAN_RESOURCES' ||
-    r === 'HUMAN RESOURCES' ||
-    r === 'HUMANRESOURCES' ||
-    r === 'TALENTO' ||
-    r.startsWith('HR') ||
-    r.startsWith('RH') ||
-    r.includes('RECURSOS') ||
-    r.includes('TALENTO')
+    r === 'hr' ||
+    r === 'rh' ||
+    r === 'recursos_humanos' ||
+    r === 'recursos humanos' ||
+    r === 'recursoshumanos' ||
+    r === 'human_resources' ||
+    r === 'human resources' ||
+    r === 'humanresources' ||
+    r.startsWith('hr') ||
+    r.startsWith('rh') ||
+    r.includes('recursos_humanos') ||
+    r.includes('recursos humanos')
   );
 }
 
 export function isAdminRole(role?: string | null): boolean {
   if (!role) return false;
-  const r = String(role).trim().toUpperCase();
-  return r === 'ADMIN' || r === 'ADMINISTRADOR' || r === 'ADMINISTRADORA';
+  const r = String(role).trim().toLowerCase();
+  return r === 'admin' || r === 'administrador' || r === 'administradora';
 }
 
 export function isLeaderRole(role?: string | null): boolean {
   if (!role) return true;
-  if (isHumanResourcesRole(role) || isAdminRole(role)) return false;
-  return true;
+  const r = String(role).trim().toLowerCase();
+  return (
+    r === 'leader' ||
+    r === 'lider' ||
+    r === 'líder' ||
+    (!isHumanResourcesRole(role) && !isAdminRole(role))
+  );
 }
 
 export function normalizeRole(role?: string | null): 'admin' | 'hr' | 'leader' {

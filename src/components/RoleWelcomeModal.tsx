@@ -43,8 +43,18 @@ export const RoleWelcomeModal: React.FC = () => {
 
   if (!activeData) return null;
 
-  // Exhaustive HR / RH role evaluation supporting 'HR', 'RH', 'hr', 'rh', 'RECURSOS_HUMANOS', etc.
-  const effectiveRole = activeData.role || currentUser?.role || 'leader';
+  // Strict evaluation of the stored "Rol en la Plataforma" selected during registration (ignoring position text):
+  let storedRegisteredRole: string | null = null;
+  try {
+    if (currentUser?.id) {
+      storedRegisteredRole = localStorage.getItem(`lidacta_registered_role_${currentUser.id}`);
+    }
+    if (!storedRegisteredRole && currentUser?.email) {
+      storedRegisteredRole = localStorage.getItem(`lidacta_registered_role_${currentUser.email.toLowerCase()}`);
+    }
+  } catch {}
+
+  const effectiveRole = activeData.role || storedRegisteredRole || currentUser?.role || 'leader';
   const isHR = isHumanResourcesRole(effectiveRole);
 
   return (

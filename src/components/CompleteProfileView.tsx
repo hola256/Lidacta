@@ -200,18 +200,31 @@ export const CompleteProfileView: React.FC = () => {
         } catch {}
       }
 
+      // Determine role strictly from the button selected during registration (ignoring position text)
+      const registeredRole = (safeUser.id && localStorage.getItem(`lidacta_registered_role_${safeUser.id}`)) ||
+        (safeUser.email && localStorage.getItem(`lidacta_registered_role_${safeUser.email.toLowerCase()}`)) ||
+        safeUser.role ||
+        currentUser?.role ||
+        'leader';
+
       // Immediate 0ms transition to dashboard
       if (safeUser.id) {
         forceCompleteProfile(safeUser.id);
       }
-      openRoleWelcomeModal(safeUser.role, name.trim() || safeUser.name);
+      openRoleWelcomeModal(registeredRole, name.trim() || safeUser.name);
       setIsSuccess(true);
     } catch (err: any) {
       console.warn('Handling local synchronous continuity on profile submit:', err);
+      const registeredRole = (safeUser.id && localStorage.getItem(`lidacta_registered_role_${safeUser.id}`)) ||
+        (safeUser.email && localStorage.getItem(`lidacta_registered_role_${safeUser.email.toLowerCase()}`)) ||
+        safeUser.role ||
+        currentUser?.role ||
+        'leader';
+
       if (safeUser.id) {
         forceCompleteProfile(safeUser.id);
       }
-      openRoleWelcomeModal(safeUser.role, name.trim() || safeUser.name);
+      openRoleWelcomeModal(registeredRole, name.trim() || safeUser.name);
       setIsSuccess(true);
     }
   };
