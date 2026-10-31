@@ -111,4 +111,37 @@ describe('User Profile Completion & Persistence Logic', () => {
     assert.ok(hrCopy.body.includes('dar seguimiento a su participación y progreso a través de indicadores'));
     assert.ok(hrCopy.conclusion.includes('Porque desarrollar el liderazgo también significa acompañar, observar y reconocer el progreso'));
   });
+
+  it('should recognize all variants of Human Resources (HR, RH, hr, rh, RECURSOS_HUMANOS)', async () => {
+    const { isHumanResourcesRole } = await import('../src/utils/roleUtils.js');
+
+    const hrVariants = [
+      'HR',
+      'RH',
+      'hr',
+      'rh',
+      'RECURSOS_HUMANOS',
+      'recursos_humanos',
+      'Recursos Humanos',
+      'RH / Talento',
+      'HUMAN_RESOURCES',
+      'human resources',
+    ];
+
+    for (const variant of hrVariants) {
+      assert.strictEqual(
+        isHumanResourcesRole(variant),
+        true,
+        `Role variant "${variant}" must be recognized as Human Resources`
+      );
+    }
+
+    // Leader and Admin should not be recognized as HR
+    assert.strictEqual(isHumanResourcesRole('leader'), false);
+    assert.strictEqual(isHumanResourcesRole('LÍDER'), false);
+    assert.strictEqual(isHumanResourcesRole('admin'), false);
+    assert.strictEqual(isHumanResourcesRole('ADMIN'), false);
+    assert.strictEqual(isHumanResourcesRole(null), false);
+    assert.strictEqual(isHumanResourcesRole(undefined), false);
+  });
 });

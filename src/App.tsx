@@ -14,6 +14,7 @@ import { AdminProfileModal } from './components/AdminProfileModal';
 import { LeaderProfileModal } from './components/LeaderProfileModal';
 import { GlobalToast } from './components/GlobalToast';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { isHumanResourcesRole, isAdminRole } from './utils/roleUtils';
 
 const AppContent: React.FC = () => {
   const { currentUser, isAuthenticated, isProfileComplete } = useLidacta();
@@ -28,11 +29,14 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // Safe fallback role
-  const userRole = (currentUser && currentUser.role) || 'leader';
+  // Safe normalized role evaluation supporting HR, RH, hr, rh, RECURSOS_HUMANOS
+  const rawRole = (currentUser && currentUser.role) || 'leader';
+  const isHR = isHumanResourcesRole(rawRole);
+  const isAdmin = isAdminRole(rawRole);
+  const isLeader = !isHR && !isAdmin;
 
   // Mandatory Onboarding Flow: block access to panel if HR or Leader has not completed profile
-  if ((userRole === 'leader' || userRole === 'hr') && !isProfileComplete) {
+  if ((isLeader || isHR) && !isProfileComplete) {
     return (
       <ErrorBoundary>
         <GlobalToast />
@@ -49,9 +53,9 @@ const AppContent: React.FC = () => {
         <Navbar />
 
         <main className="flex-1 flex flex-col min-h-0 w-full max-w-full overflow-x-hidden overflow-y-hidden">
-          {userRole === 'admin' ? (
+          {isAdmin ? (
             <AdminView />
-          ) : userRole === 'hr' ? (
+          ) : isHR ? (
             <HRView />
           ) : (
             <LeaderView />

@@ -17,6 +17,7 @@ import {
 import { userService, UserServiceResponse } from '../services/userService';
 import { emailService } from '../services/emailService';
 import { safeString, extractErrorMessage } from '../utils/safeError';
+import { isHumanResourcesRole } from '../utils/roleUtils';
 
 interface LidactaContextType {
   currentUser: UserProfile;
@@ -33,8 +34,8 @@ interface LidactaContextType {
   welcomeModalData: { user: UserProfile; emailText: string } | null;
   isProfileModalOpen: boolean;
   isLeaderProfileModalOpen: boolean;
-  roleWelcomeModalData: { role: UserRole; name?: string } | null;
-  openRoleWelcomeModal: (role: UserRole, name?: string) => void;
+  roleWelcomeModalData: { role: string; name?: string } | null;
+  openRoleWelcomeModal: (role: string, name?: string) => void;
   closeRoleWelcomeModal: () => void;
 
   // Toast / System Notifications
@@ -425,13 +426,28 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [selectedEmailForPreview, setSelectedEmailForPreview] = useState<NotificationItem | null>(null);
   const [showNewUserModal, setShowNewUserModal] = useState(false);
   const [welcomeModalData, setWelcomeModalData] = useState<{ user: UserProfile; emailText: string } | null>(null);
-  const [roleWelcomeModalData, setRoleWelcomeModalData] = useState<{ role: UserRole; name?: string } | null>(null);
+  const [roleWelcomeModalData, setRoleWelcomeModalData] = useState<{ role: string; name?: string } | null>(() => {
+    try {
+      const stored = sessionStorage.getItem('lidacta_show_role_welcome');
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch {}
+    return null;
+  });
 
-  const openRoleWelcomeModal = (role: UserRole, name?: string) => {
-    setRoleWelcomeModalData({ role, name });
+  const openRoleWelcomeModal = (role: string, name?: string) => {
+    const payload = { role, name };
+    try {
+      sessionStorage.setItem('lidacta_show_role_welcome', JSON.stringify(payload));
+    } catch {}
+    setRoleWelcomeModalData(payload);
   };
 
   const closeRoleWelcomeModal = () => {
+    try {
+      sessionStorage.removeItem('lidacta_show_role_welcome');
+    } catch {}
     setRoleWelcomeModalData(null);
   };
 
@@ -1349,7 +1365,7 @@ El Equipo de Lidacta`;
     const hasRealDate = cleanDate !== '' && cleanDate !== '1990-01-01';
     const hasCompany = Boolean(currentUser.companyName && currentUser.companyName.trim() && currentUser.companyName !== 'Empresa Sin especificar');
 
-    if (currentUser.role === 'hr') {
+    if (isHumanResourcesRole(currentUser.role)) {
       return hasCompany && hasRealPhone && hasRealDate;
     }
 
