@@ -9,6 +9,7 @@ import { CompleteProfileView } from './components/CompleteProfileView';
 import { EmailSimulatorDrawer } from './components/EmailSimulatorDrawer';
 import { NewUserModal } from './components/NewUserModal';
 import { WelcomeModal } from './components/WelcomeModal';
+import { RoleWelcomeModal } from './components/RoleWelcomeModal';
 import { AdminProfileModal } from './components/AdminProfileModal';
 import { LeaderProfileModal } from './components/LeaderProfileModal';
 import { GlobalToast } from './components/GlobalToast';
@@ -36,6 +37,7 @@ const AppContent: React.FC = () => {
       <ErrorBoundary>
         <GlobalToast />
         <CompleteProfileView />
+        <RoleWelcomeModal />
       </ErrorBoundary>
     );
   }
@@ -59,6 +61,7 @@ const AppContent: React.FC = () => {
         <EmailSimulatorDrawer />
         <NewUserModal />
         <WelcomeModal />
+        <RoleWelcomeModal />
         <AdminProfileModal />
         <LeaderProfileModal />
       </div>

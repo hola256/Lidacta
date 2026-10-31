@@ -84,4 +84,31 @@ describe('User Profile Completion & Persistence Logic', () => {
     assert.equal(label, '✅ Líder Completo');
     assert.ok(cardClass.includes('emerald-500'));
   });
+
+  it('should provide differentiated welcome modal copy according to user role (Leader vs HR)', () => {
+    const getWelcomeCopy = (role: 'leader' | 'hr' | 'admin') => {
+      if (role === 'hr') {
+        return {
+          title: '¡Bienvenido/a a Lidacta!',
+          body: 'Nos alegra que formes parte de este espacio. Aquí podrás impulsar el desarrollo de tus líderes y dar seguimiento a su participación y progreso a través de indicadores que te permitirán conocer cómo avanzan en su experiencia dentro de la plataforma.',
+          conclusion: 'Porque desarrollar el liderazgo también significa acompañar, observar y reconocer el progreso. ¡Comencemos!',
+        };
+      }
+      return {
+        title: '¡Bienvenido/a a Lidacta!',
+        body: 'Nos alegra que formes parte de este espacio. Aquí encontrarás una nueva forma de impulsar el desarrollo de tus líderes, acercándolos a herramientas de acompañamiento para enfrentar los retos reales de su día a día.',
+        conclusion: 'Construyamos juntos nuevas formas de desarrollar el liderazgo. ¡Comencemos!',
+      };
+    };
+
+    const leaderCopy = getWelcomeCopy('leader');
+    assert.strictEqual(leaderCopy.title, '¡Bienvenido/a a Lidacta!');
+    assert.ok(leaderCopy.body.includes('herramientas de acompañamiento para enfrentar los retos reales'));
+    assert.ok(leaderCopy.conclusion.includes('Construyamos juntos nuevas formas de desarrollar el liderazgo'));
+
+    const hrCopy = getWelcomeCopy('hr');
+    assert.strictEqual(hrCopy.title, '¡Bienvenido/a a Lidacta!');
+    assert.ok(hrCopy.body.includes('dar seguimiento a su participación y progreso a través de indicadores'));
+    assert.ok(hrCopy.conclusion.includes('Porque desarrollar el liderazgo también significa acompañar, observar y reconocer el progreso'));
+  });
 });

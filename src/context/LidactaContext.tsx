@@ -33,6 +33,9 @@ interface LidactaContextType {
   welcomeModalData: { user: UserProfile; emailText: string } | null;
   isProfileModalOpen: boolean;
   isLeaderProfileModalOpen: boolean;
+  roleWelcomeModalData: { role: UserRole; name?: string } | null;
+  openRoleWelcomeModal: (role: UserRole, name?: string) => void;
+  closeRoleWelcomeModal: () => void;
 
   // Toast / System Notifications
   toast: { id: string; message: string; type: 'success' | 'info' | 'warning' | 'error' } | null;
@@ -422,6 +425,15 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [selectedEmailForPreview, setSelectedEmailForPreview] = useState<NotificationItem | null>(null);
   const [showNewUserModal, setShowNewUserModal] = useState(false);
   const [welcomeModalData, setWelcomeModalData] = useState<{ user: UserProfile; emailText: string } | null>(null);
+  const [roleWelcomeModalData, setRoleWelcomeModalData] = useState<{ role: UserRole; name?: string } | null>(null);
+
+  const openRoleWelcomeModal = (role: UserRole, name?: string) => {
+    setRoleWelcomeModalData({ role, name });
+  };
+
+  const closeRoleWelcomeModal = () => {
+    setRoleWelcomeModalData(null);
+  };
 
   // Global Toast Notification State
   const [toast, setToast] = useState<{
@@ -1515,6 +1527,7 @@ El Equipo de Lidacta`;
     }
 
     showToast('¡Perfil completado y guardado correctamente!', 'success');
+    openRoleWelcomeModal(updatedUser.role, updatedUser.name);
     return { success: true };
   };
 
@@ -2136,6 +2149,9 @@ El Equipo de Lidacta`;
         selectedEmailForPreview,
         showNewUserModal,
         welcomeModalData,
+        roleWelcomeModalData,
+        openRoleWelcomeModal,
+        closeRoleWelcomeModal,
         toast,
         showToast,
         hideToast,

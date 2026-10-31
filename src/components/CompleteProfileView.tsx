@@ -19,7 +19,7 @@ import {
 import { safeString, extractErrorMessage } from '../utils/safeError';
 
 export const CompleteProfileView: React.FC = () => {
-  const { currentUser, completeUserProfile, forceCompleteProfile, logout, companies } = useLidacta();
+  const { currentUser, completeUserProfile, forceCompleteProfile, logout, companies, openRoleWelcomeModal } = useLidacta();
 
   const safeUser = currentUser || {
     id: '',
@@ -204,12 +204,14 @@ export const CompleteProfileView: React.FC = () => {
       if (safeUser.id) {
         forceCompleteProfile(safeUser.id);
       }
+      openRoleWelcomeModal(safeUser.role, name.trim() || safeUser.name);
       setIsSuccess(true);
     } catch (err: any) {
       console.warn('Handling local synchronous continuity on profile submit:', err);
       if (safeUser.id) {
         forceCompleteProfile(safeUser.id);
       }
+      openRoleWelcomeModal(safeUser.role, name.trim() || safeUser.name);
       setIsSuccess(true);
     }
   };
