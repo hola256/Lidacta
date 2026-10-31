@@ -17,6 +17,27 @@ import {
 } from 'lucide-react';
 import { safeString, extractErrorMessage } from '../utils/safeError';
 
+const MONTHS_LIST = [
+  { value: '01', label: 'Enero' },
+  { value: '02', label: 'Febrero' },
+  { value: '03', label: 'Marzo' },
+  { value: '04', label: 'Abril' },
+  { value: '05', label: 'Mayo' },
+  { value: '06', label: 'Junio' },
+  { value: '07', label: 'Julio' },
+  { value: '08', label: 'Agosto' },
+  { value: '09', label: 'Septiembre' },
+  { value: '10', label: 'Octubre' },
+  { value: '11', label: 'Noviembre' },
+  { value: '12', label: 'Diciembre' },
+];
+
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from(
+  { length: (CURRENT_YEAR - 16) - 1940 + 1 },
+  (_, i) => (CURRENT_YEAR - 16) - i
+);
+
 export const LeaderProfileModal: React.FC = () => {
   const {
     currentUser,
@@ -36,8 +57,46 @@ export const LeaderProfileModal: React.FC = () => {
       ? String(currentUser.directReports)
       : '0'
   );
-  const [birthDate, setBirthDate] = useState(currentUser.birthDate || '');
+  const [birthDate, setBirthDate] = useState(currentUser.birthDate || '1990-01-01');
   const [whatsapp, setWhatsapp] = useState(currentUser.whatsapp || '');
+  const [useNativeDatePicker, setUseNativeDatePicker] = useState<boolean>(false);
+
+  // Date parsing and part manipulation helpers for clean desktop/mobile dropdowns
+  const parseBirthDate = (isoStr: string) => {
+    const parts = (isoStr || '').split('-');
+    if (parts.length === 3) {
+      return {
+        year: parts[0] || '1990',
+        month: parts[1] || '01',
+        day: parts[2] || '01',
+      };
+    }
+    return { year: '1990', month: '01', day: '01' };
+  };
+
+  const { year: bYear, month: bMonth, day: bDay } = parseBirthDate(birthDate);
+
+  const daysInSelectedMonth = new Date(
+    parseInt(bYear, 10) || 1990,
+    parseInt(bMonth, 10) || 1,
+    0
+  ).getDate();
+
+  const handleDatePartChange = (part: 'day' | 'month' | 'year', value: string) => {
+    const current = parseBirthDate(birthDate);
+    const updated = { ...current, [part]: value };
+    const yNum = parseInt(updated.year, 10) || 1990;
+    const mNum = parseInt(updated.month, 10) || 1;
+    const maxDays = new Date(yNum, mNum, 0).getDate();
+    let dayNum = parseInt(updated.day, 10) || 1;
+    if (dayNum > maxDays) {
+      dayNum = maxDays;
+      updated.day = String(dayNum).padStart(2, '0');
+    }
+    const newDateStr = `${updated.year}-${updated.month.padStart(2, '0')}-${updated.day.padStart(2, '0')}`;
+    setBirthDate(newDateStr);
+    if (errorMsg) setErrorMsg('');
+  };
 
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -315,16 +374,74 @@ export const LeaderProfileModal: React.FC = () => {
           {/* Fecha de nacimiento y WhatsApp */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="font-bold text-[#2D1B4E] flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-[#BF3A1B]" />
-                <span>Fecha de Nacimiento</span>
-              </label>
-              <input
-                type="date"
-                value={birthDate}
-                onChange={(e) => setBirthDate(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-[#493447]/20 focus:border-[#BF3A1B] focus:ring-2 focus:ring-[#BF3A1B]/20 outline-none transition-all text-[#2D1B4E] box-border"
-              />
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-[#2D1B4E] flex items-center gap-1 text-xs">
+                  <Calendar className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                  <span>Fecha de Nacimiento</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setUseNativeDatePicker(!useNativeDatePicker)}
+                  className="text-[10px] text-[#BF3A1B] hover:text-[#2D1B4E] hover:underline cursor-pointer"
+                  title="Alternar selector"
+                >
+                  {useNativeDatePicker ? 'Desplegables' : 'Calendario'}
+                </button>
+              </div>
+
+              {!useNativeDatePicker ? (
+                <div className="grid grid-cols-12 gap-1">
+                  {/* Día */}
+                  <div className="col-span-3">
+                    <select
+                      value={bDay}
+                      onChange={(e) => handleDatePartChange('day', e.target.value)}
+                      className="w-full px-1.5 py-1.5 text-xs rounded-xl border border-[#493447]/20 focus:border-[#BF3A1B] focus:ring-1 focus:ring-[#BF3A1B]/20 outline-none transition-all text-[#2D1B4E] bg-white cursor-pointer"
+                      aria-label="Día"
+                    >
+                      {Array.from({ length: daysInSelectedMonth }, (_, i) => {
+                        const d = String(i + 1).padStart(2, '0');
+                        return <option key={d} value={d}>{d}</option>;
+                      })}
+                    </select>
+                  </div>
+                  {/* Mes */}
+                  <div className="col-span-5">
+                    <select
+                      value={bMonth}
+                      onChange={(e) => handleDatePartChange('month', e.target.value)}
+                      className="w-full px-1.5 py-1.5 text-xs rounded-xl border border-[#493447]/20 focus:border-[#BF3A1B] focus:ring-1 focus:ring-[#BF3A1B]/20 outline-none transition-all text-[#2D1B4E] bg-white cursor-pointer truncate"
+                      aria-label="Mes"
+                    >
+                      {MONTHS_LIST.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* Año */}
+                  <div className="col-span-4">
+                    <select
+                      value={bYear}
+                      onChange={(e) => handleDatePartChange('year', e.target.value)}
+                      className="w-full px-1.5 py-1.5 text-xs rounded-xl border border-[#493447]/20 focus:border-[#BF3A1B] focus:ring-1 focus:ring-[#BF3A1B]/20 outline-none transition-all text-[#2D1B4E] bg-white cursor-pointer"
+                      aria-label="Año"
+                    >
+                      {YEAR_OPTIONS.map((y) => (
+                        <option key={y} value={String(y)}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <input
+                  type="date"
+                  value={birthDate}
+                  min="1940-01-01"
+                  max={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  className="w-full px-3 py-1.5 text-xs rounded-xl border border-[#493447]/20 focus:border-[#BF3A1B] focus:ring-1 focus:ring-[#BF3A1B]/20 outline-none transition-all text-[#2D1B4E] box-border"
+                />
+              )}
             </div>
 
             <div className="space-y-1">

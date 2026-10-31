@@ -18,6 +18,27 @@ import {
 } from 'lucide-react';
 import { safeString, extractErrorMessage } from '../utils/safeError';
 
+const MONTHS_LIST = [
+  { value: '01', label: 'Enero' },
+  { value: '02', label: 'Febrero' },
+  { value: '03', label: 'Marzo' },
+  { value: '04', label: 'Abril' },
+  { value: '05', label: 'Mayo' },
+  { value: '06', label: 'Junio' },
+  { value: '07', label: 'Julio' },
+  { value: '08', label: 'Agosto' },
+  { value: '09', label: 'Septiembre' },
+  { value: '10', label: 'Octubre' },
+  { value: '11', label: 'Noviembre' },
+  { value: '12', label: 'Diciembre' },
+];
+
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from(
+  { length: (CURRENT_YEAR - 16) - 1940 + 1 },
+  (_, i) => (CURRENT_YEAR - 16) - i
+);
+
 export const CompleteProfileView: React.FC = () => {
   const { currentUser, completeUserProfile, forceCompleteProfile, logout, companies, openRoleWelcomeModal } = useLidacta();
 
@@ -51,6 +72,51 @@ export const CompleteProfileView: React.FC = () => {
   );
   const [whatsapp, setWhatsapp] = useState<string>(safeUser.whatsapp || '');
   const [birthDate, setBirthDate] = useState<string>(safeUser.birthDate || '1990-01-01');
+  const [useNativeDatePicker, setUseNativeDatePicker] = useState<boolean>(false);
+
+  // Date parsing and part manipulation helpers for clean desktop/mobile dropdowns
+  const parseBirthDate = (isoStr: string) => {
+    const parts = (isoStr || '').split('-');
+    if (parts.length === 3) {
+      return {
+        year: parts[0] || '1990',
+        month: parts[1] || '01',
+        day: parts[2] || '01',
+      };
+    }
+    return { year: '1990', month: '01', day: '01' };
+  };
+
+  const { year: bYear, month: bMonth, day: bDay } = parseBirthDate(birthDate);
+
+  const daysInSelectedMonth = new Date(
+    parseInt(bYear, 10) || 1990,
+    parseInt(bMonth, 10) || 1,
+    0
+  ).getDate();
+
+  const handleDatePartChange = (part: 'day' | 'month' | 'year', value: string) => {
+    const current = parseBirthDate(birthDate);
+    const updated = { ...current, [part]: value };
+    const yNum = parseInt(updated.year, 10) || 1990;
+    const mNum = parseInt(updated.month, 10) || 1;
+    const maxDays = new Date(yNum, mNum, 0).getDate();
+    let dayNum = parseInt(updated.day, 10) || 1;
+    if (dayNum > maxDays) {
+      dayNum = maxDays;
+      updated.day = String(dayNum).padStart(2, '0');
+    }
+    const newDateStr = `${updated.year}-${updated.month.padStart(2, '0')}-${updated.day.padStart(2, '0')}`;
+    setBirthDate(newDateStr);
+    if (errorMessage) setErrorMessage(null);
+  };
+
+  const formatDisplayDate = (isoStr: string) => {
+    const { year, month, day } = parseBirthDate(isoStr);
+    const mObj = MONTHS_LIST.find((m) => m.value === month);
+    const mName = mObj ? mObj.label : month;
+    return `${parseInt(day, 10)} de ${mName} de ${year}`;
+  };
 
   // Validation states
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -465,27 +531,117 @@ export const CompleteProfileView: React.FC = () => {
 
               {/* Fecha de nacimiento */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#2D1B4E]">
-                  Fecha de nacimiento <span className="text-[#BF3A1B]">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#4A3F55]/50">
-                    <Calendar className="w-4 h-4" />
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#2D1B4E]">
+                    Fecha de nacimiento <span className="text-[#BF3A1B]">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setUseNativeDatePicker(!useNativeDatePicker)}
+                    className="text-[11px] text-[#BF3A1B] hover:text-[#2D1B4E] hover:underline cursor-pointer flex items-center gap-1 font-medium transition-colors"
+                    title="Alternar entre desplegables y calendario"
+                  >
+                    <Calendar className="w-3 h-3 text-[#BF3A1B]" />
+                    <span>{useNativeDatePicker ? 'Desplegables (Día/Mes/Año)' : 'Calendario nativo'}</span>
+                  </button>
+                </div>
+
+                {!useNativeDatePicker ? (
+                  /* Desplegables limpios independientes para Día, Mes y Año (Óptimo para Escritorio y Móvil) */
+                  <div className="grid grid-cols-12 gap-1.5 sm:gap-2">
+                    {/* Día */}
+                    <div className="col-span-3">
+                      <select
+                        value={bDay}
+                        onChange={(e) => handleDatePartChange('day', e.target.value)}
+                        onBlur={() => setTouched((p) => ({ ...p, birthDate: true }))}
+                        className={`w-full py-2.5 px-2 bg-white border ${
+                          touched.birthDate && !isBirthDateValid
+                            ? 'border-[#BF3A1B] ring-1 ring-[#BF3A1B]'
+                            : 'border-[#493447]/20 focus:border-[#BF3A1B] focus:ring-1 focus:ring-[#BF3A1B]/30'
+                        } rounded-xl text-xs sm:text-sm text-[#2D1B4E] outline-none transition-all shadow-xs cursor-pointer font-medium min-h-[42px]`}
+                        aria-label="Día de nacimiento"
+                      >
+                        {Array.from({ length: daysInSelectedMonth }, (_, i) => {
+                          const d = String(i + 1).padStart(2, '0');
+                          return (
+                            <option key={d} value={d}>
+                              {d}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    {/* Mes */}
+                    <div className="col-span-5">
+                      <select
+                        value={bMonth}
+                        onChange={(e) => handleDatePartChange('month', e.target.value)}
+                        onBlur={() => setTouched((p) => ({ ...p, birthDate: true }))}
+                        className={`w-full py-2.5 px-2 bg-white border ${
+                          touched.birthDate && !isBirthDateValid
+                            ? 'border-[#BF3A1B] ring-1 ring-[#BF3A1B]'
+                            : 'border-[#493447]/20 focus:border-[#BF3A1B] focus:ring-1 focus:ring-[#BF3A1B]/30'
+                        } rounded-xl text-xs sm:text-sm text-[#2D1B4E] outline-none transition-all shadow-xs cursor-pointer font-medium truncate min-h-[42px]`}
+                        aria-label="Mes de nacimiento"
+                      >
+                        {MONTHS_LIST.map((m) => (
+                          <option key={m.value} value={m.value}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Año */}
+                    <div className="col-span-4">
+                      <select
+                        value={bYear}
+                        onChange={(e) => handleDatePartChange('year', e.target.value)}
+                        onBlur={() => setTouched((p) => ({ ...p, birthDate: true }))}
+                        className={`w-full py-2.5 px-2 bg-white border ${
+                          touched.birthDate && !isBirthDateValid
+                            ? 'border-[#BF3A1B] ring-1 ring-[#BF3A1B]'
+                            : 'border-[#493447]/20 focus:border-[#BF3A1B] focus:ring-1 focus:ring-[#BF3A1B]/30'
+                        } rounded-xl text-xs sm:text-sm text-[#2D1B4E] outline-none transition-all shadow-xs cursor-pointer font-medium min-h-[42px]`}
+                        aria-label="Año de nacimiento"
+                      >
+                        {YEAR_OPTIONS.map((y) => (
+                          <option key={y} value={String(y)}>
+                            {y}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                  <input
-                    type="date"
-                    value={birthDate}
-                    onChange={(e) => {
-                      setBirthDate(e.target.value);
-                      if (errorMessage) setErrorMessage(null);
-                    }}
-                    onBlur={() => setTouched((p) => ({ ...p, birthDate: true }))}
-                    className={`w-full pl-10 pr-3 py-2.5 bg-white border ${
-                      touched.birthDate && !isBirthDateValid
-                        ? 'border-[#BF3A1B] ring-1 ring-[#BF3A1B]'
-                        : 'border-[#493447]/20 focus:border-[#BF3A1B]'
-                    } rounded-xl text-sm text-[#2D1B4E] outline-none transition-all shadow-xs`}
-                  />
+                ) : (
+                  /* Input date nativo estilizado */
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#4A3F55]/50">
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="date"
+                      value={birthDate}
+                      min="1940-01-01"
+                      max={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => {
+                        setBirthDate(e.target.value);
+                        if (errorMessage) setErrorMessage(null);
+                      }}
+                      onBlur={() => setTouched((p) => ({ ...p, birthDate: true }))}
+                      className={`w-full pl-10 pr-3 py-2.5 bg-white border ${
+                        touched.birthDate && !isBirthDateValid
+                          ? 'border-[#BF3A1B] ring-1 ring-[#BF3A1B]'
+                          : 'border-[#493447]/20 focus:border-[#BF3A1B] focus:ring-1 focus:ring-[#BF3A1B]/30'
+                      } rounded-xl text-sm text-[#2D1B4E] outline-none transition-all shadow-xs min-h-[42px]`}
+                    />
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-[10px] text-[#4A3F55]/70 pt-0.5">
+                  <span>Fecha seleccionada: <strong className="text-[#2D1B4E] font-semibold">{formatDisplayDate(birthDate)}</strong></span>
                 </div>
               </div>
             </div>
