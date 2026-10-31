@@ -201,7 +201,10 @@ export const CompleteProfileView: React.FC = () => {
       }
 
       // Determine role strictly from the button selected during registration (ignoring position text)
-      const registeredRole = (safeUser.id && localStorage.getItem(`lidacta_registered_role_${safeUser.id}`)) ||
+      const registeredRole =
+        (safeUser.id && sessionStorage.getItem(`lidacta_registered_role_${safeUser.id}`)) ||
+        (safeUser.id && localStorage.getItem(`lidacta_registered_role_${safeUser.id}`)) ||
+        (safeUser.email && sessionStorage.getItem(`lidacta_registered_role_${safeUser.email.toLowerCase()}`)) ||
         (safeUser.email && localStorage.getItem(`lidacta_registered_role_${safeUser.email.toLowerCase()}`)) ||
         safeUser.role ||
         currentUser?.role ||
@@ -215,7 +218,10 @@ export const CompleteProfileView: React.FC = () => {
       setIsSuccess(true);
     } catch (err: any) {
       console.warn('Handling local synchronous continuity on profile submit:', err);
-      const registeredRole = (safeUser.id && localStorage.getItem(`lidacta_registered_role_${safeUser.id}`)) ||
+      const registeredRole =
+        (safeUser.id && sessionStorage.getItem(`lidacta_registered_role_${safeUser.id}`)) ||
+        (safeUser.id && localStorage.getItem(`lidacta_registered_role_${safeUser.id}`)) ||
+        (safeUser.email && sessionStorage.getItem(`lidacta_registered_role_${safeUser.email.toLowerCase()}`)) ||
         (safeUser.email && localStorage.getItem(`lidacta_registered_role_${safeUser.email.toLowerCase()}`)) ||
         safeUser.role ||
         currentUser?.role ||

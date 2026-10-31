@@ -1,7 +1,45 @@
 import React, { useEffect, useState } from 'react';
 import { useLidacta } from '../context/LidactaContext';
-import { Sparkles, X, ArrowRight, CheckCircle2, Users } from 'lucide-react';
-import { isHumanResourcesRole } from '../utils/roleUtils';
+import { X, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { isHumanResourcesRole, isLeaderRole } from '../utils/roleUtils';
+
+/**
+ * Isotipo oficial SVG de Lidacta:
+ * 'L' estilizada con flecha ascendente naranja/blanca sobre fondo ciruela (#2D1B4E).
+ * Proporción compacta y discreta para no distraer la lectura del mensaje.
+ */
+export const LidactaIsotype: React.FC<{ className?: string }> = ({
+  className = 'w-full h-full',
+}) => (
+  <svg
+    viewBox="0 0 340 340"
+    className={className}
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-label="Isotipo Lidacta"
+  >
+    {/* Fondo ciruela */}
+    <rect width="340" height="340" rx="72" fill="#2D1B4E" />
+    {/* Punto superior de la 'L' */}
+    <circle cx="103" cy="95" r="26" fill="#FFFFFF" />
+    {/* Trazo vertical y curvatura de la 'L' */}
+    <path
+      d="M103 138 V228 Q103 248 123 248 H173"
+      stroke="#FFFFFF"
+      strokeWidth="36"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Flecha ascendente naranja */}
+    <path
+      d="M150 248 L235 163 M195 163 H235 V203"
+      stroke="#F7B538"
+      strokeWidth="30"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
 
 export const RoleWelcomeModal: React.FC = () => {
   const { roleWelcomeModalData, closeRoleWelcomeModal, currentUser } = useLidacta();
@@ -43,19 +81,29 @@ export const RoleWelcomeModal: React.FC = () => {
 
   if (!activeData) return null;
 
-  // Strict evaluation of the stored "Rol en la Plataforma" selected during registration (ignoring position text):
+  // Strict evaluation of the stored "Rol en la Plataforma" selected during registration:
+  // Evaluates explicit role keys: LEADER, LIDER, lider, leader vs HR, RH, rh, hr (ignoring position text)
   let storedRegisteredRole: string | null = null;
   try {
     if (currentUser?.id) {
-      storedRegisteredRole = localStorage.getItem(`lidacta_registered_role_${currentUser.id}`);
+      storedRegisteredRole =
+        sessionStorage.getItem(`lidacta_registered_role_${currentUser.id}`) ||
+        localStorage.getItem(`lidacta_registered_role_${currentUser.id}`);
     }
     if (!storedRegisteredRole && currentUser?.email) {
-      storedRegisteredRole = localStorage.getItem(`lidacta_registered_role_${currentUser.email.toLowerCase()}`);
+      storedRegisteredRole =
+        sessionStorage.getItem(`lidacta_registered_role_${currentUser.email.toLowerCase()}`) ||
+        localStorage.getItem(`lidacta_registered_role_${currentUser.email.toLowerCase()}`);
     }
   } catch {}
 
-  const effectiveRole = activeData.role || storedRegisteredRole || currentUser?.role || 'leader';
-  const isHR = isHumanResourcesRole(effectiveRole);
+  const rawRole = (activeData.role || storedRegisteredRole || currentUser?.role || 'leader')
+    .toString()
+    .trim()
+    .toLowerCase();
+
+  const isHR = isHumanResourcesRole(rawRole);
+  const isLeader = isLeaderRole(rawRole) && !isHR;
 
   return (
     <div
@@ -69,7 +117,7 @@ export const RoleWelcomeModal: React.FC = () => {
         }
       }}
     >
-      <div className="bg-white border-2 border-[#BF3A1B]/20 rounded-3xl max-w-lg w-full shadow-2xl p-6 sm:p-8 space-y-6 text-center my-auto max-h-[92vh] overflow-y-auto relative animate-in zoom-in-95 duration-200">
+      <div className="bg-white border-2 border-[#BF3A1B]/20 rounded-3xl max-w-lg w-full shadow-2xl p-6 sm:p-8 space-y-5 text-center my-auto max-h-[92vh] overflow-y-auto relative animate-in zoom-in-95 duration-200">
         {/* Close Button Top-Right */}
         <button
           type="button"
@@ -81,13 +129,11 @@ export const RoleWelcomeModal: React.FC = () => {
           <X className="w-5 h-5" />
         </button>
 
-        {/* Icon Badge */}
-        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-[#2D1B4E] to-[#493447] text-[#F7B538] flex items-center justify-center mx-auto shadow-md ring-4 ring-[#F7B538]/20">
-          {isHR ? (
-            <Users className="w-7 h-7 sm:w-8 sm:h-8" />
-          ) : (
-            <Sparkles className="w-7 h-7 sm:w-8 sm:h-8" />
-          )}
+        {/* Isotipo Lidacta Superior (Discreto, Pequeño y Armónico) */}
+        <div className="flex items-center justify-center mx-auto pt-1">
+          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl shadow-md ring-2 ring-[#F7B538]/30 flex items-center justify-center overflow-hidden shrink-0 transition-transform hover:scale-105">
+            <LidactaIsotype className="w-full h-full" />
+          </div>
         </div>
 
         {/* Header & Subtitle */}

@@ -145,6 +145,34 @@ describe('User Profile Completion & Persistence Logic', () => {
     assert.strictEqual(isHumanResourcesRole(undefined), false);
   });
 
+  it('should strictly evaluate all leader role variants (LEADER, LIDER, lider, leader, líder)', async () => {
+    const { isLeaderRole, isHumanResourcesRole } = await import('../src/utils/roleUtils.js');
+
+    const leaderVariants = [
+      'LEADER',
+      'LIDER',
+      'leader',
+      'lider',
+      'líder',
+      'LÍDER',
+      'LEADER_ROLE',
+      'lider_role',
+    ];
+
+    for (const variant of leaderVariants) {
+      assert.strictEqual(
+        isLeaderRole(variant),
+        true,
+        `Role variant "${variant}" must be recognized as Leader`
+      );
+      assert.strictEqual(
+        isHumanResourcesRole(variant),
+        false,
+        `Role variant "${variant}" must NOT be recognized as Human Resources`
+      );
+    }
+  });
+
   it('should evaluate welcome modal strictly from the role selection button, ignoring free-text position/cargo', async () => {
     const { isHumanResourcesRole } = await import('../src/utils/roleUtils.js');
 

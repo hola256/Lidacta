@@ -33,12 +33,19 @@ export function isAdminRole(role?: string | null): boolean {
 export function isLeaderRole(role?: string | null): boolean {
   if (!role) return true;
   const r = String(role).trim().toLowerCase();
-  return (
+  if (
     r === 'leader' ||
     r === 'lider' ||
     r === 'líder' ||
-    (!isHumanResourcesRole(role) && !isAdminRole(role))
-  );
+    r === 'leader_role' ||
+    r === 'lider_role' ||
+    r.startsWith('leader') ||
+    r.startsWith('lider') ||
+    r.startsWith('líder')
+  ) {
+    return true;
+  }
+  return !isHumanResourcesRole(role) && !isAdminRole(role);
 }
 
 export function normalizeRole(role?: string | null): 'admin' | 'hr' | 'leader' {
