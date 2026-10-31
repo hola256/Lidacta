@@ -96,15 +96,15 @@ describe('User Profile Completion & Persistence Logic', () => {
       }
       return {
         title: '¡Bienvenido/a a Lidacta!',
-        body: 'Nos alegra que formes parte de este espacio. Aquí encontrarás una nueva forma de impulsar el desarrollo de tus líderes, acercándolos a herramientas de acompañamiento para enfrentar los retos reales de su día a día.',
-        conclusion: 'Construyamos juntos nuevas formas de desarrollar el liderazgo. ¡Comencemos!',
+        body: 'Nos alegra que estés aquí. Este es un espacio para ti y para los retos que enfrentas al dirigir, acompañar y gestionar personas en tu equipo.',
+        conclusion: 'Cada situación, desde una conversación difícil hasta la toma de decisiones sobre tu equipo, es una oportunidad para analizar, aprender y encontrar nuevas formas de actuar, fortaleciendo tu liderazgo en el día a día.',
       };
     };
 
     const leaderCopy = getWelcomeCopy('leader');
     assert.strictEqual(leaderCopy.title, '¡Bienvenido/a a Lidacta!');
-    assert.ok(leaderCopy.body.includes('herramientas de acompañamiento para enfrentar los retos reales'));
-    assert.ok(leaderCopy.conclusion.includes('Construyamos juntos nuevas formas de desarrollar el liderazgo'));
+    assert.ok(leaderCopy.body.includes('Este es un espacio para ti y para los retos que enfrentas al dirigir'));
+    assert.ok(leaderCopy.conclusion.includes('fortaleciendo tu liderazgo en el día a día'));
 
     const hrCopy = getWelcomeCopy('hr');
     assert.strictEqual(hrCopy.title, '¡Bienvenido/a a Lidacta!');

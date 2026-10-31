@@ -82,7 +82,6 @@ export const RoleWelcomeModal: React.FC = () => {
   if (!activeData) return null;
 
   // Strict evaluation of the stored "Rol en la Plataforma" selected during registration:
-  // Evaluates explicit role keys: LEADER, LIDER, lider, leader vs HR, RH, rh, hr (ignoring position text)
   let storedRegisteredRole: string | null = null;
   try {
     if (currentUser?.id) {
@@ -97,13 +96,24 @@ export const RoleWelcomeModal: React.FC = () => {
     }
   } catch {}
 
-  const rawRole = (activeData.role || storedRegisteredRole || currentUser?.role || 'leader')
+  const roleValue = activeData.role || storedRegisteredRole || currentUser?.role || 'leader';
+  const normalizedRole = (roleValue || '')
     .toString()
+    .toLowerCase()
     .trim()
-    .toLowerCase();
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 
-  const isHR = isHumanResourcesRole(rawRole);
-  const isLeader = isLeaderRole(rawRole) && !isHR;
+  const isLeader =
+    normalizedRole.includes('leader') ||
+    normalizedRole.includes('lider') ||
+    normalizedRole.includes('leader_role');
+
+  const isHR =
+    !isLeader &&
+    (normalizedRole.includes('hr') ||
+      normalizedRole.includes('rh') ||
+      normalizedRole.includes('recursos'));
 
   return (
     <div
@@ -165,10 +175,10 @@ export const RoleWelcomeModal: React.FC = () => {
           ) : (
             <>
               <p className="text-xs sm:text-sm text-[#2D1B4E] leading-relaxed">
-                Nos alegra que formes parte de este espacio. Aquí encontrarás una nueva forma de impulsar el desarrollo de tus líderes, acercándolos a herramientas de acompañamiento para enfrentar los retos reales de su día a día.
+                Nos alegra que estés aquí. Este es un espacio para ti y para los retos que enfrentas al dirigir, acompañar y gestionar personas en tu equipo.
               </p>
               <p className="text-xs sm:text-sm font-semibold text-[#BF3A1B] leading-relaxed pt-1 border-t border-[#493447]/10">
-                Construyamos juntos nuevas formas de desarrollar el liderazgo. ¡Comencemos!
+                Cada situación, desde una conversación difícil hasta la toma de decisiones sobre tu equipo, es una oportunidad para analizar, aprender y encontrar nuevas formas de actuar, fortaleciendo tu liderazgo en el día a día.
               </p>
             </>
           )}

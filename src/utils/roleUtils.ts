@@ -5,43 +5,40 @@
  * Ignora por completo el texto libre del campo "Puesto / Cargo".
  */
 
+export function normalizeRoleString(roleValue?: string | null): string {
+  return (roleValue || '')
+    .toString()
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 export function isHumanResourcesRole(role?: string | null): boolean {
   if (!role) return false;
-  const r = String(role).trim().toLowerCase();
+  const r = normalizeRoleString(role);
   return (
-    r === 'hr' ||
-    r === 'rh' ||
-    r === 'recursos_humanos' ||
-    r === 'recursos humanos' ||
-    r === 'recursoshumanos' ||
-    r === 'human_resources' ||
-    r === 'human resources' ||
-    r === 'humanresources' ||
-    r.startsWith('hr') ||
-    r.startsWith('rh') ||
-    r.includes('recursos_humanos') ||
-    r.includes('recursos humanos')
+    r.includes('hr') ||
+    r.includes('rh') ||
+    r.includes('recursos') ||
+    r.includes('human_resources') ||
+    r.includes('human resources')
   );
 }
 
 export function isAdminRole(role?: string | null): boolean {
   if (!role) return false;
-  const r = String(role).trim().toLowerCase();
+  const r = normalizeRoleString(role);
   return r === 'admin' || r === 'administrador' || r === 'administradora';
 }
 
 export function isLeaderRole(role?: string | null): boolean {
   if (!role) return true;
-  const r = String(role).trim().toLowerCase();
+  const r = normalizeRoleString(role);
   if (
-    r === 'leader' ||
-    r === 'lider' ||
-    r === 'líder' ||
-    r === 'leader_role' ||
-    r === 'lider_role' ||
-    r.startsWith('leader') ||
-    r.startsWith('lider') ||
-    r.startsWith('líder')
+    r.includes('leader') ||
+    r.includes('lider') ||
+    r.includes('leader_role')
   ) {
     return true;
   }
