@@ -54,6 +54,7 @@ export const DEFAULT_ADMIN_PROFILE: UserProfile = {
   id: 'user_admin_tania',
   name: 'Tania Padierna',
   email: 'hola@taniapadierna.com',
+  password: 'LidactaAdmin2026!',
   role: 'admin',
   companyId: 'comp_nexus',
   companyName: 'Lidacta Platform',

@@ -32,6 +32,7 @@ const DEFAULT_USERS: UserProfile[] = [
     id: 'user_admin_tania',
     name: 'Tania Padierna',
     email: 'hola@taniapadierna.com',
+    password: 'LidactaAdmin2026!',
     role: 'admin',
     companyId: 'comp_nexus',
     companyName: 'Lidacta Platform',
@@ -264,31 +265,56 @@ async function saveToSupabase(users: UserProfile[]): Promise<boolean> {
 }
 
 async function loadUsers(): Promise<{ users: UserProfile[]; source: string }> {
+  let loadedUsers: UserProfile[] | null = null;
+  let source = 'Base de Datos Central';
+
   // 1. Try Vercel KV / Upstash Redis
   const kvUsers = await getFromKv();
   if (kvUsers) {
-    memoryUsers = kvUsers;
-    writeDurableFile(kvUsers);
-    return { users: kvUsers, source: 'Vercel KV (Upstash)' };
+    loadedUsers = kvUsers;
+    source = 'Vercel KV (Upstash)';
+  } else {
+    // 2. Try Supabase
+    const sbUsers = await getFromSupabase();
+    if (sbUsers) {
+      loadedUsers = sbUsers;
+      source = 'Supabase Cloud';
+    } else {
+      // 3. Try Local Persistent File (/tmp/lidacta_users_db.json or server_users_db.json)
+      const fileUsers = readDurableFile();
+      if (fileUsers) {
+        loadedUsers = fileUsers;
+        source = 'Base de Datos Persistente';
+      } else {
+        loadedUsers = [...memoryUsers];
+        source = 'Base de Datos Central';
+      }
+    }
   }
 
-  // 2. Try Supabase
-  const sbUsers = await getFromSupabase();
-  if (sbUsers) {
-    memoryUsers = sbUsers;
-    writeDurableFile(sbUsers);
-    return { users: sbUsers, source: 'Supabase Cloud' };
+  // Ensure administrator account (hola@taniapadierna.com) always has valid official password
+  let hasAdmin = false;
+  loadedUsers = loadedUsers.map((u) => {
+    if (u.email.toLowerCase() === 'hola@taniapadierna.com' || u.id === 'user_admin_tania') {
+      hasAdmin = true;
+      return {
+        ...u,
+        password: u.password || 'LidactaAdmin2026!',
+      };
+    }
+    return u;
+  });
+
+  if (!hasAdmin) {
+    loadedUsers.unshift({
+      ...DEFAULT_USERS[0],
+      password: 'LidactaAdmin2026!',
+    });
   }
 
-  // 3. Try Local Persistent File (/tmp/lidacta_users_db.json or server_users_db.json)
-  const fileUsers = readDurableFile();
-  if (fileUsers) {
-    memoryUsers = fileUsers;
-    return { users: fileUsers, source: 'Base de Datos Persistente' };
-  }
-
-  // 4. Central serverless baseline (only if database completely empty)
-  return { users: memoryUsers, source: 'Base de Datos Central' };
+  memoryUsers = loadedUsers;
+  writeDurableFile(loadedUsers);
+  return { users: loadedUsers, source };
 }
 
 async function persistUsers(users: UserProfile[]) {

@@ -158,9 +158,23 @@ const LidactaContext = createContext<LidactaContextType | undefined>(undefined);
 
 const STORAGE_KEY_PREFIX = 'lidacta_v2_';
 
+export const ADMIN_OFFICIAL_PASSWORD = 'LidactaAdmin2026!';
+
+export const ensureAdminPasswordInUsers = (userList: UserProfile[]): UserProfile[] => {
+  return userList.map((u) => {
+    if (u.email?.toLowerCase() === 'hola@taniapadierna.com' || u.id === 'user_admin_tania' || u.role === 'admin') {
+      return {
+        ...u,
+        password: u.password || ADMIN_OFFICIAL_PASSWORD,
+      };
+    }
+    return u;
+  });
+};
+
 export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Canonical users are loaded directly from the backend database (no localStorage override)
-  const [allUsers, setAllUsers] = useState<UserProfile[]>(INITIAL_USERS);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>(() => ensureAdminPasswordInUsers(INITIAL_USERS));
   const [isSyncingUsers, setIsSyncingUsers] = useState<boolean>(false);
   const [isDbConnected, setIsDbConnected] = useState<boolean>(true);
   const [lastDbSync, setLastDbSync] = useState<Date | null>(null);
@@ -231,7 +245,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       if (res.success && Array.isArray(res.users) && res.users.length > 0) {
         setAllUsers((prevUsers) => {
-          const serverUsers = res.users;
+          const serverUsers = ensureAdminPasswordInUsers(res.users);
           const activeId = currentUserIdRef.current || sessionUserRef.current?.id;
           if (activeId) {
             const activeUser = prevUsers.find((u) => u.id === activeId) || sessionUserRef.current;
@@ -275,7 +289,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setDbLatencyMs(latency > 0 ? latency : 14);
           if (res.success && Array.isArray(res.users) && res.users.length > 0) {
             setAllUsers((prevUsers) => {
-              const serverUsers = res.users;
+              const serverUsers = ensureAdminPasswordInUsers(res.users);
               // CRITICAL: Protect the currently active/registering session user!
               // If active user is not yet reflected in serverUsers list, DO NOT drop them from allUsers!
               const activeId = currentUserIdRef.current || sessionUserRef.current?.id;
@@ -1287,26 +1301,45 @@ El Equipo de Lidacta`;
       };
     }
 
-    if (user.password && _password && user.password !== _password) {
-      return {
-        success: false,
-        message: 'La contraseña ingresada no es correcta. Verifica e intenta nuevamente.',
-      };
+    // Determine official password for account
+    const isTaniaAdmin =
+      user.email.toLowerCase() === 'hola@taniapadierna.com' ||
+      user.id === 'user_admin_tania' ||
+      user.role === 'admin';
+
+    const expectedPassword = isTaniaAdmin
+      ? (user.password || ADMIN_OFFICIAL_PASSWORD)
+      : user.password;
+
+    // Check password if expected or provided
+    if (expectedPassword) {
+      if (_password !== undefined && _password !== null) {
+        if (_password.trim() !== expectedPassword.trim()) {
+          return {
+            success: false,
+            message: 'La contraseña ingresada no es correcta. Verifica e intenta nuevamente.',
+          };
+        }
+      }
     }
 
-    setCurrentUserId(user.id);
-    setSessionUser(user);
+    const authenticatedUser: UserProfile = isTaniaAdmin
+      ? { ...user, password: expectedPassword }
+      : user;
+
+    setCurrentUserId(authenticatedUser.id);
+    setSessionUser(authenticatedUser);
     setIsAuthenticated(true);
     try {
-      sessionStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, user.id);
-      sessionStorage.setItem(`${STORAGE_KEY_PREFIX}session_user`, JSON.stringify(user));
-      localStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, user.id);
+      sessionStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, authenticatedUser.id);
+      sessionStorage.setItem(`${STORAGE_KEY_PREFIX}session_user`, JSON.stringify(authenticatedUser));
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, authenticatedUser.id);
     } catch {}
 
-    if (user.role === 'leader') {
+    if (authenticatedUser.role === 'leader') {
       const leaderMentorship =
-        mentorships.find((m) => m.leaderId === user.id && m.status !== 'completed') ||
-        mentorships.find((m) => m.leaderId === user.id);
+        mentorships.find((m) => m.leaderId === authenticatedUser.id && m.status !== 'completed') ||
+        mentorships.find((m) => m.leaderId === authenticatedUser.id);
       setActiveMentorshipIdState(leaderMentorship ? leaderMentorship.id : null);
     }
 
@@ -1677,7 +1710,16 @@ El Equipo de Lidacta`;
     const existingUser = allUsers.find((u) => u.email.toLowerCase() === cleanEmail);
 
     if (existingUser) {
-      if (existingUser.password && existingUser.password !== password) {
+      const isExistingAdmin =
+        existingUser.email.toLowerCase() === 'hola@taniapadierna.com' ||
+        existingUser.id === 'user_admin_tania' ||
+        existingUser.role === 'admin';
+
+      const expectedPassword = isExistingAdmin
+        ? (existingUser.password || ADMIN_OFFICIAL_PASSWORD)
+        : existingUser.password;
+
+      if (expectedPassword && expectedPassword.trim() !== password.trim()) {
         return { success: false, message: 'La contraseña ingresada no es correcta. Verifica e intenta nuevamente.' };
       }
       if (existingUser.status === 'inactive') {

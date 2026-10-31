@@ -176,7 +176,7 @@ export const LoginView: React.FC = () => {
     setErrorMessage(null);
     setIsLoading(true);
     setTimeout(() => {
-      login('hola@taniapadierna.com');
+      login('hola@taniapadierna.com', 'LidactaAdmin2026!');
       setIsLoading(false);
     }, 250);
   };
