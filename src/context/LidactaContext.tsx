@@ -47,7 +47,7 @@ interface LidactaContextType {
   isAuthenticated: boolean;
   isProfileComplete: boolean;
   forceCompleteProfile: (userId?: string) => void;
-  login: (email: string, password?: string) => { success: boolean; message?: string };
+  login: (email: string, password?: string, is1ClickRemembered?: boolean) => { success: boolean; message?: string };
   logout: () => void;
   completeUserProfile: (data: {
     name?: string;
@@ -1276,7 +1276,11 @@ El Equipo de Lidacta`;
     }).catch((err) => console.warn('Could not sync status to server:', err));
   };
 
-  const login = (email: string, _password?: string): { success: boolean; message?: string } => {
+  const login = (
+    email: string,
+    _password?: string,
+    is1ClickRemembered?: boolean
+  ): { success: boolean; message?: string } => {
     const cleanEmail = email.trim().toLowerCase();
 
     // Check if user exists in allUsers
@@ -1311,8 +1315,8 @@ El Equipo de Lidacta`;
       ? (user.password || ADMIN_OFFICIAL_PASSWORD)
       : user.password;
 
-    // Check password if expected or provided
-    if (expectedPassword) {
+    // Check password if expected or provided (bypassed if resuming recognized session on this device in 1-click)
+    if (!is1ClickRemembered && expectedPassword) {
       if (_password !== undefined && _password !== null) {
         if (_password.trim() !== expectedPassword.trim()) {
           return {
@@ -1334,6 +1338,8 @@ El Equipo de Lidacta`;
       sessionStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, authenticatedUser.id);
       sessionStorage.setItem(`${STORAGE_KEY_PREFIX}session_user`, JSON.stringify(authenticatedUser));
       localStorage.setItem(`${STORAGE_KEY_PREFIX}current_user_id`, authenticatedUser.id);
+      localStorage.setItem('lidacta_remembered_user', JSON.stringify(authenticatedUser));
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}remembered_user`, JSON.stringify(authenticatedUser));
     } catch {}
 
     if (authenticatedUser.role === 'leader') {

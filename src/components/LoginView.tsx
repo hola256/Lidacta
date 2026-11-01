@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useLidacta } from '../context/LidactaContext';
-import { UserRole } from '../types/lidacta';
+import { UserProfile, UserRole } from '../types/lidacta';
 import { emailService } from '../services/emailService';
 import { safeString, extractErrorMessage } from '../utils/safeError';
+import { isHumanResourcesRole, isAdminRole, getRoleDisplayName } from '../utils/roleUtils';
 import {
   Lock,
   Mail,
@@ -14,13 +15,35 @@ import {
   ShieldCheck,
   Sparkles,
   ArrowRight,
+  ArrowLeft,
   AlertCircle,
   Building2,
   CheckCircle2,
+  UserCheck,
 } from 'lucide-react';
 
 export const LoginView: React.FC = () => {
   const { registerOrSetPassword, login, allUsers, companies, showToast } = useLidacta();
+
+  // Detect if a user previously logged in on this browser (via LocalStorage)
+  const [rememberedUser, setRememberedUser] = useState<UserProfile | null>(() => {
+    try {
+      const raw =
+        localStorage.getItem('lidacta_remembered_user') ||
+        localStorage.getItem('lidacta_v2_remembered_user') ||
+        localStorage.getItem('lidacta_v2_session_user') ||
+        sessionStorage.getItem('lidacta_v2_session_user');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && (parsed.email || parsed.id)) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return null;
+  });
+
+  const [showOtherAccount, setShowOtherAccount] = useState<boolean>(false);
 
   // Mode: Iniciar Sesión vs Registrar Nuevo Usuario
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -171,32 +194,33 @@ export const LoginView: React.FC = () => {
     }
   };
 
-  // Quick 1-click test handlers
-  const handleQuickLoginAdmin = () => {
+  // 1-Click access for recognized device/browser session
+  const handleResumeRememberedSession = () => {
+    if (!rememberedUser) return;
     setErrorMessage(null);
     setIsLoading(true);
-    setTimeout(() => {
-      login('hola@taniapadierna.com', 'LidactaAdmin2026!');
+
+    try {
+      const res = login(rememberedUser.email, rememberedUser.password, true);
+      if (!res.success) {
+        setEmail(rememberedUser.email);
+        setShowOtherAccount(true);
+        setErrorMessage(extractErrorMessage(res.message, 'Por favor, ingresa tu contraseña para continuar.'));
+      }
+    } catch (err: any) {
+      setEmail(rememberedUser.email);
+      setShowOtherAccount(true);
+      setErrorMessage(extractErrorMessage(err, 'Por favor, ingresa tu contraseña para acceder.'));
+    } finally {
       setIsLoading(false);
-    }, 250);
+    }
   };
 
-  const handleQuickLoginLeader = () => {
+  const handleSwitchAccount = () => {
+    setShowOtherAccount(true);
     setErrorMessage(null);
-    setIsLoading(true);
-    setTimeout(() => {
-      login('roberto.gomez@nexus-auto.com');
-      setIsLoading(false);
-    }, 250);
-  };
-
-  const handleQuickLoginHR = () => {
-    setErrorMessage(null);
-    setIsLoading(true);
-    setTimeout(() => {
-      login('sofia.valenzuela@nexus-auto.com');
-      setIsLoading(false);
-    }, 250);
+    setEmail('');
+    setPassword('');
   };
 
   return (
@@ -224,9 +248,117 @@ export const LoginView: React.FC = () => {
 
       {/* Main Centered Login / Registration Container */}
       <main className="w-full max-w-lg mx-auto my-6 sm:my-8 flex-1 flex flex-col justify-center animate-in fade-in zoom-in-95 duration-300">
-        <div className="bg-[#24153F]/95 backdrop-blur-xl border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5">
-          {/* Card Header */}
-          <div className="text-center space-y-1.5">
+        {rememberedUser && !showOtherAccount ? (
+          <div className="bg-[#24153F]/95 backdrop-blur-xl border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5">
+            {/* Remembered User Card Header */}
+            <div className="text-center space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#F7B538]/15 border border-[#F7B538]/30 text-[#F7B538] text-xs font-semibold">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Sesión Recordada en este Dispositivo</span>
+              </div>
+              <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-white tracking-tight">
+                ¡Hola de nuevo, {rememberedUser.name ? rememberedUser.name.split(' ')[0] : 'Líder'}!
+              </h1>
+              <p className="text-xs sm:text-sm text-[#FFF7EF]/80 leading-relaxed max-w-sm mx-auto">
+                Detectamos tu sesión previa en este navegador. Puedes acceder inmediatamente con un solo clic.
+              </p>
+            </div>
+
+            {/* User Preview Profile Box */}
+            <div className="p-4 bg-white/5 border border-white/15 rounded-2xl flex items-center gap-3.5">
+              {rememberedUser.avatarUrl ? (
+                <img
+                  src={rememberedUser.avatarUrl}
+                  alt={rememberedUser.name}
+                  className="w-13 h-13 rounded-2xl object-cover border border-[#F7B538]/40 shadow-xs shrink-0"
+                />
+              ) : (
+                <div className="w-13 h-13 rounded-2xl bg-linear-to-tr from-[#BF3A1B] to-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-heading font-black text-lg shadow-xs shrink-0">
+                  {rememberedUser.name ? rememberedUser.name.charAt(0).toUpperCase() : 'U'}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="font-heading font-bold text-base text-white truncate">
+                  {rememberedUser.name}
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-[#F7B538]/20 text-[#F7B538] border border-[#F7B538]/30">
+                    {getRoleDisplayName(rememberedUser.role)}
+                  </span>
+                  {rememberedUser.companyName && (
+                    <span className="text-[11px] text-[#FFF7EF]/70 truncate">
+                      · {rememberedUser.companyName}
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-[#FFF7EF]/60 truncate mt-0.5">
+                  {rememberedUser.email}
+                </div>
+              </div>
+            </div>
+
+            {/* Error Alert if 1-click fails */}
+            {errorMessage && (
+              <div className="p-3.5 bg-rose-950/90 border-2 border-rose-500 text-rose-100 rounded-xl text-xs sm:text-sm flex items-start gap-3 shadow-lg animate-in fade-in" role="alert">
+                <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                <div className="flex-1 space-y-0.5">
+                  <span className="font-bold text-rose-200 block text-xs uppercase tracking-wider">Aviso en la Solicitud</span>
+                  <span className="leading-relaxed block text-rose-100 font-medium">{safeString(errorMessage)}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Primary 1-Click Action Button */}
+            <div className="space-y-3 pt-1">
+              <button
+                type="button"
+                onClick={handleResumeRememberedSession}
+                disabled={isLoading}
+                className="w-full py-3.5 px-4 bg-linear-to-r from-[#F7B538] to-[#FF8C42] hover:from-[#f5a91e] hover:to-[#ff7b29] text-[#2D1B4E] font-heading font-extrabold text-sm sm:text-base rounded-2xl shadow-lg hover:shadow-xl transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98 disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-[#2D1B4E] border-t-transparent rounded-full animate-spin" />
+                    <span>Accediendo...</span>
+                  </span>
+                ) : (
+                  <>
+                    <UserCheck className="w-5 h-5 text-[#2D1B4E]" />
+                    <span>Continuar como {rememberedUser.name}</span>
+                    <ArrowRight className="w-5 h-5 text-[#2D1B4E]" />
+                  </>
+                )}
+              </button>
+
+              {/* Discrete Switch Account option */}
+              <button
+                type="button"
+                onClick={handleSwitchAccount}
+                className="w-full py-2.5 text-xs text-[#FFF7EF]/80 hover:text-white transition-colors cursor-pointer flex items-center justify-center gap-1.5 hover:underline"
+              >
+                <span>Ingresar con otra cuenta</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-[#24153F]/95 backdrop-blur-xl border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5">
+            {rememberedUser && (
+              <div className="mb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowOtherAccount(false);
+                    setErrorMessage(null);
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs text-[#F7B538] hover:text-[#ffd3bf] transition-colors cursor-pointer font-medium"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Volver a la cuenta de {rememberedUser.name ? rememberedUser.name.split(' ')[0] : 'usuario'}</span>
+                </button>
+              </div>
+            )}
+            {/* Card Header */}
+            <div className="text-center space-y-1.5">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#F7B538]/15 border border-[#F7B538]/30 text-[#F7B538] mb-1">
               <Lock className="w-6 h-6" />
             </div>
@@ -612,59 +744,8 @@ export const LoginView: React.FC = () => {
               </div>
             </form>
           )}
-
-          {/* Quick Demo Access (1-Click Instant Access) */}
-          <div className="pt-4 border-t border-white/10 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[#FFF7EF]/70 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
-                Acceso Rápido de Prueba (1 Clic)
-              </span>
-            </div>
-
-            {/* Direct Admin Access Button */}
-            <button
-              type="button"
-              onClick={handleQuickLoginAdmin}
-              className="w-full p-3 bg-[#F7B538]/15 hover:bg-[#F7B538]/25 border border-[#F7B538]/40 rounded-2xl flex items-center justify-between transition-all cursor-pointer group text-left active:scale-98 shadow-xs"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
-                  👑
-                </div>
-                <div>
-                  <span className="font-heading font-bold text-xs sm:text-sm text-white group-hover:text-[#F7B538] transition-colors block">
-                    Ingresar como Administradora
-                  </span>
-                  <span className="text-[10px] text-[#FFF7EF]/70 block">
-                    Tania Padierna · Acceso total al panel administrativo
-                  </span>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-[#F7B538] group-hover:translate-x-1 transition-transform shrink-0" />
-            </button>
-
-            {/* Quick buttons for Líder and RRHH */}
-            <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
-              <button
-                type="button"
-                onClick={handleQuickLoginLeader}
-                className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-left cursor-pointer transition-colors"
-              >
-                <span className="font-semibold text-[#FFD3BF] block">Líder Activo</span>
-                <span className="text-[10px] text-[#FFF7EF]/60 truncate block">Roberto Gómez</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleQuickLoginHR}
-                className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-left cursor-pointer transition-colors"
-              >
-                <span className="font-semibold text-[#C9BDF2] block">RH Activa</span>
-                <span className="text-[10px] text-[#FFF7EF]/60 truncate block">Sofía Valenzuela</span>
-              </button>
-            </div>
           </div>
-        </div>
+        )}
       </main>
 
       {/* Footer Info */}

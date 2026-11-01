@@ -263,4 +263,74 @@ describe('User Profile Completion & Persistence Logic', () => {
     const emptyResult = testLogin('hola@taniapadierna.com', '');
     assert.strictEqual(emptyResult.success, false, 'Login with empty password must fail');
   });
+
+  it('should support 1-click remembered session login and verify public demo buttons are eliminated', async () => {
+    const { DEFAULT_ADMIN_PROFILE, INITIAL_USERS } = await import('../src/data/mockData.js');
+    const fs = await import('fs');
+
+    // 1. Simulator for 1-click remembered session login logic
+    const testLoginRemembered = (email: string, passwordInput?: string, is1ClickRemembered?: boolean) => {
+      const cleanEmail = email.trim().toLowerCase();
+      const allTestUsers = INITIAL_USERS || [DEFAULT_ADMIN_PROFILE];
+      const user = allTestUsers.find((u) => u.email.trim().toLowerCase() === cleanEmail);
+      if (!user) return { success: false, message: 'Usuario no encontrado' };
+
+      // When 1-click remembered is true, previous authentication in browser is trusted
+      if (!is1ClickRemembered) {
+        const expected = user.password;
+        if (expected && (!passwordInput || passwordInput.trim() !== expected.trim())) {
+          return { success: false, message: 'Contraseña incorrecta' };
+        }
+      }
+      return { success: true, user };
+    };
+
+    // Standard login without password should fail
+    const standardWithoutPassword = testLoginRemembered('hola@taniapadierna.com', '');
+    assert.strictEqual(standardWithoutPassword.success, false);
+
+    // 1-Click remembered session for valid user should succeed
+    const rememberedLogin = testLoginRemembered('hola@taniapadierna.com', undefined, true);
+    assert.strictEqual(rememberedLogin.success, true);
+    assert.strictEqual(rememberedLogin.user?.email, 'hola@taniapadierna.com');
+
+    // 2. Ensure LoginView source code does NOT contain public quick demo buttons
+    const loginViewSource = fs.readFileSync('src/components/LoginView.tsx', 'utf-8');
+    assert.strictEqual(
+      loginViewSource.includes('Acceso Rápido de Prueba (1 Clic)'),
+      false,
+      'Public test access button label must be removed'
+    );
+    assert.strictEqual(
+      loginViewSource.includes('Ingresar como Administradora'),
+      false,
+      'Public admin test access button must be removed'
+    );
+    assert.strictEqual(
+      loginViewSource.includes('handleQuickLoginAdmin'),
+      false,
+      'handleQuickLoginAdmin handler must not be present'
+    );
+    assert.strictEqual(
+      loginViewSource.includes('handleResumeRememberedSession'),
+      true,
+      'handleResumeRememberedSession must be present for 1-click remembered access'
+    );
+    assert.strictEqual(
+      loginViewSource.includes('handleSwitchAccount'),
+      true,
+      'handleSwitchAccount must be present for switching account'
+    );
+    assert.strictEqual(
+      loginViewSource.includes('Continuar como'),
+      true,
+      'Continuar como [Nombre] button must be present in remembered session'
+    );
+    assert.strictEqual(
+      loginViewSource.includes('Ingresar con otra cuenta'),
+      true,
+      'Ingresar con otra cuenta button must be present'
+    );
+  });
 });
+

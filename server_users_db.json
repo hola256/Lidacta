@@ -222,7 +222,6 @@
     "id": "user_admin_tania",
     "name": "Tania Padierna",
     "email": "hola@taniapadierna.com",
-    "password": "LidactaAdmin2026!",
     "role": "admin",
     "companyId": "comp_nexus",
     "companyName": "Lidacta Platform",
@@ -233,7 +232,7 @@
     "isProfileCompleted": true,
     "isProfileComplete": true,
     "createdAt": "2026-01-01",
-    "updatedAt": "2026-10-31T14:29:38.779Z"
+    "updatedAt": "2026-11-01T15:50:17.958Z"
   },
   {
     "id": "user_leader_roberto",
