@@ -12,6 +12,7 @@ import { WelcomeModal } from './components/WelcomeModal';
 import { RoleWelcomeModal } from './components/RoleWelcomeModal';
 import { AdminProfileModal } from './components/AdminProfileModal';
 import { LeaderProfileModal } from './components/LeaderProfileModal';
+import { InspectorBanner } from './components/InspectorBanner';
 import { GlobalToast } from './components/GlobalToast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { isHumanResourcesRole, isAdminRole } from './utils/roleUtils';
@@ -40,6 +41,7 @@ const AppContent: React.FC = () => {
     return (
       <ErrorBoundary>
         <GlobalToast />
+        <InspectorBanner />
         <CompleteProfileView />
         <RoleWelcomeModal />
       </ErrorBoundary>
@@ -50,6 +52,7 @@ const AppContent: React.FC = () => {
     <ErrorBoundary>
       <div className="min-h-screen bg-[#FFF7EF] flex flex-col font-sans text-[#4A3F55] selection:bg-[#FFD3BF] selection:text-[#2D1B4E] animate-in fade-in duration-300 overflow-x-hidden w-full max-w-full relative">
         <GlobalToast />
+        <InspectorBanner />
         <Navbar />
 
         <main className="flex-1 flex flex-col min-h-0 w-full max-w-full overflow-x-hidden overflow-y-hidden">

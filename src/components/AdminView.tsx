@@ -56,7 +56,12 @@ export const AdminView: React.FC = () => {
     dbLatencyMs,
     updateUser,
     sendProfileInvite,
+    impersonateUser,
+    impersonateRole,
+    openRoleWelcomeModal,
   } = useLidacta();
+
+  const [isInspectorModalOpen, setIsInspectorModalOpen] = useState(false);
 
   const adminProfile = allUsers.find((u) => u.role === 'admin') || currentUser;
 
@@ -312,6 +317,17 @@ export const AdminView: React.FC = () => {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto">
+            {/* Inspector Mode / Role Simulation Button */}
+            <button
+              type="button"
+              onClick={() => setIsInspectorModalOpen(true)}
+              title="Simular roles de Líder o Recursos Humanos y verificar modales de bienvenida"
+              className="min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#F7B538]/20 hover:bg-[#F7B538]/35 text-[#2D1B4E] border border-[#F7B538]/60 rounded-xl text-xs font-heading font-extrabold transition-all shadow-xs cursor-pointer active:scale-95 shrink-0"
+            >
+              <Sliders className="w-4 h-4 text-[#BF3A1B]" />
+              <span>Simular Vista / Roles</span>
+            </button>
+
             {/* Direct Admin Profile Access Button */}
             <button
               onClick={openProfileModal}
@@ -1393,6 +1409,18 @@ export const AdminView: React.FC = () => {
                                 </span>
                               </button>
 
+                              {/* Simulate / Impersonate User Button (Excluding Admin) */}
+                              {u.id !== adminProfile.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => impersonateUser(u)}
+                                  className="min-h-[36px] min-w-[36px] p-2 text-[#BF3A1B] hover:text-[#2D1B4E] hover:bg-[#FFD3BF]/50 rounded-xl transition-colors cursor-pointer flex items-center justify-center active:scale-95 border border-[#BF3A1B]/20 hover:border-[#BF3A1B]"
+                                  title={`Simular interfaz como ${u.name} (${u.role === 'hr' ? 'Recursos Humanos' : 'Líder'})`}
+                                >
+                                  <Sliders className="w-4 h-4 text-[#BF3A1B]" />
+                                </button>
+                              )}
+
                               {/* View Profile Button */}
                               <button
                                 type="button"
@@ -1789,6 +1817,203 @@ export const AdminView: React.FC = () => {
         }}
         onSendInvite={handleSendInviteToUser}
       />
+
+      {/* Modal de Simulación / Modo Inspector para Administradora */}
+      {isInspectorModalOpen && (
+        <div className="fixed inset-0 bg-[#2D1B4E]/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in">
+          <div className="bg-white border border-[#493447]/20 rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-5 sm:p-6 bg-linear-to-r from-[#2D1B4E] to-[#493447] text-white flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#F7B538] text-[#2D1B4E] font-heading font-extrabold text-[10px] tracking-wider uppercase flex items-center gap-1 shadow-xs">
+                    <Sliders className="w-3 h-3 text-[#2D1B4E]" />
+                    Modo Inspector
+                  </span>
+                  <span className="text-white/60 text-xs">Exclusivo de Administradora</span>
+                </div>
+                <h3 className="font-heading font-extrabold text-lg sm:text-xl text-white tracking-tight">
+                  Simulación de Roles & Vistas
+                </h3>
+                <p className="text-xs text-[#FFF7EF]/80 max-w-lg leading-relaxed">
+                  Carga la interfaz, herramientas y modales de bienvenida de Líder o Recursos Humanos para realizar pruebas sin cerrar tu sesión administrativa.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsInspectorModalOpen(false)}
+                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
+                title="Cerrar ventana de simulación"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+              {/* Quick Role Simulation Cards */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-[#4A3F55]/80">
+                  1. Selección Rápida por Rol
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Leader Card */}
+                  <div className="p-4 rounded-2xl border-2 border-[#FFD3BF] bg-[#FFF7EF]/50 hover:bg-[#FFF7EF] transition-all space-y-3 flex flex-col justify-between shadow-xs">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FFD3BF] text-[#BF3A1B]">
+                          Rol: Líder Operativo
+                        </span>
+                        <span className="text-[10px] text-[#4A3F55]/60 font-medium">Ej: Roberto Gómez</span>
+                      </div>
+                      <h5 className="font-heading font-bold text-sm text-[#2D1B4E]">
+                        Espacio de Acompañamiento Líder
+                      </h5>
+                      <p className="text-[11px] text-[#4A3F55] leading-relaxed">
+                        Prueba el chat confidencial de 7 etapas, planes de acción, dictado por voz y solicitud de mentoría 1:1.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          impersonateRole('leader');
+                          setIsInspectorModalOpen(false);
+                        }}
+                        className="w-full py-2 px-3 bg-[#BF3A1B] hover:bg-[#a63216] text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs active:scale-95 flex items-center justify-center gap-1.5"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Cargar Vista de Líder</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          openRoleWelcomeModal('leader', 'Roberto Gómez');
+                        }}
+                        className="w-full py-1.5 px-3 bg-white hover:bg-[#FFD3BF]/40 text-[#BF3A1B] border border-[#BF3A1B]/30 rounded-xl text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <Sparkles className="w-3 h-3 text-[#BF3A1B]" />
+                        <span>Ver Modal Bienvenida Líder</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* HR Card */}
+                  <div className="p-4 rounded-2xl border-2 border-[#C9BDF2] bg-[#F5F1FB]/60 hover:bg-[#F5F1FB] transition-all space-y-3 flex flex-col justify-between shadow-xs">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#C9BDF2] text-[#2D1B4E]">
+                          Rol: Recursos Humanos
+                        </span>
+                        <span className="text-[10px] text-[#4A3F55]/60 font-medium">Ej: Sofía Valenzuela</span>
+                      </div>
+                      <h5 className="font-heading font-bold text-sm text-[#2D1B4E]">
+                        Panel de Seguimiento & Indicadores
+                      </h5>
+                      <p className="text-[11px] text-[#4A3F55] leading-relaxed">
+                        Consulta métricas agregadas de participación, distribución de habilidades y progreso general sin violar confidencialidad.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          impersonateRole('hr');
+                          setIsInspectorModalOpen(false);
+                        }}
+                        className="w-full py-2 px-3 bg-[#2D1B4E] hover:bg-[#3D2568] text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs active:scale-95 flex items-center justify-center gap-1.5"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Cargar Vista de RH</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          openRoleWelcomeModal('hr', 'Sofía Valenzuela');
+                        }}
+                        className="w-full py-1.5 px-3 bg-white hover:bg-[#C9BDF2]/30 text-[#2D1B4E] border border-[#2D1B4E]/30 rounded-xl text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <Sparkles className="w-3 h-3 text-[#2D1B4E]" />
+                        <span>Ver Modal Bienvenida RH</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Specific User Emulation from Database */}
+              <div className="space-y-3 pt-2 border-t border-[#493447]/10">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#4A3F55]/80">
+                    2. Simular Usuario Específico del Directorio
+                  </h4>
+                  <span className="text-[11px] text-[#4A3F55]/60">
+                    {allUsers.filter((u) => u.role !== 'admin').length} usuarios registrados
+                  </span>
+                </div>
+
+                <div className="max-h-56 overflow-y-auto rounded-xl border border-[#493447]/15 divide-y divide-[#493447]/10 bg-white">
+                  {allUsers
+                    .filter((u) => u.role !== 'admin')
+                    .map((user) => (
+                      <div
+                        key={user.id}
+                        className="p-3 flex items-center justify-between gap-3 hover:bg-[#FFF7EF]/60 transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs text-[#2D1B4E] truncate">
+                              {user.name}
+                            </span>
+                            <span
+                              className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase ${
+                                user.role === 'hr'
+                                  ? 'bg-[#C9BDF2] text-[#2D1B4E]'
+                                  : 'bg-[#FFD3BF] text-[#BF3A1B]'
+                              }`}
+                            >
+                              {user.role === 'hr' ? 'RH' : 'Líder'}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-[#4A3F55]/70 truncate">
+                            {user.email} · {user.companyName} {user.position ? `(${user.position})` : ''}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            impersonateUser(user);
+                            setIsInspectorModalOpen(false);
+                          }}
+                          className="min-h-[30px] px-2.5 py-1 text-[11px] font-bold text-[#2D1B4E] bg-[#FFF7EF] hover:bg-[#FFD3BF] border border-[#BF3A1B]/30 hover:border-[#BF3A1B] rounded-lg transition-all cursor-pointer shrink-0 flex items-center gap-1 active:scale-95"
+                        >
+                          <Eye className="w-3 h-3 text-[#BF3A1B]" />
+                          <span>Simular</span>
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-[#FFF7EF] border-t border-[#493447]/10 flex items-center justify-between text-xs">
+              <span className="text-[#4A3F55]/70 text-[11px]">
+                💡 Mientras estés en Modo Inspector, verás un banner superior flotante para regresar en 1 clic.
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsInspectorModalOpen(false)}
+                className="px-4 py-2 bg-white hover:bg-gray-100 text-[#4A3F55] font-semibold rounded-xl border border-[#493447]/20 transition-colors cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   </div>
   );

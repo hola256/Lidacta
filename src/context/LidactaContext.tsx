@@ -43,6 +43,13 @@ interface LidactaContextType {
   showToast: (message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
   hideToast: () => void;
 
+  // Inspector Mode / Role Impersonation (Exclusively for Administrator)
+  impersonatedUser: UserProfile | null;
+  isImpersonating: boolean;
+  impersonateUser: (userOrId: string | UserProfile) => void;
+  impersonateRole: (role: 'leader' | 'hr') => void;
+  stopImpersonation: () => void;
+
   // Authentication & Onboarding
   isAuthenticated: boolean;
   isProfileComplete: boolean;
@@ -205,6 +212,27 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   sessionUserRef.current = sessionUser;
   const currentUserIdRef = useRef<string>(currentUserId);
   currentUserIdRef.current = currentUserId;
+
+  // Inspector Mode / Emulation State (Strictly limited to Administrator sessions)
+  const [impersonatedUser, setImpersonatedUser] = useState<UserProfile | null>(() => {
+    try {
+      const savedAdminRaw = sessionStorage.getItem(`${STORAGE_KEY_PREFIX}session_user`);
+      if (savedAdminRaw) {
+        const savedAdmin = JSON.parse(savedAdminRaw);
+        if (savedAdmin && (savedAdmin.role === 'admin' || savedAdmin.email?.toLowerCase() === 'hola@taniapadierna.com')) {
+          const rawImp = sessionStorage.getItem(`${STORAGE_KEY_PREFIX}impersonated_user`);
+          return rawImp ? JSON.parse(rawImp) : null;
+        }
+      }
+    } catch {}
+    return null;
+  });
+
+  const isImpersonating = Boolean(
+    sessionUser &&
+      (sessionUser.role === 'admin' || sessionUser.email?.toLowerCase() === 'hola@taniapadierna.com') &&
+      impersonatedUser
+  );
 
   // Force completed profiles tracking for immediate 0ms redirect
   const [forceCompletedUserIds, setForceCompletedUserIds] = useState<Record<string, boolean>>(() => {
@@ -517,6 +545,16 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [notifications]);
 
   const currentUser = useMemo(() => {
+    // 0. If inspector mode is active and original user is administrator
+    if (isImpersonating && impersonatedUser) {
+      const live = allUsers.find(
+        (u) =>
+          u.id === impersonatedUser.id ||
+          (impersonatedUser.email && u.email.toLowerCase() === impersonatedUser.email.toLowerCase())
+      );
+      return live ? { ...impersonatedUser, ...live } : impersonatedUser;
+    }
+
     // 1. If active sessionUser exists, find latest matching record in allUsers or use sessionUser
     if (sessionUser && sessionUser.id) {
       const live = allUsers.find(
@@ -533,7 +571,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
     // 3. Fallback for unauthenticated or initial state
     return allUsers[0] || DEFAULT_ADMIN_PROFILE;
-  }, [allUsers, currentUserId, sessionUser]);
+  }, [allUsers, currentUserId, sessionUser, isImpersonating, impersonatedUser]);
 
   const activeMentorship =
     mentorships.find((m) => m.id === activeMentorshipId) ||
@@ -545,7 +583,80 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     (n) => !n.read && (n.recipientRole === currentUser.role || (n.recipientUserId && n.recipientUserId === currentUser.id))
   ).length;
 
+  const impersonateUser = (userOrId: string | UserProfile) => {
+    const isAdmin =
+      sessionUser?.role === 'admin' ||
+      sessionUser?.email?.toLowerCase() === 'hola@taniapadierna.com';
+    if (!isAdmin) {
+      showToast('Acceso denegado: El modo inspector requiere permisos de administración.', 'error');
+      return;
+    }
+
+    let target: UserProfile | undefined;
+    if (typeof userOrId === 'string') {
+      target = allUsers.find((u) => u.id === userOrId || u.email.toLowerCase() === userOrId.toLowerCase());
+    } else {
+      target = userOrId;
+    }
+
+    if (!target) {
+      showToast('No se encontró el perfil de usuario para simular.', 'error');
+      return;
+    }
+
+    if (target.role === 'leader') {
+      const leaderMentorship =
+        mentorships.find((m) => m.leaderId === target!.id && m.status !== 'completed') ||
+        mentorships.find((m) => m.leaderId === target!.id);
+      setActiveMentorshipIdState(leaderMentorship ? leaderMentorship.id : null);
+    }
+
+    setImpersonatedUser(target);
+    try {
+      sessionStorage.setItem(`${STORAGE_KEY_PREFIX}impersonated_user`, JSON.stringify(target));
+    } catch {}
+
+    const roleName = isHumanResourcesRole(target.role) ? 'Recursos Humanos' : target.role === 'admin' ? 'Administrador' : 'Líder';
+    showToast(`Modo Inspector: Visualizando interfaz como ${target.name} (${roleName})`, 'info');
+  };
+
+  const impersonateRole = (role: 'leader' | 'hr') => {
+    const isAdmin =
+      sessionUser?.role === 'admin' ||
+      sessionUser?.email?.toLowerCase() === 'hola@taniapadierna.com';
+    if (!isAdmin) return;
+
+    if (role === 'hr') {
+      const hrUser =
+        allUsers.find((u) => isHumanResourcesRole(u.role)) ||
+        INITIAL_USERS.find((u) => isHumanResourcesRole(u.role));
+      if (hrUser) {
+        impersonateUser(hrUser);
+      }
+    } else {
+      const leaderUser =
+        allUsers.find((u) => u.role === 'leader' && u.id === 'user_leader_roberto') ||
+        allUsers.find((u) => u.role === 'leader') ||
+        INITIAL_USERS.find((u) => u.role === 'leader');
+      if (leaderUser) {
+        impersonateUser(leaderUser);
+      }
+    }
+  };
+
+  const stopImpersonation = () => {
+    setImpersonatedUser(null);
+    try {
+      sessionStorage.removeItem(`${STORAGE_KEY_PREFIX}impersonated_user`);
+    } catch {}
+    showToast('Has regresado al Panel de Administradora.', 'success');
+  };
+
   const switchUser = (userId: string) => {
+    if (sessionUser && (sessionUser.role === 'admin' || sessionUser.email?.toLowerCase() === 'hola@taniapadierna.com')) {
+      impersonateUser(userId);
+      return;
+    }
     setCurrentUserId(userId);
     const targetUser = allUsers.find((u) => u.id === userId);
     if (targetUser && targetUser.role === 'leader') {
@@ -1680,10 +1791,12 @@ El Equipo de Lidacta`;
   const logout = () => {
     setIsAuthenticated(false);
     setSessionUser(null);
+    setImpersonatedUser(null);
     setCurrentUserId('');
     try {
       sessionStorage.removeItem(`${STORAGE_KEY_PREFIX}current_user_id`);
       sessionStorage.removeItem(`${STORAGE_KEY_PREFIX}session_user`);
+      sessionStorage.removeItem(`${STORAGE_KEY_PREFIX}impersonated_user`);
       localStorage.removeItem(`${STORAGE_KEY_PREFIX}current_user_id`);
     } catch {}
   };
@@ -2236,6 +2349,11 @@ El Equipo de Lidacta`;
         sendProfileInvite,
         login,
         logout,
+        impersonatedUser,
+        isImpersonating,
+        impersonateUser,
+        impersonateRole,
+        stopImpersonation,
         completeUserProfile,
         registerOrSetPassword,
         switchUser,
