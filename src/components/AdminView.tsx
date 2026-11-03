@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLidacta } from '../context/LidactaContext';
 import { CompanyContext, MentorshipSession, UserProfile } from '../types/lidacta';
+import { INTERNAL_LIBRARY_CATALOG, EXTERNAL_SOURCES_CATALOG } from '../data/mockData';
 import { AddUserModal, EditUserModal, DeleteUserModal, ViewUserModal } from './UserManagementModals';
 import {
   Building2,
@@ -35,6 +36,10 @@ import {
   Filter,
   RefreshCw,
   Send,
+  BookOpen,
+  Library,
+  Globe,
+  BookmarkCheck,
 } from 'lucide-react';
 
 export const AdminView: React.FC = () => {
@@ -46,6 +51,7 @@ export const AdminView: React.FC = () => {
     allUsers,
     currentUser,
     notifications,
+    recommendedResources,
     openEmailDrawer,
     openProfileModal,
     updateMentorRequestStatus,
@@ -66,12 +72,158 @@ export const AdminView: React.FC = () => {
   const adminProfile = allUsers.find((u) => u.role === 'admin') || currentUser;
 
   const [activeTab, setActiveTab] = useState<
-    'onboarding' | 'stages_monitoring' | 'analytics' | 'users' | 'mentor_requests'
+    'onboarding' | 'stages_monitoring' | 'analytics' | 'resources_analytics' | 'users' | 'mentor_requests'
   >('onboarding');
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(companies[0]?.id || 'comp_nexus');
   const [selectedMentorshipForAudit, setSelectedMentorshipForAudit] = useState<MentorshipSession | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'pendiente' | 'contactado' | 'atendido'>('all');
   const [adminNoteInput, setAdminNoteInput] = useState<Record<string, string>>({});
+
+  // Resource Analytics State & Filters
+  const [resourceFilterLeader, setResourceFilterLeader] = useState<string>('all');
+  const [resourceFilterTheme, setResourceFilterTheme] = useState<string>('all');
+  const [resourceFilterOrigin, setResourceFilterOrigin] = useState<'all' | 'internal' | 'external'>('all');
+  const [resourceSearchQuery, setResourceSearchQuery] = useState<string>('');
+  const [selectedResourceForDetail, setSelectedResourceForDetail] = useState<any | null>(null);
+
+  // Resource Analytics Metrics and Aggregations
+  const resourceStats = useMemo(() => {
+    const list = recommendedResources || [];
+    const total = list.length;
+    const internalCount = list.filter((r) => r.origin === 'internal').length;
+    const externalCount = list.filter((r) => r.origin === 'external').length;
+    const internalPercent = total > 0 ? Math.round((internalCount / total) * 100) : 0;
+    const externalPercent = total > 0 ? Math.round((externalCount / total) * 100) : 0;
+
+    // Unique leaders who have received resources
+    const uniqueLeaderIds = new Set(list.map((r) => r.leaderId));
+    const uniqueLeadersCount = uniqueLeaderIds.size;
+
+    // Internal Tools frequency count
+    const internalFrequency: Record<string, { count: number; tool: any }> = {};
+    INTERNAL_LIBRARY_CATALOG.forEach((cat) => {
+      internalFrequency[cat.title] = { count: 0, tool: cat };
+    });
+    list.filter((r) => r.origin === 'internal').forEach((r) => {
+      if (internalFrequency[r.resourceTitle]) {
+        internalFrequency[r.resourceTitle].count += 1;
+      } else {
+        internalFrequency[r.resourceTitle] = {
+          count: 1,
+          tool: {
+            id: r.id,
+            title: r.resourceTitle,
+            origin: 'internal',
+            category: r.categoryOrTool || 'Herramienta Práctica (Bloque 3)',
+            description: 'Herramienta interna recomendada por Lidacta.',
+            authorOrSource: r.sourceOrAuthor || 'Biblioteca Interna Lidacta (Bloque 3)',
+            urlOrRef: r.urlOrRef,
+            recommendedStages: [r.stage],
+            relatedThemes: [r.theme],
+          },
+        };
+      }
+    });
+
+    const sortedInternalTools = Object.values(internalFrequency).sort((a, b) => b.count - a.count);
+
+    // External Sources frequency count
+    const externalFrequency: Record<string, { count: number; source: any }> = {};
+    EXTERNAL_SOURCES_CATALOG.forEach((cat) => {
+      externalFrequency[cat.title] = { count: 0, source: cat };
+    });
+    list.filter((r) => r.origin === 'external').forEach((r) => {
+      if (externalFrequency[r.resourceTitle]) {
+        externalFrequency[r.resourceTitle].count += 1;
+      } else {
+        externalFrequency[r.resourceTitle] = {
+          count: 1,
+          source: {
+            id: r.id,
+            title: r.resourceTitle,
+            origin: 'external',
+            category: r.categoryOrTool || 'Fuente Externa Delimitada',
+            description: 'Referencia bibliográfica especializada consultada por Lidacta.',
+            authorOrSource: r.sourceOrAuthor || 'Fuente Externa Delimitada',
+            urlOrRef: r.urlOrRef,
+            recommendedStages: [r.stage],
+            relatedThemes: [r.theme],
+          },
+        };
+      }
+    });
+
+    const sortedExternalSources = Object.values(externalFrequency).sort((a, b) => b.count - a.count);
+
+    return {
+      total,
+      internalCount,
+      externalCount,
+      internalPercent,
+      externalPercent,
+      uniqueLeadersCount,
+      sortedInternalTools,
+      sortedExternalSources,
+    };
+  }, [recommendedResources]);
+
+  // Unique list of leaders who have received resources for the filter dropdown
+  const leadersWithResources = useMemo(() => {
+    const list = recommendedResources || [];
+    const map = new Map<string, { id: string; name: string; email: string; companyName: string }>();
+    list.forEach((r) => {
+      if (!map.has(r.leaderId)) {
+        map.set(r.leaderId, {
+          id: r.leaderId,
+          name: r.leaderName,
+          email: r.leaderEmail,
+          companyName: r.companyName,
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [recommendedResources]);
+
+  // Unique list of themes/challenges for the filter dropdown
+  const uniqueResourceThemes = useMemo(() => {
+    const list = recommendedResources || [];
+    const set = new Set<string>();
+    list.forEach((r) => {
+      if (r.theme) set.add(r.theme);
+      if (r.challengeTitle) set.add(r.challengeTitle);
+    });
+    return Array.from(set);
+  }, [recommendedResources]);
+
+  // Filtered list of detailed resource recommendations
+  const filteredRecommendedResources = useMemo(() => {
+    const list = recommendedResources || [];
+    return list.filter((item) => {
+      if (resourceFilterLeader !== 'all' && item.leaderId !== resourceFilterLeader) {
+        return false;
+      }
+      if (resourceFilterOrigin !== 'all' && item.origin !== resourceFilterOrigin) {
+        return false;
+      }
+      if (resourceFilterTheme !== 'all' && item.theme !== resourceFilterTheme && item.challengeTitle !== resourceFilterTheme) {
+        return false;
+      }
+      if (resourceSearchQuery.trim()) {
+        const q = resourceSearchQuery.toLowerCase().trim();
+        const matchTitle = item.resourceTitle.toLowerCase().includes(q);
+        const matchLeader = item.leaderName.toLowerCase().includes(q);
+        const matchCompany = item.companyName.toLowerCase().includes(q);
+        const matchCat = (item.categoryOrTool || '').toLowerCase().includes(q);
+        const matchSource = (item.sourceOrAuthor || '').toLowerCase().includes(q);
+        const matchTheme = (item.theme || '').toLowerCase().includes(q);
+        const matchChallenge = (item.challengeTitle || '').toLowerCase().includes(q);
+        if (!matchTitle && !matchLeader && !matchCompany && !matchCat && !matchSource && !matchTheme && !matchChallenge) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [recommendedResources, resourceFilterLeader, resourceFilterOrigin, resourceFilterTheme, resourceSearchQuery]);
 
   // User Management State (CRUD)
   const [searchUserQuery, setSearchUserQuery] = useState('');
@@ -369,6 +521,24 @@ export const AdminView: React.FC = () => {
               }`}
             >
               📊 Analítica & Gráficos
+            </button>
+            <button
+              onClick={() => setActiveTab('resources_analytics')}
+              className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5 ${
+                activeTab === 'resources_analytics'
+                  ? 'bg-[#BF3A1B] text-white shadow-xs'
+                  : 'text-[#4A3F55] hover:text-[#2D1B4E]'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Analítica de Recursos</span>
+              <span
+                className={`ml-1 px-1.5 py-0.5 text-[10px] font-extrabold rounded-full leading-tight ${
+                  activeTab === 'resources_analytics' ? 'bg-white/20 text-white' : 'bg-[#2D1B4E]/10 text-[#2D1B4E]'
+                }`}
+              >
+                {recommendedResources.length}
+              </span>
             </button>
             <button
               onClick={() => setActiveTab('users')}
@@ -1023,6 +1193,611 @@ export const AdminView: React.FC = () => {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: ANALÍTICA DE RECURSOS RECOMENDADOS (BLOQUE 3 & FUENTES EXTERNAS) */}
+      {activeTab === 'resources_analytics' && (
+        <div className="space-y-6 animate-in fade-in">
+          {/* Header Card with Silent Capture Notice */}
+          <div className="bg-white border border-[#493447]/10 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-[#2D1B4E]/10 text-[#2D1B4E] flex items-center justify-center shrink-0">
+                    <BookOpen className="w-5 h-5 text-[#2D1B4E]" />
+                  </div>
+                  <h3 className="font-heading font-extrabold text-lg sm:text-xl text-[#2D1B4E]">
+                    Analítica de Recursos Recomendados por Lidacta
+                  </h3>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#246B2A] bg-emerald-50 px-3 py-1 rounded-full border border-[#246B2A]/20 shadow-2xs">
+                    <Sparkles className="w-3.5 h-3.5 text-[#246B2A]" />
+                    <span>100% Invisible para el Líder · Registro Automático en Segundo Plano</span>
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-[#4A3F55]/80 mt-1.5 max-w-3xl leading-relaxed">
+                  Monitoreo silencioso y exhaustivo de las herramientas prácticas y fuentes que el motor de Lidacta entrega implícitamente a los líderes según sus desafíos conversacionales y avance en las 6 etapas.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-bold text-[#4A3F55] bg-[#FFF7EF] border border-[#FFD3BF] px-3 py-1.5 rounded-xl">
+                  Total Registros: <strong className="text-[#BF3A1B] font-extrabold ml-1">{resourceStats.total}</strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Global Metrics Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+              <div className="bg-[#FFF7EF]/60 border border-[#FFD3BF]/60 rounded-xl p-4 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#4A3F55] uppercase tracking-wider">Total Recursos</span>
+                  <div className="w-8 h-8 rounded-lg bg-[#BF3A1B]/10 text-[#BF3A1B] flex items-center justify-center">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-2xl font-heading font-black text-[#2D1B4E]">{resourceStats.total}</div>
+                  <p className="text-[11px] text-[#4A3F55]/70 mt-0.5">Sugeridos a líderes en sesiones</p>
+                </div>
+              </div>
+
+              <div className="bg-emerald-50/60 border border-emerald-200/60 rounded-xl p-4 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-900 uppercase tracking-wider">Biblioteca Interna</span>
+                  <div className="w-8 h-8 rounded-lg bg-[#246B2A]/15 text-[#246B2A] flex items-center justify-center">
+                    <Library className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-heading font-black text-[#246B2A]">{resourceStats.internalCount}</span>
+                    <span className="text-xs font-bold text-[#246B2A] bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                      {resourceStats.internalPercent}% del total
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800/70 mt-0.5">Herramientas Bloque 3 Lidacta</p>
+                </div>
+              </div>
+
+              <div className="bg-[#2D1B4E]/5 border border-[#2D1B4E]/15 rounded-xl p-4 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#2D1B4E] uppercase tracking-wider">Fuentes Externas</span>
+                  <div className="w-8 h-8 rounded-lg bg-[#2D1B4E]/10 text-[#2D1B4E] flex items-center justify-center">
+                    <Globe className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-heading font-black text-[#2D1B4E]">{resourceStats.externalCount}</span>
+                    <span className="text-xs font-bold text-[#2D1B4E] bg-[#2D1B4E]/10 px-2 py-0.5 rounded-full">
+                      {resourceStats.externalPercent}% del total
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#4A3F55]/70 mt-0.5">Bibliografía y artículos delimitados</p>
+                </div>
+              </div>
+
+              <div className="bg-[#F7B538]/10 border border-[#F7B538]/30 rounded-xl p-4 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#2D1B4E] uppercase tracking-wider">Líderes Impactados</span>
+                  <div className="w-8 h-8 rounded-lg bg-[#F7B538]/30 text-[#2D1B4E] flex items-center justify-center">
+                    <Users className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-2xl font-heading font-black text-[#2D1B4E]">{resourceStats.uniqueLeadersCount}</div>
+                  <p className="text-[11px] text-[#4A3F55]/70 mt-0.5">Líderes con al menos 1 entrega</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Visual Balance Bar */}
+            <div className="bg-[#FFF7EF]/40 border border-[#FFD3BF]/40 rounded-xl p-4 space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-[#2D1B4E]">
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-[#246B2A] inline-block" />
+                  <span>Biblioteca Interna Lidacta (Bloque 3): {resourceStats.internalPercent}% ({resourceStats.internalCount})</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-[#2D1B4E] inline-block" />
+                  <span>Fuentes Externas Delimitadas: {resourceStats.externalPercent}% ({resourceStats.externalCount})</span>
+                </span>
+              </div>
+              <div className="w-full bg-[#2D1B4E] h-3.5 rounded-full overflow-hidden flex shadow-inner">
+                <div
+                  className="bg-[#246B2A] h-full transition-all duration-500 ease-out flex items-center justify-center text-[9px] text-white font-extrabold"
+                  style={{ width: `${resourceStats.internalPercent}%` }}
+                >
+                  {resourceStats.internalPercent > 10 ? `${resourceStats.internalPercent}%` : ''}
+                </div>
+                <div
+                  className="bg-[#2D1B4E] h-full transition-all duration-500 ease-out flex items-center justify-center text-[9px] text-white font-extrabold"
+                  style={{ width: `${resourceStats.externalPercent}%` }}
+                >
+                  {resourceStats.externalPercent > 10 ? `${resourceStats.externalPercent}%` : ''}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Catalog Tables: Bloque 3 & Fuentes Externas side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Table 1: Biblioteca Interna (Bloque 3) */}
+            <div className="bg-white border border-[#493447]/10 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between border-b border-[#493447]/10 pb-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-[#246B2A] flex items-center justify-center">
+                      <Library className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-heading font-extrabold text-sm sm:text-base text-[#2D1B4E]">
+                        Biblioteca Interna (Bloque 3)
+                      </h4>
+                      <p className="text-[11px] text-[#4A3F55]/70">
+                        Herramientas prácticas propietarias más recomendadas
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-extrabold text-[#246B2A] bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    {INTERNAL_LIBRARY_CATALOG.length} Herramientas
+                  </span>
+                </div>
+
+                <div className="divide-y divide-[#493447]/10">
+                  {resourceStats.sortedInternalTools.map(({ tool, count }) => {
+                    const maxToolCount = Math.max(...resourceStats.sortedInternalTools.map((t) => t.count), 1);
+                    const pctOfMax = Math.round((count / maxToolCount) * 100);
+                    return (
+                      <div key={tool.id || tool.title} className="py-3 hover:bg-[#FFF7EF]/30 px-2 rounded-lg transition-colors">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-xs sm:text-sm text-[#2D1B4E] truncate">
+                                {tool.title}
+                              </span>
+                              <span className="text-[10px] font-semibold text-[#BF3A1B] bg-[#FFF7EF] border border-[#FFD3BF] px-1.5 py-0.2 rounded">
+                                {tool.category}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-[#4A3F55]/70 line-clamp-1">
+                              {tool.description}
+                            </p>
+                            <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
+                              <span className="text-[10px] text-[#4A3F55]/60 font-semibold">Etapas:</span>
+                              {(tool.recommendedStages || [2, 3]).map((stg: number) => (
+                                <span key={stg} className="text-[9px] font-bold bg-[#2D1B4E]/5 text-[#2D1B4E] px-1 rounded">
+                                  Etapa {stg}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0 flex flex-col items-end">
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-sm font-heading font-black text-[#246B2A]">{count}</span>
+                              <span className="text-[10px] text-[#4A3F55]/60 font-medium">sug.</span>
+                            </div>
+                            <div className="w-16 bg-gray-100 h-1.5 rounded-full mt-1 overflow-hidden">
+                              <div
+                                className="bg-[#246B2A] h-full rounded-full"
+                                style={{ width: `${pctOfMax}%` }}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedResourceForDetail(tool)}
+                              className="text-[10px] font-bold text-[#BF3A1B] hover:text-[#2D1B4E] mt-1.5 flex items-center gap-0.5 cursor-pointer"
+                            >
+                              <span>Ver</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Table 2: Fuentes Externas Delimitadas */}
+            <div className="bg-white border border-[#493447]/10 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between border-b border-[#493447]/10 pb-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-[#2D1B4E]/10 text-[#2D1B4E] flex items-center justify-center">
+                      <Globe className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-heading font-extrabold text-sm sm:text-base text-[#2D1B4E]">
+                        Fuentes Externas Delimitadas
+                      </h4>
+                      <p className="text-[11px] text-[#4A3F55]/70">
+                        Bibliografía y artículos consultados por Lidacta
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-extrabold text-[#2D1B4E] bg-[#2D1B4E]/5 border border-[#2D1B4E]/15 px-2 py-0.5 rounded-full">
+                    {EXTERNAL_SOURCES_CATALOG.length} Fuentes
+                  </span>
+                </div>
+
+                <div className="divide-y divide-[#493447]/10">
+                  {resourceStats.sortedExternalSources.map(({ source, count }) => {
+                    const maxSourceCount = Math.max(...resourceStats.sortedExternalSources.map((s) => s.count), 1);
+                    const pctOfMax = Math.round((count / maxSourceCount) * 100);
+                    return (
+                      <div key={source.id || source.title} className="py-3 hover:bg-[#FFF7EF]/30 px-2 rounded-lg transition-colors">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-xs sm:text-sm text-[#2D1B4E] truncate">
+                                {source.title}
+                              </span>
+                              <span className="text-[10px] font-semibold text-[#2D1B4E] bg-[#2D1B4E]/5 border border-[#2D1B4E]/15 px-1.5 py-0.2 rounded">
+                                {source.category}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-[#4A3F55]/70 line-clamp-1">
+                              {source.authorOrSource} · {source.description}
+                            </p>
+                            <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
+                              <span className="text-[10px] text-[#4A3F55]/60 font-semibold">Etapas:</span>
+                              {(source.recommendedStages || [2, 3]).map((stg: number) => (
+                                <span key={stg} className="text-[9px] font-bold bg-[#2D1B4E]/5 text-[#2D1B4E] px-1 rounded">
+                                  Etapa {stg}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0 flex flex-col items-end">
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-sm font-heading font-black text-[#2D1B4E]">{count}</span>
+                              <span className="text-[10px] text-[#4A3F55]/60 font-medium">sug.</span>
+                            </div>
+                            <div className="w-16 bg-gray-100 h-1.5 rounded-full mt-1 overflow-hidden">
+                              <div
+                                className="bg-[#2D1B4E] h-full rounded-full"
+                                style={{ width: `${pctOfMax}%` }}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedResourceForDetail(source)}
+                              className="text-[10px] font-bold text-[#BF3A1B] hover:text-[#2D1B4E] mt-1.5 flex items-center gap-0.5 cursor-pointer"
+                            >
+                              <span>Ver</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Filters & Detailed Delivery Log */}
+          <div className="bg-white border border-[#493447]/10 rounded-2xl p-5 shadow-xs space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-[#493447]/10 pb-3">
+              <div>
+                <h4 className="font-heading font-extrabold text-base text-[#2D1B4E] flex items-center gap-2">
+                  <BookmarkCheck className="w-4 h-4 text-[#BF3A1B]" />
+                  <span>Bitácora Detallada de Entregas por Líder</span>
+                </h4>
+                <p className="text-xs text-[#4A3F55]/70">
+                  Historial en tiempo real de recursos sugeridos en sesiones de chat y avances de etapa
+                </p>
+              </div>
+
+              {/* Reset Filters button if any active */}
+              {(resourceFilterLeader !== 'all' || resourceFilterOrigin !== 'all' || resourceFilterTheme !== 'all' || resourceSearchQuery) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResourceFilterLeader('all');
+                    setResourceFilterOrigin('all');
+                    setResourceFilterTheme('all');
+                    setResourceSearchQuery('');
+                  }}
+                  className="text-xs font-bold text-[#BF3A1B] hover:text-[#2D1B4E] underline cursor-pointer self-start md:self-auto"
+                >
+                  Restablecer filtros
+                </button>
+              )}
+            </div>
+
+            {/* Filter Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Leader Filter */}
+              <div>
+                <label className="block text-[11px] font-bold text-[#4A3F55] mb-1">
+                  Filtrar por Líder:
+                </label>
+                <select
+                  value={resourceFilterLeader}
+                  onChange={(e) => setResourceFilterLeader(e.target.value)}
+                  className="w-full text-xs font-medium border border-[#493447]/20 rounded-xl px-3 py-2 bg-white text-[#2D1B4E] focus:outline-none focus:ring-2 focus:ring-[#BF3A1B]/30"
+                >
+                  <option value="all">Todos los Líderes ({leadersWithResources.length})</option>
+                  {leadersWithResources.map((ldr) => (
+                    <option key={ldr.id} value={ldr.id}>
+                      {ldr.name} ({ldr.companyName})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Theme/Challenge Filter */}
+              <div>
+                <label className="block text-[11px] font-bold text-[#4A3F55] mb-1">
+                  Filtrar por Desafío / Tema:
+                </label>
+                <select
+                  value={resourceFilterTheme}
+                  onChange={(e) => setResourceFilterTheme(e.target.value)}
+                  className="w-full text-xs font-medium border border-[#493447]/20 rounded-xl px-3 py-2 bg-white text-[#2D1B4E] focus:outline-none focus:ring-2 focus:ring-[#BF3A1B]/30"
+                >
+                  <option value="all">Todos los Temas ({uniqueResourceThemes.length})</option>
+                  {uniqueResourceThemes.map((thm) => (
+                    <option key={thm} value={thm}>
+                      {thm}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Origin Filter */}
+              <div>
+                <label className="block text-[11px] font-bold text-[#4A3F55] mb-1">
+                  Origen del Recurso:
+                </label>
+                <select
+                  value={resourceFilterOrigin}
+                  onChange={(e) => setResourceFilterOrigin(e.target.value as any)}
+                  className="w-full text-xs font-medium border border-[#493447]/20 rounded-xl px-3 py-2 bg-white text-[#2D1B4E] focus:outline-none focus:ring-2 focus:ring-[#BF3A1B]/30"
+                >
+                  <option value="all">Todos los Orígenes</option>
+                  <option value="internal">Biblioteca Interna (Bloque 3)</option>
+                  <option value="external">Fuentes Externas Delimitadas</option>
+                </select>
+              </div>
+
+              {/* Text Search */}
+              <div>
+                <label className="block text-[11px] font-bold text-[#4A3F55] mb-1">
+                  Búsqueda Rápida:
+                </label>
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-[#4A3F55]/50 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={resourceSearchQuery}
+                    onChange={(e) => setResourceSearchQuery(e.target.value)}
+                    placeholder="Buscar título, autor, empresa..."
+                    className="w-full text-xs border border-[#493447]/20 rounded-xl pl-8 pr-3 py-2 bg-white text-[#2D1B4E] focus:outline-none focus:ring-2 focus:ring-[#BF3A1B]/30"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Results Counter */}
+            <div className="flex items-center justify-between text-xs text-[#4A3F55]/70 pt-1">
+              <span>
+                Mostrando <strong className="text-[#2D1B4E] font-bold">{filteredRecommendedResources.length}</strong> de{' '}
+                {recommendedResources.length} recomendaciones registradas
+              </span>
+            </div>
+
+            {/* Deliveries Table */}
+            <div className="overflow-x-auto rounded-xl border border-[#493447]/10">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[#FFF7EF] border-b border-[#493447]/10 text-[#2D1B4E] font-heading font-extrabold uppercase text-[10px] tracking-wider">
+                    <th className="py-3 px-3">Líder & Empresa</th>
+                    <th className="py-3 px-3">Recurso Recomendado</th>
+                    <th className="py-3 px-3">Origen</th>
+                    <th className="py-3 px-3">Desafío / Tema</th>
+                    <th className="py-3 px-3 text-center">Etapa</th>
+                    <th className="py-3 px-3">Fecha y Hora</th>
+                    <th className="py-3 px-3 text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#493447]/10">
+                  {filteredRecommendedResources.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-xs text-[#4A3F55]/60">
+                        No se encontraron recursos que coincidan con los filtros seleccionados.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRecommendedResources.map((item) => (
+                      <tr key={item.id} className="hover:bg-[#FFF7EF]/40 transition-colors">
+                        <td className="py-3 px-3 font-medium">
+                          <div className="font-bold text-[#2D1B4E]">{item.leaderName}</div>
+                          <div className="text-[10px] text-[#4A3F55]/70">{item.companyName}</div>
+                        </td>
+
+                        <td className="py-3 px-3 max-w-xs">
+                          <div className="font-bold text-[#2D1B4E] line-clamp-1">{item.resourceTitle}</div>
+                          <div className="text-[10px] text-[#4A3F55]/60 truncate">
+                            {item.sourceOrAuthor || item.categoryOrTool || 'Recurso de acompañamiento'}
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          {item.origin === 'internal' ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-[#246B2A] bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                              <Library className="w-3 h-3 text-[#246B2A]" />
+                              <span>Biblioteca Interna</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-[#2D1B4E] bg-[#2D1B4E]/5 border border-[#2D1B4E]/15 px-2 py-0.5 rounded-full">
+                              <Globe className="w-3 h-3 text-[#2D1B4E]" />
+                              <span>Fuente Externa</span>
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="py-3 px-3 max-w-xs">
+                          <span className="inline-block text-[11px] text-[#4A3F55] font-medium bg-[#FFF7EF] border border-[#FFD3BF] px-2 py-0.5 rounded-md truncate max-w-full">
+                            {item.theme || item.challengeTitle}
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <span className="font-bold text-[10px] text-[#2D1B4E] bg-white border border-[#493447]/20 px-2 py-0.5 rounded-md">
+                            Etapa {item.stage}
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-3 whitespace-nowrap text-[11px] text-[#4A3F55]/80">
+                          {new Date(item.recommendedAt || item.timestamp || Date.now()).toLocaleDateString('es-MX', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </td>
+
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedResourceForDetail(item)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-[#BF3A1B] hover:text-white hover:bg-[#BF3A1B] border border-[#BF3A1B]/30 rounded-lg transition-all cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>Ver Detalle</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DETALLE DEL RECURSO RECOMENDADO */}
+      {selectedResourceForDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 border border-[#493447]/20 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3 border-b border-[#493447]/10 pb-3">
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                  selectedResourceForDetail.origin === 'internal'
+                    ? 'bg-emerald-50 text-[#246B2A]'
+                    : 'bg-[#2D1B4E]/10 text-[#2D1B4E]'
+                }`}>
+                  {selectedResourceForDetail.origin === 'internal' ? (
+                    <Library className="w-4 h-4" />
+                  ) : (
+                    <Globe className="w-4 h-4" />
+                  )}
+                </div>
+                <div>
+                  <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
+                    selectedResourceForDetail.origin === 'internal'
+                      ? 'bg-emerald-50 text-[#246B2A] border-emerald-200'
+                      : 'bg-[#2D1B4E]/5 text-[#2D1B4E] border-[#2D1B4E]/15'
+                  }`}>
+                    {selectedResourceForDetail.origin === 'internal'
+                      ? 'Biblioteca Interna Lidacta (Bloque 3)'
+                      : 'Fuente Externa Delimitada'}
+                  </span>
+                  <h3 className="font-heading font-extrabold text-base text-[#2D1B4E] mt-1">
+                    {selectedResourceForDetail.title || selectedResourceForDetail.resourceTitle}
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedResourceForDetail(null)}
+                className="text-[#4A3F55]/60 hover:text-[#2D1B4E] text-lg font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <span className="font-bold text-[#4A3F55] block text-[11px]">Categoría / Tipo:</span>
+                <span className="text-[#2D1B4E] font-medium">
+                  {selectedResourceForDetail.category || selectedResourceForDetail.categoryOrTool || 'Herramienta de desarrollo'}
+                </span>
+              </div>
+
+              <div>
+                <span className="font-bold text-[#4A3F55] block text-[11px]">Autor o Fuente:</span>
+                <span className="text-[#2D1B4E] font-medium">
+                  {selectedResourceForDetail.authorOrSource || selectedResourceForDetail.sourceOrAuthor || 'Lidacta Executive Coaching'}
+                </span>
+              </div>
+
+              {selectedResourceForDetail.description && (
+                <div>
+                  <span className="font-bold text-[#4A3F55] block text-[11px]">Descripción / Enfoque:</span>
+                  <p className="text-[#4A3F55]/90 bg-[#FFF7EF] p-2.5 rounded-xl border border-[#FFD3BF]/60 leading-relaxed">
+                    {selectedResourceForDetail.description}
+                  </p>
+                </div>
+              )}
+
+              {/* If opened from delivery log, show delivery metadata */}
+              {selectedResourceForDetail.leaderName && (
+                <div className="bg-[#FFF7EF]/40 border border-[#FFD3BF]/60 rounded-xl p-3 space-y-1.5">
+                  <div className="font-bold text-[11px] text-[#2D1B4E] uppercase tracking-wider">
+                    Datos de la Entrega Silenciosa:
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div>
+                      <span className="text-[#4A3F55]/70 block">Líder:</span>
+                      <strong className="text-[#2D1B4E]">{selectedResourceForDetail.leaderName}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[#4A3F55]/70 block">Empresa:</span>
+                      <strong className="text-[#2D1B4E]">{selectedResourceForDetail.companyName}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[#4A3F55]/70 block">Desafío / Tema:</span>
+                      <strong className="text-[#2D1B4E]">{selectedResourceForDetail.theme || selectedResourceForDetail.challengeTitle}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[#4A3F55]/70 block">Etapa Sugerida:</span>
+                      <strong className="text-[#2D1B4E]">Etapa {selectedResourceForDetail.stage}</strong>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedResourceForDetail.urlOrRef && (
+                <div>
+                  <span className="font-bold text-[#4A3F55] block text-[11px]">Referencia Documental / Enlace:</span>
+                  <div className="text-[11px] font-mono text-[#BF3A1B] bg-gray-50 p-2 rounded-lg border border-gray-200 break-all select-all">
+                    {selectedResourceForDetail.urlOrRef}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-end border-t border-[#493447]/10">
+              <button
+                type="button"
+                onClick={() => setSelectedResourceForDetail(null)}
+                className="px-4 py-2 bg-[#2D1B4E] hover:bg-[#493447] text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                Cerrar Ventana
+              </button>
             </div>
           </div>
         </div>

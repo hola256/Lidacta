@@ -6,6 +6,7 @@ import {
   StageNumber,
   UserProfile,
   UserRole,
+  RecommendedResourceItem,
 } from '../types/lidacta';
 import {
   INITIAL_COMPANIES,
@@ -13,6 +14,9 @@ import {
   INITIAL_NOTIFICATIONS,
   INITIAL_USERS,
   DEFAULT_ADMIN_PROFILE,
+  INITIAL_RECOMMENDED_RESOURCES,
+  INTERNAL_LIBRARY_CATALOG,
+  EXTERNAL_SOURCES_CATALOG,
 } from '../data/mockData';
 import { userService, UserServiceResponse } from '../services/userService';
 import { emailService } from '../services/emailService';
@@ -159,6 +163,12 @@ interface LidactaContextType {
   isDbConnected: boolean;
   lastDbSync: Date | null;
   dbLatencyMs: number;
+
+  // Resource Tracking & Analytics (Implicit & Invisible for Leader)
+  recommendedResources: RecommendedResourceItem[];
+  recordResourceRecommendation: (
+    resource: Omit<RecommendedResourceItem, 'id' | 'recommendedAt'>
+  ) => void;
 }
 
 const LidactaContext = createContext<LidactaContextType | undefined>(undefined);
@@ -457,6 +467,125 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
   });
 
+  // Implicit & Silent Resource Tracking (Invisible for Leader)
+  const [recommendedResources, setRecommendedResources] = useState<RecommendedResourceItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}recommended_resources_v1`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_RECOMMENDED_RESOURCES;
+  });
+
+  const recordResourceRecommendation = (
+    resource: Omit<RecommendedResourceItem, 'id' | 'recommendedAt'>
+  ) => {
+    const newItem: RecommendedResourceItem = {
+      ...resource,
+      id: `rec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      recommendedAt: new Date().toISOString(),
+    };
+
+    setRecommendedResources((prev) => {
+      const isDuplicate = prev.some(
+        (r) =>
+          r.mentorshipId === resource.mentorshipId &&
+          r.stage === resource.stage &&
+          r.resourceTitle.toLowerCase() === resource.resourceTitle.toLowerCase()
+      );
+      if (isDuplicate) return prev;
+      return [newItem, ...prev];
+    });
+  };
+
+  const autoDetectAndLogResources = (
+    stage: StageNumber,
+    session: MentorshipSession,
+    text: string,
+    coachReplyText?: string
+  ) => {
+    const fullContext = `${session.title} ${session.theme || ''} ${text} ${coachReplyText || ''}`.toLowerCase();
+    const candidateMatches: RecommendedResourceItem[] = [];
+
+    // Check Internal Library Catalog (Bloque 3)
+    for (const item of INTERNAL_LIBRARY_CATALOG) {
+      const matchesStage = item.recommendedStages.includes(stage);
+      const matchesTheme = item.relatedThemes.some(
+        (t) => fullContext.includes(t.toLowerCase()) || (session.theme && session.theme.toLowerCase().includes(t.toLowerCase()))
+      );
+      if (matchesStage && matchesTheme) {
+        candidateMatches.push({
+          id: `rec_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          resourceTitle: item.title,
+          origin: 'internal',
+          categoryOrTool: item.category,
+          sourceOrAuthor: item.authorOrSource,
+          urlOrRef: item.urlOrRef,
+          leaderId: session.leaderId,
+          leaderName: session.leaderName,
+          leaderEmail: currentUser.email || `${session.leaderId}@empresa.com`,
+          companyId: session.companyId,
+          companyName: session.companyName,
+          mentorshipId: session.id,
+          challengeTitle: session.title,
+          theme: session.theme || 'Desarrollo de Liderazgo',
+          stage,
+          stageName: `Etapa ${stage}`,
+          recommendedAt: new Date().toISOString(),
+        });
+        break; // 1 internal resource max per interaction
+      }
+    }
+
+    // Check External Sources Catalog
+    for (const item of EXTERNAL_SOURCES_CATALOG) {
+      const matchesStage = item.recommendedStages.includes(stage);
+      const matchesTheme = item.relatedThemes.some(
+        (t) => fullContext.includes(t.toLowerCase()) || (session.theme && session.theme.toLowerCase().includes(t.toLowerCase()))
+      );
+      if (matchesStage && matchesTheme) {
+        candidateMatches.push({
+          id: `rec_${Date.now()}_ext_${Math.random().toString(36).substring(2, 6)}`,
+          resourceTitle: item.title,
+          origin: 'external',
+          categoryOrTool: item.category,
+          sourceOrAuthor: item.authorOrSource,
+          urlOrRef: item.urlOrRef,
+          leaderId: session.leaderId,
+          leaderName: session.leaderName,
+          leaderEmail: currentUser.email || `${session.leaderId}@empresa.com`,
+          companyId: session.companyId,
+          companyName: session.companyName,
+          mentorshipId: session.id,
+          challengeTitle: session.title,
+          theme: session.theme || 'Desarrollo de Liderazgo',
+          stage,
+          stageName: `Etapa ${stage}`,
+          recommendedAt: new Date().toISOString(),
+        });
+        break; // 1 external resource max per interaction
+      }
+    }
+
+    if (candidateMatches.length > 0) {
+      setRecommendedResources((prev) => {
+        const toAdd = candidateMatches.filter(
+          (cand) =>
+            !prev.some(
+              (p) =>
+                p.mentorshipId === cand.mentorshipId &&
+                p.stage === cand.stage &&
+                p.resourceTitle.toLowerCase() === cand.resourceTitle.toLowerCase()
+            )
+        );
+        if (toAdd.length === 0) return prev;
+        return [...toAdd, ...prev];
+      });
+    }
+  };
+
   const [activeMentorshipId, setActiveMentorshipIdState] = useState<string | null>(() => {
     return 'ment_roberto_2';
   });
@@ -543,6 +672,10 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     localStorage.setItem(`${STORAGE_KEY_PREFIX}notifications`, JSON.stringify(notifications));
   }, [notifications]);
+
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}recommended_resources_v1`, JSON.stringify(recommendedResources));
+  }, [recommendedResources]);
 
   const currentUser = useMemo(() => {
     // 0. If inspector mode is active and original user is administrator
@@ -977,6 +1110,31 @@ El Equipo de Lidacta`;
             };
           })
         );
+
+        // Silent and automatic resource tracking in background (100% invisible for leader)
+        if (coachReply.recommendedResources && Array.isArray(coachReply.recommendedResources) && coachReply.recommendedResources.length > 0) {
+          coachReply.recommendedResources.forEach((res: any) => {
+            recordResourceRecommendation({
+              resourceTitle: res.title || res.resourceTitle,
+              origin: res.origin || 'internal',
+              categoryOrTool: res.category || res.categoryOrTool || 'Biblioteca Interna (Bloque 3)',
+              sourceOrAuthor: res.sourceOrAuthor || (res.origin === 'internal' ? 'Biblioteca Interna Lidacta (Bloque 3)' : 'Fuente Externa Delimitada'),
+              urlOrRef: res.urlOrRef,
+              leaderId: activeMentorship.leaderId,
+              leaderName: activeMentorship.leaderName,
+              leaderEmail: currentUser.email || `${activeMentorship.leaderId}@empresa.com`,
+              companyId: activeMentorship.companyId,
+              companyName: activeMentorship.companyName,
+              mentorshipId: activeMentorship.id,
+              challengeTitle: activeMentorship.title,
+              theme: coachReply.detectedTheme || activeMentorship.theme || 'Desarrollo de Liderazgo',
+              stage: currentStage,
+              stageName: `Etapa ${currentStage}`,
+            });
+          });
+        } else {
+          autoDetectAndLogResources(currentStage, activeMentorship, text, coachReply.replyText);
+        }
       }
     } catch (err) {
       console.error('Error sending message:', err);
@@ -1105,6 +1263,31 @@ El Equipo de Lidacta`;
               : m
           )
         );
+
+        // Silent and automatic resource tracking in background upon advancing stage
+        if (coachReply.recommendedResources && Array.isArray(coachReply.recommendedResources) && coachReply.recommendedResources.length > 0) {
+          coachReply.recommendedResources.forEach((res: any) => {
+            recordResourceRecommendation({
+              resourceTitle: res.title || res.resourceTitle,
+              origin: res.origin || 'internal',
+              categoryOrTool: res.category || res.categoryOrTool || 'Biblioteca Interna (Bloque 3)',
+              sourceOrAuthor: res.sourceOrAuthor || (res.origin === 'internal' ? 'Biblioteca Interna Lidacta (Bloque 3)' : 'Fuente Externa Delimitada'),
+              urlOrRef: res.urlOrRef,
+              leaderId: activeMentorship.leaderId,
+              leaderName: activeMentorship.leaderName,
+              leaderEmail: currentUser.email || `${activeMentorship.leaderId}@empresa.com`,
+              companyId: activeMentorship.companyId,
+              companyName: activeMentorship.companyName,
+              mentorshipId: activeMentorship.id,
+              challengeTitle: activeMentorship.title,
+              theme: activeMentorship.theme || 'Desarrollo de Liderazgo',
+              stage: nextStage,
+              stageName: `Etapa ${nextStage}`,
+            });
+          });
+        } else {
+          autoDetectAndLogResources(nextStage, activeMentorship, `[Avanzando a Etapa ${nextStage}]`, coachReply.replyText);
+        }
       }
     } catch (err) {
       console.error('Error transitioning stage:', err);
@@ -2382,6 +2565,8 @@ El Equipo de Lidacta`;
         isDbConnected,
         lastDbSync,
         dbLatencyMs,
+        recommendedResources,
+        recordResourceRecommendation,
       }}
     >
       {children}

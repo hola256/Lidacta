@@ -154,3 +154,27 @@ export interface NotificationItem {
   };
   mentorRequestDetails?: MentorRequestDetails;
 }
+
+export type ResourceOrigin = 'internal' | 'external';
+
+export interface RecommendedResourceItem {
+  id: string;
+  resourceTitle: string;
+  origin: ResourceOrigin; // 'internal' = Biblioteca Interna (Bloque 3) | 'external' = Fuentes Externas Delimitadas
+  categoryOrTool?: string;
+  category?: string;
+  sourceOrAuthor?: string;
+  urlOrRef?: string;
+  leaderId: string;
+  leaderName: string;
+  leaderEmail: string;
+  companyId: string;
+  companyName: string;
+  mentorshipId: string;
+  challengeTitle: string;
+  theme: string;
+  stage: StageNumber;
+  stageName: string;
+  recommendedAt: string;
+  timestamp?: string;
+}

@@ -234,6 +234,20 @@ function generateDeterministicCoaching({
         readyToAdvance: false,
         identifiedSkills: skills,
         detectedTheme: sessionData?.theme || 'Comunicación y Alineación de Equipo',
+        recommendedResources: [
+          {
+            title: 'Guía de Retroalimentación en Piso (Modelo E-H-I: Evento, Hecho, Impacto)',
+            origin: 'internal',
+            category: 'Herramienta de Campo (Bloque 3)',
+            sourceOrAuthor: 'Biblioteca Interna Lidacta (Bloque 3)',
+          },
+          {
+            title: 'The Feedback Fallacy (Marcus Buckingham & Ashley Goodall)',
+            origin: 'external',
+            category: 'Artículo de Investigación Especializada',
+            sourceOrAuthor: 'Harvard Business Review',
+          },
+        ],
       };
     } else {
       return {
@@ -241,6 +255,14 @@ function generateDeterministicCoaching({
         readyToAdvance: true,
         advancePrompt: 'Avanzar a Etapa 3: Diseñar alternativas de solución',
         identifiedSkills: sessionData.identifiedSkills || skills,
+        recommendedResources: [
+          {
+            title: 'Guía de Retroalimentación en Piso (Modelo E-H-I: Evento, Hecho, Impacto)',
+            origin: 'internal',
+            category: 'Herramienta de Campo (Bloque 3)',
+            sourceOrAuthor: 'Biblioteca Interna Lidacta (Bloque 3)',
+          },
+        ],
       };
     }
   }
@@ -261,6 +283,20 @@ function generateDeterministicCoaching({
           'Conversación 1 a 1 de alineación de expectativas y acuerdos mutuos',
           'Retroalimentación enfocada en hechos observables con plan de seguimiento',
         ],
+        recommendedResources: [
+          {
+            title: 'Protocolo de Conversación 1 a 1 con Personal de Mayor Antigüedad',
+            origin: 'internal',
+            category: 'Protocolo de Diálogo (Bloque 3)',
+            sourceOrAuthor: 'Biblioteca Interna Lidacta (Bloque 3)',
+          },
+          {
+            title: 'Radical Candor: Care Personally & Challenge Directly',
+            origin: 'external',
+            category: 'Marco de Liderazgo Directivo',
+            sourceOrAuthor: 'Kim Scott',
+          },
+        ],
       };
     }
   }
@@ -271,6 +307,14 @@ function generateDeterministicCoaching({
         replyText: `[En personaje]: "Hola ${leaderName}, gracias por llamarme. Honestamente he sentido que el ritmo de trabajo ha sido muy pesado y no me quedaba claro qué era lo prioritario esta semana..."\n\n[Retroalimentación de Lidacta]: Escuché un inicio claro. Para fortalecer aún más tu mensaje: cuida no usar frases absolutistas como "nunca" o "siempre". Focalízate en el impacto concreto y hazle una pregunta abierta. ¿Cómo le responderías ahora?`,
         readyToAdvance: true,
         advancePrompt: 'Concluir práctica y definir plan de acción (Etapa 5)',
+        recommendedResources: [
+          {
+            title: 'Modelo SBI (Situation - Behavior - Impact)',
+            origin: 'external',
+            category: 'Modelo Metodológico Institucional',
+            sourceOrAuthor: 'Center for Creative Leadership (CCL)',
+          },
+        ],
       };
     } else {
       return {
@@ -293,6 +337,14 @@ function generateDeterministicCoaching({
         how: 'Enfoque en hechos observables, preguntas abiertas y acuerdos mutuos',
         careReminders: 'Escuchar el 70% del tiempo, no emitir juicios y formalizar acuerdos por escrito',
       },
+      recommendedResources: [
+        {
+          title: 'Plantilla de Acuerdos Operativos y Compromisos Mutuos',
+          origin: 'internal',
+          category: 'Plantilla de Gestión (Bloque 3)',
+          sourceOrAuthor: 'Biblioteca Interna Lidacta (Bloque 3)',
+        },
+      ],
     };
   }
 
@@ -303,6 +355,14 @@ function generateDeterministicCoaching({
       advancePrompt: 'Avanzar a Etapa 7: Cierre y Reporte de Retroalimentación',
       learningsSummary:
         'El líder identificó que anticipar la conversación con acuerdos observables redujo la fricción y fortaleció el compromiso mutuo.',
+      recommendedResources: [
+        {
+          title: 'Rúbrica de Empoderamiento y Nivel de Autonomía de Supervisores',
+          origin: 'internal',
+          category: 'Rúbrica Formativa (Bloque 3)',
+          sourceOrAuthor: 'Biblioteca Interna Lidacta (Bloque 3)',
+        },
+      ],
     };
   }
 
