@@ -148,6 +148,29 @@ export interface MentorRequestDetails {
   adminNotes?: string;
 }
 
+export type SystemAlertType = 'therapeutic_limit' | 'inactivity_day8';
+
+export interface SystemAlertItem {
+  id: string;
+  type: SystemAlertType;
+  typeName: 'Límite Terapéutico' | 'Inactividad Día 8';
+  leaderId?: string;
+  leaderName: string;
+  leaderEmail?: string;
+  leaderPosition?: string;
+  leaderArea?: string;
+  companyId: string;
+  companyName: string;
+  stage?: StageNumber;
+  stageName?: string;
+  timestamp: string;
+  status: 'Correo Enviado';
+  caseSummary: string;
+  emailRecipient: string;
+  realEmailSent?: boolean;
+  realEmailId?: string;
+}
+
 export interface NotificationItem {
   id: string;
   recipientRole: UserRole;
@@ -155,7 +178,7 @@ export interface NotificationItem {
   companyId: string;
   title: string;
   message: string;
-  type: 'registration' | 'case_started' | 'action_reminder' | 'case_completed' | 'system' | 'mentor_request' | 'stage5_followup' | 'inactivity_alert';
+  type: 'registration' | 'case_started' | 'action_reminder' | 'case_completed' | 'system' | 'mentor_request' | 'stage5_followup' | 'inactivity_alert' | 'therapeutic_alert';
   timestamp: string;
   read: boolean;
   emailSimulated?: {
@@ -200,4 +223,24 @@ export interface RecommendedResourceItem {
   // Context-estimated Difficulty & Resistance
   estimatedDifficulty?: ResourceDifficultyLevel;
   resistanceOrDoubtNotes?: string;
+}
+
+export type SystemAlertType = 'therapeutic_limit' | 'inactivity_day8';
+
+export interface SystemAlertItem {
+  id: string;
+  timestamp: string;
+  leaderName: string;
+  companyName: string;
+  type: SystemAlertType;
+  typeName: string; // 'Límite Terapéutico' | 'Inactividad Día 8'
+  status: 'Correo Enviado' | 'Pendiente' | 'Revisado';
+  caseSummary: string;
+  emailRecipient: string; // 'hola@taniapadierna.com'
+  currentStage?: number;
+  mentorshipId?: string;
+  leaderEmail?: string;
+  leaderPosition?: string;
+  userMessageSnippet?: string;
+  details?: Record<string, any>;
 }

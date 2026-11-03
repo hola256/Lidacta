@@ -319,6 +319,63 @@ export class EmailService {
       };
     }
   }
+
+  /**
+   * Envía alerta de límite terapéutico a la Administradora (hola@taniapadierna.com).
+   */
+  async sendTherapeuticAlert(params: {
+    leaderEmail?: string;
+    leaderName: string;
+    companyName?: string;
+    currentStage?: number;
+    stageName?: string;
+    dateTimeFormatted?: string;
+    contextSummary: string;
+  }): Promise<EmailServiceResult> {
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/send-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          to: 'hola@taniapadierna.com',
+          email: 'hola@taniapadierna.com',
+          leaderEmail: params.leaderEmail,
+          leaderName: params.leaderName,
+          companyName: params.companyName || 'Industrias Nexus Automotriz',
+          currentStage: params.currentStage || 1,
+          stageName: params.stageName || 'Etapa 1',
+          dateTimeFormatted: params.dateTimeFormatted,
+          contextSummary: params.contextSummary,
+          type: 'therapeutic_alert',
+          subject: '[ALERTA LIDACTA] Detección de Caso con Naturaleza Terapéutica',
+          replyTo: params.leaderEmail || 'hola@taniapadierna.com',
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.success) {
+        return {
+          success: true,
+          emailId: data.emailId || data.id,
+          realSent: data.realSent ?? true,
+          message: data.message || 'Alerta de límite terapéutico enviada a Administradora.',
+        };
+      }
+      return {
+        success: false,
+        error: data.error || data.message || 'Error al enviar alerta terapéutica',
+      };
+    } catch (error) {
+      console.error('Error despachando alerta terapéutica a Administradora:', error);
+      return {
+        success: false,
+        error: (error as any)?.message || 'Error de red en alerta terapéutica',
+      };
+    }
+  }
 }
 
 export const emailService = EmailService.getInstance();

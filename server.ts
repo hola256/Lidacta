@@ -110,6 +110,12 @@ Cada vez que sugieras o utilices un recurso o herramienta para enriquecer la men
    - estimatedDifficulty: 'Baja' | 'Media' | 'Alta' (dificultad estimada de implementación para el líder).
    - resistanceOrDoubtNotes: Resistencias, fricciones o dudas observadas o anticipadas en su aplicación.
 
+=== PROTOCOLO ÉTICO DE LÍMITE TERAPÉUTICO (DETECCIÓN AUTOMÁTICA) ===
+Si el líder aborda o consulta sobre temas de naturaleza terapéutica, diagnósticos psicológicos o psiquiátricos (ej. depresión, ataques de pánico, ansiedad clínica, trastorno bipolar, ideación suicida, crisis emocional personal severa, duelo patológico, adicciones, etc.):
+1. Responde de forma muy cálida, empática y respetuosa, explicando con delicadeza que tu rol como mentora en Lidacta se enfoca exclusivamente en habilidades de liderazgo y retos laborales entre personas, y que por respeto a su bienestar integral este tipo de situaciones amerita la atención especializada de un profesional de la salud mental o del programa de bienestar/PAE de su empresa.
+2. Continúa el flujo de la conversación amablemente sin bloquear la interfaz.
+3. Incluye obligatoriamente en el JSON: "isTherapeuticCase": true y "therapeuticReason": "Resumen contextual de la situación terapéutica planteada".
+
 Debes responder en formato JSON con la siguiente estructura:
 {
   "replyText": "Tu intervención de mentoría para el líder, en lenguaje cálido, humano y profesional.",
@@ -117,6 +123,8 @@ Debes responder en formato JSON con la siguiente estructura:
   "advancePrompt": "Frase breve invitando a pasar a la siguiente etapa (o null si aún faltan preguntas en esta etapa)",
   "identifiedSkills": ["Habilidad 1", "Habilidad 2"] (solo si estamos en etapa 2 o posterior),
   "detectedTheme": "Tema general (ej. Comunicación Asertiva, Manejo de Conflictos, Delegación, Alineación de Expectativas)",
+  "isTherapeuticCase": false (o true si se detectó naturaleza terapéutica o clínica),
+  "therapeuticReason": "Resumen si aplica...",
   "suggestedAlternatives": ["Opción 1...", "Opción 2..."] (en etapa 3 si aplica),
   "actionPlanDraft": { "what": "...", "when": "...", "withWhom": "...", "how": "...", "careReminders": "..." } (en etapa 5 si aplica),
   "learningsSummary": "Resumen de lo que aprendió el líder" (en etapa 6 si aplica),
@@ -208,6 +216,71 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
   }
 });
 
+// Detector de naturaleza terapéutica / clínica para garantizar el límite ético
+function detectTherapeuticNature(text: string): { isTherapeutic: boolean; reason: string } {
+  if (!text) return { isTherapeutic: false, reason: '' };
+  const lower = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  const directKeywords = [
+    'ansiedad clinica',
+    'ataque de panico',
+    'ataques de panico',
+    'crisis de panico',
+    'depresion severa',
+    'depresion profunda',
+    'depresion clinica',
+    'deprimido clinicamente',
+    'terapia psicologica',
+    'terapia psiquiatrica',
+    'psicologo clinico',
+    'psicologa clinica',
+    'psiquiatra',
+    'medicamento psiquiatrico',
+    'antidepresivos',
+    'antidepresivo',
+    'pastillas para dormir',
+    'ideacion suicida',
+    'suicidio',
+    'suicidarme',
+    'quitarme la vida',
+    'no quiero vivir',
+    'no puedo mas con mi vida',
+    'autolesion',
+    'autolesionarme',
+    'trastorno bipolar',
+    'tdah clinico',
+    'adiccion severa',
+    'trauma severo',
+    'trauma infantil',
+    'crisis emocional severa',
+    'duelo patologico',
+    'abuso psicologico severo',
+    'trastorno de ansiedad',
+  ];
+
+  for (const kw of directKeywords) {
+    if (lower.includes(kw)) {
+      return {
+        isTherapeutic: true,
+        reason: `Líder abordó tema de naturaleza terapéutica / clínica relacionado con "${kw}" en su mensaje.`,
+      };
+    }
+  }
+
+  // Combinaciones de palabras clínicas / terapéuticas personales
+  const hasClinicalTerm = lower.includes('terapia') || lower.includes('ansiedad') || lower.includes('panico') || lower.includes('depres') || lower.includes('psicolog');
+  const hasPersonalCrisis = lower.includes('crisis personal') || lower.includes('crisis emocional') || lower.includes('medicacion') || lower.includes('pastillas') || lower.includes('desborde') || lower.includes('desesperacion');
+
+  if (hasClinicalTerm && hasPersonalCrisis) {
+    return {
+      isTherapeutic: true,
+      reason: 'Líder expresó sintomatología emocional o terapéutica personal que excede el marco del liderazgo laboral.',
+    };
+  }
+
+  return { isTherapeutic: false, reason: '' };
+}
+
 // Deterministic Coaching Engine (Ensures 100% uptime, adhering to all PDF rules)
 function generateDeterministicCoaching({
   stage,
@@ -229,6 +302,18 @@ function generateDeterministicCoaching({
   const leaderName = leaderProfile?.name?.split(' ')[0] || 'Líder';
   const company = companyContext?.name || 'tu organización';
   const industry = companyContext?.industry || 'tu sector';
+
+  // Interceptación de límite terapéutico: Respuesta empática y derivación profesional
+  const therapeuticCheck = detectTherapeuticNature(userMessage);
+  if (therapeuticCheck.isTherapeutic) {
+    return {
+      replyText: `Hola ${leaderName}, comprendo y agradezco profundamente la confianza y apertura con la que me compartes lo que estás viviendo. Sin embargo, como mentora en Lidacta, mi rol se enfoca estrictamente en el desarrollo de habilidades de liderazgo, gestión de personas y acuerdos laborales entre equipos.\n\nPor respeto a tu bienestar integral y salud mental, situaciones de esta índole ameritan el acompañamiento cálido y especializado de un profesional de la salud mental (psicólogo/a clínico/a o terapeuta) o del Programa de Asistencia al Empleado (PAE) / área de bienestar de ${company}.\n\nAquí permanezco a tu lado para cuando desees trabajar cualquier reto sobre tus equipos, acuerdos y liderazgo en el día a día. ¿Cómo te gustaría que enfoquemos tus próximos pasos operativos?`,
+      readyToAdvance: false,
+      detectedTheme: 'Orientación y Límite de Rol (Bienestar Integral)',
+      isTherapeuticCase: true,
+      therapeuticReason: therapeuticCheck.reason,
+    };
+  }
 
   if (stage === 1) {
     const isFirst = conversationHistory.length <= 1;

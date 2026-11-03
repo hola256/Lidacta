@@ -52,6 +52,9 @@ export const AdminView: React.FC = () => {
     currentUser,
     notifications,
     recommendedResources,
+    systemAlerts,
+    triggerTherapeuticAlert,
+    showToast,
     openEmailDrawer,
     openProfileModal,
     updateMentorRequestStatus,
@@ -74,8 +77,15 @@ export const AdminView: React.FC = () => {
   const adminProfile = allUsers.find((u) => u.role === 'admin') || currentUser;
 
   const [activeTab, setActiveTab] = useState<
-    'onboarding' | 'stages_monitoring' | 'analytics' | 'resources_analytics' | 'users' | 'mentor_requests'
+    'onboarding' | 'stages_monitoring' | 'analytics' | 'resources_analytics' | 'users' | 'mentor_requests' | 'alerts_log'
   >('onboarding');
+
+  // System Alerts (Bitácora de Alertas) Filters & State
+  const [alertFilterType, setAlertFilterType] = useState<'all' | 'therapeutic_limit' | 'inactivity_day8'>('all');
+  const [alertSearchQuery, setAlertSearchQuery] = useState<string>('');
+  const [isSimulatingAlert, setIsSimulatingAlert] = useState<boolean>(false);
+  const [selectedAlertForDetail, setSelectedAlertForDetail] = useState<any | null>(null);
+
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(companies[0]?.id || 'comp_nexus');
   const [selectedMentorshipForAudit, setSelectedMentorshipForAudit] = useState<MentorshipSession | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'pendiente' | 'contactado' | 'atendido'>('all');
@@ -245,6 +255,61 @@ export const AdminView: React.FC = () => {
       return true;
     });
   }, [recommendedResources, resourceFilterLeader, resourceFilterOrigin, resourceFilterDifficulty, resourceFilterTheme, resourceSearchQuery]);
+
+  // System Alerts (Bitácora de Alertas) Aggregations and Filtering
+  const alertsStats = useMemo(() => {
+    const list = systemAlerts || [];
+    const total = list.length;
+    const therapeuticCount = list.filter((a) => a.type === 'therapeutic_limit').length;
+    const inactivityCount = list.filter((a) => a.type === 'inactivity_day8').length;
+    return {
+      total,
+      therapeuticCount,
+      inactivityCount,
+    };
+  }, [systemAlerts]);
+
+  const filteredAlerts = useMemo(() => {
+    return (systemAlerts || []).filter((alert) => {
+      if (alertFilterType !== 'all' && alert.type !== alertFilterType) {
+        return false;
+      }
+      if (alertSearchQuery.trim()) {
+        const q = alertSearchQuery.toLowerCase().trim();
+        const matchLeader = (alert.leaderName || '').toLowerCase().includes(q);
+        const matchComp = (alert.companyName || '').toLowerCase().includes(q);
+        const matchSummary = (alert.caseSummary || '').toLowerCase().includes(q);
+        const matchType = (alert.typeName || '').toLowerCase().includes(q);
+        const matchEmail = (alert.leaderEmail || '').toLowerCase().includes(q);
+        return matchLeader || matchComp || matchSummary || matchType || matchEmail;
+      }
+      return true;
+    });
+  }, [systemAlerts, alertFilterType, alertSearchQuery]);
+
+  const handleSimulateTherapeuticAlert = async () => {
+    setIsSimulatingAlert(true);
+    try {
+      const res = await triggerTherapeuticAlert({
+        leaderName: 'Roberto Gómez',
+        leaderEmail: 'roberto.gomez@nexus-auto.com',
+        companyName: 'Industrias Nexus Automotriz',
+        currentStage: 2,
+        caseSummary: 'Líder reportó episodios de llanto incontrolable y crisis de angustia personal recurrentes fuera de las líneas de producción. Se activó protocolo de derivación a PAE y atención psicológica.',
+        userMessageSnippet: 'Siento demasiada angustia y depresión profunda, no puedo parar de llorar y creo que esto ya rebasa mi trabajo como líder...',
+      });
+      if (res && res.success) {
+        showToast('¡Alerta de Límite Terapéutico simulada y correo enviado a hola@taniapadierna.com!', 'success');
+      } else {
+        showToast('Alerta procesada en bitácora.', 'info');
+      }
+    } catch (e) {
+      console.error('Error simulando alerta terapéutica:', e);
+      showToast('Error al simular alerta', 'error');
+    } finally {
+      setIsSimulatingAlert(false);
+    }
+  };
 
   // User Management State (CRUD)
   const [searchUserQuery, setSearchUserQuery] = useState('');
@@ -584,6 +649,26 @@ export const AdminView: React.FC = () => {
               {pendingRequestsCount > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 text-[10px] font-extrabold rounded-full bg-[#F7B538] text-[#2D1B4E] leading-tight animate-pulse">
                   {pendingRequestsCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('alerts_log')}
+              className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5 ${
+                activeTab === 'alerts_log'
+                  ? 'bg-[#BF3A1B] text-white shadow-xs'
+                  : 'text-[#4A3F55] hover:text-[#2D1B4E]'
+              }`}
+            >
+              <ShieldAlert className="w-3.5 h-3.5" />
+              <span>Bitácora de Alertas</span>
+              {systemAlerts.length > 0 && (
+                <span
+                  className={`ml-1 px-1.5 py-0.5 text-[10px] font-extrabold rounded-full leading-tight ${
+                    activeTab === 'alerts_log' ? 'bg-white/20 text-white' : 'bg-[#BF3A1B]/15 text-[#BF3A1B]'
+                  }`}
+                >
+                  {systemAlerts.length}
                 </span>
               )}
             </button>
@@ -2948,6 +3033,495 @@ export const AdminView: React.FC = () => {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =========================================================================
+          TAB: BITÁCORA DE ALERTAS DEL SISTEMA (Límite Terapéutico & Inactividad Día 8)
+          ========================================================================= */}
+      {activeTab === 'alerts_log' && (
+        <div className="space-y-6">
+          {/* Header & Simulation Action Bar */}
+          <div className="bg-white border border-[#493447]/10 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-[#BF3A1B]/15 text-[#BF3A1B] font-heading font-extrabold text-[10px] tracking-wider uppercase flex items-center gap-1 shadow-xs">
+                  <ShieldAlert className="w-3 h-3 text-[#BF3A1B]" />
+                  Monitoreo Ético & Supervisión
+                </span>
+                <span className="text-[#4A3F55]/60 text-xs">Despacho exclusivo a hola@taniapadierna.com</span>
+              </div>
+              <h2 className="font-heading font-extrabold text-xl sm:text-2xl text-[#2D1B4E] tracking-tight">
+                Bitácora Central de Alertas del Sistema
+              </h2>
+              <p className="text-xs text-[#4A3F55] max-w-2xl leading-relaxed">
+                Historial auditado de intervenciones automatizadas: detección de casos con <strong>naturaleza terapéutica/psicológica</strong> y <strong>alertas de inactividad a partir del Día 8</strong> en la Etapa 5.
+              </p>
+            </div>
+
+            {/* Live Testing / Simulation Button */}
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={handleSimulateTherapeuticAlert}
+                disabled={isSimulatingAlert}
+                className="w-full sm:w-auto min-h-[42px] px-4 py-2 bg-gradient-to-r from-[#BF3A1B] to-[#842029] hover:from-[#A53216] hover:to-[#6C1A22] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                title="Ejecutar simulación de alerta de límite terapéutico y despachar correo a hola@taniapadierna.com"
+              >
+                {isSimulatingAlert ? (
+                  <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                ) : (
+                  <Sparkles className="w-4 h-4 text-[#F7B538]" />
+                )}
+                <span>Simular Alerta Límite Terapéutico</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Metric KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white border border-[#493447]/10 rounded-2xl p-4 shadow-xs flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#2D1B4E] text-[#FFF7EF] flex items-center justify-center shrink-0">
+                <Layers className="w-5 h-5 text-[#F7B538]" />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#4A3F55]/70 block">Total de Alertas</span>
+                <span className="font-heading font-extrabold text-xl text-[#2D1B4E]">{alertsStats.total}</span>
+              </div>
+            </div>
+
+            <div className="bg-white border border-[#842029]/20 rounded-2xl p-4 shadow-xs flex items-center gap-3 bg-gradient-to-br from-white to-[#F8D7DA]/20">
+              <div className="w-10 h-10 rounded-xl bg-[#842029] text-white flex items-center justify-center shrink-0 shadow-xs">
+                <ShieldAlert className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#842029] block">Límite Terapéutico</span>
+                <span className="font-heading font-extrabold text-xl text-[#842029]">{alertsStats.therapeuticCount}</span>
+              </div>
+            </div>
+
+            <div className="bg-white border border-[#F7B538]/30 rounded-2xl p-4 shadow-xs flex items-center gap-3 bg-gradient-to-br from-white to-[#FFF7EF]">
+              <div className="w-10 h-10 rounded-xl bg-[#F7B538] text-[#2D1B4E] flex items-center justify-center shrink-0 shadow-xs">
+                <Clock className="w-5 h-5 text-[#2D1B4E]" />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#BF3A1B] block">Inactividad Día 8</span>
+                <span className="font-heading font-extrabold text-xl text-[#2D1B4E]">{alertsStats.inactivityCount}</span>
+              </div>
+            </div>
+
+            <div className="bg-white border border-[#246B2A]/20 rounded-2xl p-4 shadow-xs flex items-center gap-3 bg-gradient-to-br from-white to-emerald-50/30">
+              <div className="w-10 h-10 rounded-xl bg-[#246B2A] text-white flex items-center justify-center shrink-0">
+                <Mail className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] uppercase font-bold text-emerald-800 block">Destinatario Oficial</span>
+                <span className="font-bold text-xs text-[#2D1B4E] truncate block">hola@taniapadierna.com</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Filters & Search Bar */}
+          <div className="bg-white border border-[#493447]/10 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              <button
+                type="button"
+                onClick={() => setAlertFilterType('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[38px] ${
+                  alertFilterType === 'all'
+                    ? 'bg-[#2D1B4E] text-white shadow-xs'
+                    : 'bg-[#FFF7EF] text-[#4A3F55] hover:text-[#2D1B4E]'
+                }`}
+              >
+                Todas ({alertsStats.total})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAlertFilterType('therapeutic_limit')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[38px] flex items-center gap-1.5 ${
+                  alertFilterType === 'therapeutic_limit'
+                    ? 'bg-[#842029] text-white shadow-xs'
+                    : 'bg-[#FFF7EF] text-[#842029] hover:bg-rose-50'
+                }`}
+              >
+                <ShieldAlert className="w-3.5 h-3.5" />
+                <span>Límite Terapéutico ({alertsStats.therapeuticCount})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAlertFilterType('inactivity_day8')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[38px] flex items-center gap-1.5 ${
+                  alertFilterType === 'inactivity_day8'
+                    ? 'bg-[#BF3A1B] text-white shadow-xs'
+                    : 'bg-[#FFF7EF] text-[#BF3A1B] hover:bg-[#FFD3BF]/30'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Inactividad Día 8 ({alertsStats.inactivityCount})</span>
+              </button>
+            </div>
+
+            <div className="relative min-w-[240px]">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#4A3F55]/50" />
+              <input
+                type="text"
+                value={alertSearchQuery}
+                onChange={(e) => setAlertSearchQuery(e.target.value)}
+                placeholder="Buscar por líder, empresa o detalle..."
+                className="w-full pl-9 pr-3 py-2 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E] focus:outline-none focus:ring-1 focus:ring-[#BF3A1B]"
+              />
+            </div>
+          </div>
+
+          {/* Centralized Alerts Table / Feed */}
+          {filteredAlerts.length === 0 ? (
+            <div className="bg-white border border-[#493447]/10 rounded-2xl p-12 text-center shadow-xs">
+              <div className="w-12 h-12 rounded-full bg-[#FFF7EF] border border-[#FFD3BF] text-[#246B2A] flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <h3 className="font-heading font-bold text-base text-[#2D1B4E]">
+                No hay alertas registradas con estos filtros
+              </h3>
+              <p className="text-xs text-[#4A3F55] mt-1 max-w-sm mx-auto">
+                {alertSearchQuery.trim()
+                  ? 'No se encontraron coincidencias para tu búsqueda.'
+                  : 'El sistema no registra alertas pendientes en esta categoría.'}
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Mobile Card Feed */}
+              <div className="grid grid-cols-1 gap-3 md:hidden">
+                {filteredAlerts.map((alert) => {
+                  const isTherapeutic = alert.type === 'therapeutic_limit';
+                  const dateFormatted = new Date(alert.timestamp).toLocaleString('es-MX', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  });
+
+                  return (
+                    <div
+                      key={alert.id}
+                      className={`bg-white border rounded-2xl p-4 shadow-xs space-y-3 ${
+                        isTherapeutic ? 'border-[#842029]/30 bg-gradient-to-b from-white to-[#F8D7DA]/10' : 'border-[#F7B538]/30 bg-gradient-to-b from-white to-[#FFF7EF]/30'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                              isTherapeutic
+                                ? 'bg-[#F8D7DA] text-[#842029] border border-[#842029]/20'
+                                : 'bg-[#FFF7EF] text-[#BF3A1B] border border-[#BF3A1B]/20'
+                            }`}
+                          >
+                            {isTherapeutic ? <ShieldAlert className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                            {alert.typeName}
+                          </span>
+                          <h4 className="font-heading font-bold text-sm text-[#2D1B4E] mt-1.5">
+                            {alert.leaderName}
+                          </h4>
+                          <span className="text-[11px] text-[#4A3F55] font-medium block">
+                            {alert.companyName} {alert.currentStage ? `· Etapa ${alert.currentStage}` : ''}
+                          </span>
+                        </div>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          <Check className="w-3 h-3" />
+                          {alert.status}
+                        </span>
+                      </div>
+
+                      <div className="p-3 bg-[#FFF7EF]/60 rounded-xl border border-[#493447]/10 text-xs text-[#2D1B4E] leading-relaxed">
+                        <span className="text-[10px] font-bold text-[#4A3F55]/70 uppercase block mb-1">
+                          Detalle / Resumen del caso:
+                        </span>
+                        <p className="line-clamp-3">{alert.caseSummary}</p>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-[#4A3F55]/70 pt-1">
+                        <span>{dateFormatted}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const isTherap = alert.type === 'therapeutic_limit';
+                            openEmailDrawer({
+                              id: `notif_email_${alert.id}`,
+                              recipientRole: 'admin',
+                              title: isTherap
+                                ? `[ALERTA LIDACTA] Detección de Caso con Naturaleza Terapéutica`
+                                : `🚨 Alerta de Inactividad (Día 8): ${alert.leaderName} (${alert.companyName})`,
+                              message: alert.caseSummary,
+                              type: isTherap ? 'therapeutic_alert' : 'inactivity_alert',
+                              timestamp: alert.timestamp,
+                              read: true,
+                              emailSimulated: {
+                                from: 'Lidacta <notificaciones@taniapadierna.com>',
+                                to: 'hola@taniapadierna.com',
+                                replyTo: alert.leaderEmail || 'hola@taniapadierna.com',
+                                subject: isTherap
+                                  ? '[ALERTA LIDACTA] Detección de Caso con Naturaleza Terapéutica'
+                                  : `🚨 Alerta de Inactividad (Día 8): ${alert.leaderName} (${alert.companyName}) sin avances en Etapa 5`,
+                                bodyText: isTherap
+                                  ? `Estimada Tania:\n\nSe ha activado el Protocolo Ético de Límite Terapéutico en Lidacta.\n\n• Nombre del Líder: ${alert.leaderName}\n• Empresa: ${alert.companyName}\n• Fecha/Hora: ${dateFormatted}\n• Etapa actual: Etapa ${alert.currentStage || 1}\n• Resumen contextual: ${alert.caseSummary}\n\nAcción en chat: Orientación cálida hacia profesionales de la salud mental / PAE sin bloquear la plataforma.`
+                                  : `Estimada Tania:\n\nAlerta de inactividad de 8 días en Etapa 5.\n\n• Líder: ${alert.leaderName}\n• Empresa: ${alert.companyName}\n• Resumen: ${alert.caseSummary}`,
+                                realEmailSent: true,
+                              },
+                            });
+                          }}
+                          className="px-2.5 py-1 text-xs font-bold text-[#BF3A1B] hover:text-[#842029] bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 rounded-lg border border-[#BF3A1B]/20 transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <Mail className="w-3 h-3" />
+                          <span>Ver Correo Despachado</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop Table */}
+              <div className="hidden md:block bg-white rounded-2xl border border-[#493447]/10 shadow-xs overflow-hidden">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-[#FFF7EF] text-[#2D1B4E] uppercase text-[10px] tracking-wider font-extrabold border-b border-[#493447]/10">
+                    <tr>
+                      <th className="p-3.5">Fecha / Hora</th>
+                      <th className="p-3.5">Nombre del Líder</th>
+                      <th className="p-3.5">Empresa</th>
+                      <th className="p-3.5">Tipo de Alerta</th>
+                      <th className="p-3.5">Estado</th>
+                      <th className="p-3.5">Detalle / Resumen del Caso</th>
+                      <th className="p-3.5 text-right">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#493447]/5 bg-white">
+                    {filteredAlerts.map((alert) => {
+                      const isTherapeutic = alert.type === 'therapeutic_limit';
+                      const dateObj = new Date(alert.timestamp);
+                      const dateFormatted = dateObj.toLocaleDateString('es-MX', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      });
+                      const timeFormatted = dateObj.toLocaleTimeString('es-MX', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      });
+
+                      return (
+                        <tr
+                          key={alert.id}
+                          className={`hover:bg-[#FFF7EF]/40 transition-colors ${
+                            isTherapeutic ? 'bg-rose-50/20' : ''
+                          }`}
+                        >
+                          {/* Fecha / Hora */}
+                          <td className="p-3.5 whitespace-nowrap text-[#4A3F55]">
+                            <div className="font-bold text-[#2D1B4E]">{dateFormatted}</div>
+                            <div className="text-[11px] text-[#4A3F55]/70">{timeFormatted} hrs</div>
+                          </td>
+
+                          {/* Nombre del Líder */}
+                          <td className="p-3.5">
+                            <div className="font-bold text-[#2D1B4E]">{alert.leaderName}</div>
+                            <div className="text-[11px] text-[#4A3F55]/70">{alert.leaderEmail || 'lider@empresa.com'}</div>
+                            {alert.currentStage && (
+                              <span className="inline-block mt-0.5 text-[9px] font-bold px-1.5 py-0.2 rounded bg-[#FFF7EF] text-[#BF3A1B]">
+                                Etapa {alert.currentStage}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Empresa */}
+                          <td className="p-3.5 font-medium text-[#4A3F55]">
+                            {alert.companyName}
+                          </td>
+
+                          {/* Tipo de Alerta */}
+                          <td className="p-3.5 whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${
+                                isTherapeutic
+                                  ? 'bg-[#F8D7DA] text-[#842029] border border-[#842029]/30'
+                                  : 'bg-[#FFF7EF] text-[#BF3A1B] border border-[#BF3A1B]/30'
+                              }`}
+                            >
+                              {isTherapeutic ? <ShieldAlert className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                              {alert.typeName}
+                            </span>
+                          </td>
+
+                          {/* Estado */}
+                          <td className="p-3.5 whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                              <Check className="w-3 h-3 text-emerald-600" />
+                              {alert.status}
+                            </span>
+                            <span className="block text-[9px] text-[#4A3F55]/60 mt-0.5">
+                              hola@taniapadierna.com
+                            </span>
+                          </td>
+
+                          {/* Detalle / Resumen del caso */}
+                          <td className="p-3.5 max-w-md">
+                            <p className="text-xs text-[#2D1B4E] leading-relaxed line-clamp-2">
+                              {alert.caseSummary}
+                            </p>
+                            {alert.userMessageSnippet && (
+                              <p className="text-[10px] text-[#842029] italic mt-1 line-clamp-1">
+                                «{alert.userMessageSnippet}»
+                              </p>
+                            )}
+                          </td>
+
+                          {/* Acciones */}
+                          <td className="p-3.5 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedAlertForDetail(alert)}
+                                className="min-h-[32px] px-2.5 py-1 bg-white hover:bg-[#FFF7EF] text-[#2D1B4E] text-xs font-bold rounded-lg border border-[#493447]/15 transition-all cursor-pointer flex items-center gap-1 shadow-2xs active:scale-95"
+                                title="Ver detalles y contexto"
+                              >
+                                <Eye className="w-3 h-3 text-[#2D1B4E]" />
+                                <span>Detalle</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const isTherap = alert.type === 'therapeutic_limit';
+                                  openEmailDrawer({
+                                    id: `notif_email_${alert.id}`,
+                                    recipientRole: 'admin',
+                                    title: isTherap
+                                      ? `[ALERTA LIDACTA] Detección de Caso con Naturaleza Terapéutica`
+                                      : `🚨 Alerta de Inactividad (Día 8): ${alert.leaderName} (${alert.companyName})`,
+                                    message: alert.caseSummary,
+                                    type: isTherap ? 'therapeutic_alert' : 'inactivity_alert',
+                                    timestamp: alert.timestamp,
+                                    read: true,
+                                    emailSimulated: {
+                                      from: 'Lidacta <notificaciones@taniapadierna.com>',
+                                      to: 'hola@taniapadierna.com',
+                                      replyTo: alert.leaderEmail || 'hola@taniapadierna.com',
+                                      subject: isTherap
+                                        ? '[ALERTA LIDACTA] Detección de Caso con Naturaleza Terapéutica'
+                                        : `🚨 Alerta de Inactividad (Día 8): ${alert.leaderName} (${alert.companyName}) sin avances en Etapa 5`,
+                                      bodyText: isTherap
+                                        ? `Estimada Tania:\n\nSe ha activado el Protocolo Ético de Límite Terapéutico en Lidacta.\n\n• Nombre del Líder: ${alert.leaderName}\n• Empresa: ${alert.companyName}\n• Fecha/Hora: ${dateFormatted} ${timeFormatted}\n• Etapa actual: Etapa ${alert.currentStage || 1}\n• Resumen contextual: ${alert.caseSummary}\n\nAcción en chat: Orientación cálida hacia profesionales de la salud mental / PAE sin bloquear la plataforma.`
+                                        : `Estimada Tania:\n\nAlerta de inactividad de 8 días tras Etapa 5.\n\n• Líder: ${alert.leaderName}\n• Empresa: ${alert.companyName}\n• Resumen: ${alert.caseSummary}`,
+                                      realEmailSent: true,
+                                    },
+                                  });
+                                }}
+                                className="min-h-[32px] px-2.5 py-1 bg-[#FFF7EF] hover:bg-[#FFD3BF]/50 text-[#BF3A1B] text-xs font-bold rounded-lg border border-[#BF3A1B]/30 transition-all cursor-pointer flex items-center gap-1 shadow-2xs active:scale-95"
+                                title="Ver plantilla de correo electrónico despachada a hola@taniapadierna.com"
+                              >
+                                <Mail className="w-3 h-3 text-[#BF3A1B]" />
+                                <span>Ver Correo</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {/* Modal Detalle de Alerta */}
+          {selectedAlertForDetail && (
+            <div className="fixed inset-0 bg-[#2D1B4E]/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+              <div className="bg-white border border-[#493447]/20 rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+                <div className="p-5 bg-gradient-to-r from-[#2D1B4E] to-[#493447] text-white flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="w-5 h-5 text-[#F7B538]" />
+                    <h3 className="font-heading font-extrabold text-base text-white">
+                      Detalle de Alerta del Sistema
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAlertForDetail(null)}
+                    className="p-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-lg cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="p-6 space-y-4 text-xs">
+                  <div className="flex items-center justify-between border-b border-[#493447]/10 pb-3">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-[#4A3F55]/60 block">Tipo de Alerta</span>
+                      <span className="font-heading font-bold text-sm text-[#2D1B4E]">{selectedAlertForDetail.typeName}</span>
+                    </div>
+                    <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      ✓ {selectedAlertForDetail.status}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 bg-[#FFF7EF]/50 p-3.5 rounded-xl border border-[#493447]/10">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-[#4A3F55]/60 block">Líder</span>
+                      <span className="font-bold text-[#2D1B4E] text-xs">{selectedAlertForDetail.leaderName}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-[#4A3F55]/60 block">Empresa</span>
+                      <span className="font-bold text-[#2D1B4E] text-xs">{selectedAlertForDetail.companyName}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-[#4A3F55]/60 block">Etapa</span>
+                      <span className="font-bold text-[#BF3A1B] text-xs">Etapa {selectedAlertForDetail.currentStage || 1}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-[#4A3F55]/60 block">Fecha y Hora</span>
+                      <span className="text-[#4A3F55] font-medium text-xs">
+                        {new Date(selectedAlertForDetail.timestamp).toLocaleString('es-MX')}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-[#4A3F55]/70 block mb-1">
+                      Resumen Contextual:
+                    </span>
+                    <p className="p-3 bg-[#FFF7EF] rounded-xl border border-[#EADBCE] text-[#2D1B4E] leading-relaxed text-xs">
+                      {selectedAlertForDetail.caseSummary}
+                    </p>
+                  </div>
+
+                  {selectedAlertForDetail.userMessageSnippet && (
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-[#842029] block mb-1">
+                        Mensaje Detectado en Chat:
+                      </span>
+                      <div className="p-3 bg-rose-50/50 rounded-xl border border-rose-200 text-[#842029] italic text-xs leading-relaxed">
+                        «{selectedAlertForDetail.userMessageSnippet}»
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900 text-[11px] leading-relaxed">
+                    <strong>Supervisión Directiva:</strong> Correo de notificación entregado a <code>hola@taniapadierna.com</code> vía Resend. La conversación del líder continuó de forma fluida y empática sin interrumpir la plataforma.
+                  </div>
+                </div>
+
+                <div className="p-4 bg-[#FFF7EF] border-t border-[#493447]/10 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAlertForDetail(null)}
+                    className="px-4 py-2 bg-white hover:bg-gray-100 text-[#4A3F55] font-semibold rounded-xl border border-[#493447]/20 transition-colors cursor-pointer"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

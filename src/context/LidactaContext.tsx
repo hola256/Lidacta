@@ -7,6 +7,7 @@ import {
   UserProfile,
   UserRole,
   RecommendedResourceItem,
+  SystemAlertItem,
 } from '../types/lidacta';
 import {
   INITIAL_COMPANIES,
@@ -15,6 +16,7 @@ import {
   INITIAL_USERS,
   DEFAULT_ADMIN_PROFILE,
   INITIAL_RECOMMENDED_RESOURCES,
+  INITIAL_SYSTEM_ALERTS,
   INTERNAL_LIBRARY_CATALOG,
   EXTERNAL_SOURCES_CATALOG,
 } from '../data/mockData';
@@ -31,6 +33,15 @@ interface LidactaContextType {
   activeMentorship: MentorshipSession | null;
   notifications: NotificationItem[];
   unreadNotificationsCount: number;
+  systemAlerts: SystemAlertItem[];
+  triggerTherapeuticAlert: (params: {
+    leaderName: string;
+    leaderEmail?: string;
+    companyName?: string;
+    currentStage?: number;
+    caseSummary: string;
+    userMessageSnippet?: string;
+  }) => Promise<{ success: boolean; alertItem?: SystemAlertItem; error?: string }>;
   isSendingMessage: boolean;
   isEmailDrawerOpen: boolean;
   selectedEmailForPreview: NotificationItem | null;
@@ -185,6 +196,24 @@ const LidactaContext = createContext<LidactaContextType | undefined>(undefined);
 const STORAGE_KEY_PREFIX = 'lidacta_v2_';
 
 export const ADMIN_OFFICIAL_PASSWORD = 'LidactaAdmin2026!';
+
+export const isTherapeuticText = (text: string): boolean => {
+  if (!text || typeof text !== 'string') return false;
+  const lower = text.toLowerCase();
+  const therapeuticTerms = [
+    'depresión', 'depresion', 'depresivo', 'depresiva',
+    'ansiedad clínica', 'ansiedad clinica', 'ataque de pánico', 'ataque de panico',
+    'crisis de angustia', 'crisis existencial profunda',
+    'terapia psicológica', 'terapia psicologica', 'psiquiatra', 'psiquiátrico', 'psiquiatrico',
+    'medicamento psiquiátrico', 'antidepresivo', 'ansiolítico', 'ansiolitico',
+    'ideación suicida', 'ideacion suicida', 'ganas de morir', 'no quiero vivir',
+    'quitarme la vida', 'hacerme daño', 'hacerme dano', 'autolesión', 'autolesion',
+    'trauma severo', 'abuso sexual', 'violencia intrafamiliar', 'duelo patológico',
+    'trastorno bipolar', 'esquizofrenia', 'trastorno de la personalidad',
+    'brote psicótico', 'brote psicotico', 'burnout severo clínico',
+  ];
+  return therapeuticTerms.some((t) => lower.includes(t));
+};
 
 export const ensureAdminPasswordInUsers = (userList: UserProfile[]): UserProfile[] => {
   return userList.map((u) => {
@@ -488,6 +517,18 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return INITIAL_RECOMMENDED_RESOURCES;
   });
 
+  // Centralized System Alerts (Límite Terapéutico & Inactividad Día 8)
+  const [systemAlerts, setSystemAlerts] = useState<SystemAlertItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}system_alerts_v1`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_SYSTEM_ALERTS;
+  });
+
   const recordResourceRecommendation = (
     resource: Omit<RecommendedResourceItem, 'id' | 'recommendedAt'>
   ) => {
@@ -719,6 +760,10 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     localStorage.setItem(`${STORAGE_KEY_PREFIX}recommended_resources_v1`, JSON.stringify(recommendedResources));
   }, [recommendedResources]);
+
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}system_alerts_v1`, JSON.stringify(systemAlerts));
+  }, [systemAlerts]);
 
   const currentUser = useMemo(() => {
     // 0. If inspector mode is active and original user is administrator
@@ -1064,6 +1109,104 @@ El Equipo de Lidacta`;
     return newSession;
   };
 
+  const lastAlertTimestampRef = useRef<{ [key: string]: number }>({});
+
+  /**
+   * Dispara el protocolo ético y la alerta de caso con naturaleza terapéutica.
+   * Envía correo transaccional vía Resend a hola@taniapadierna.com y registra en la Bitácora de Alertas.
+   */
+  const triggerTherapeuticAlert = async (params: {
+    leaderName: string;
+    leaderEmail?: string;
+    companyName?: string;
+    currentStage?: number;
+    caseSummary: string;
+    userMessageSnippet?: string;
+  }): Promise<{ success: boolean; alertItem?: SystemAlertItem; error?: string }> => {
+    const leaderKey = `${params.leaderName}_${params.companyName || ''}`.toLowerCase();
+    const nowMs = Date.now();
+    const lastTriggered = lastAlertTimestampRef.current[leaderKey] || 0;
+
+    // Prevenir despachos duplicados para el mismo líder en una ventana de 30 segundos
+    if (nowMs - lastTriggered < 30000) {
+      return { success: true };
+    }
+    lastAlertTimestampRef.current[leaderKey] = nowMs;
+
+    const nowIso = new Date().toISOString();
+    const formattedDateTime = new Date().toLocaleString('es-MX', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const alertId = `alert_therap_${nowMs}_${Math.random().toString(36).substring(2, 6)}`;
+    const compName = params.companyName || currentUser.companyName || 'Industrias Nexus Automotriz';
+    const leaderMail = params.leaderEmail || currentUser.email || 'lider@empresa.com';
+    const stageNum = params.currentStage || 1;
+
+    const alertItem: SystemAlertItem = {
+      id: alertId,
+      timestamp: nowIso,
+      leaderName: params.leaderName,
+      companyName: compName,
+      type: 'therapeutic_limit',
+      typeName: 'Límite Terapéutico',
+      status: 'Correo Enviado',
+      caseSummary: params.caseSummary,
+      emailRecipient: 'hola@taniapadierna.com',
+      currentStage: stageNum,
+      leaderEmail: leaderMail,
+      userMessageSnippet: params.userMessageSnippet,
+      details: {
+        dateTimeFormatted: formattedDateTime,
+        protocolStatus: 'Derivación ética y respetuosa aplicada en chat',
+      },
+    };
+
+    // 1. Despacho real de correo transaccional a hola@taniapadierna.com
+    try {
+      await emailService.sendTherapeuticAlert({
+        leaderName: params.leaderName,
+        leaderEmail: leaderMail,
+        companyName: compName,
+        currentStage: stageNum,
+        stageName: `Etapa ${stageNum}`,
+        dateTimeFormatted: formattedDateTime,
+        contextSummary: params.caseSummary,
+      });
+    } catch (e) {
+      console.error('[triggerTherapeuticAlert] Error enviando correo Resend:', e);
+    }
+
+    // 2. Registrar en Bitácora de Alertas del Sistema
+    setSystemAlerts((prev) => [alertItem, ...prev]);
+
+    // 3. Crear notificación interna para Administradora
+    const adminNotif: NotificationItem = {
+      id: `notif_${nowMs}_therap`,
+      recipientRole: 'admin',
+      title: `🚨 Alerta: Límite Terapéutico detectado (${params.leaderName})`,
+      message: `Lidacta detectó una consulta con naturaleza clínica/terapéutica en la Etapa ${stageNum} de ${params.leaderName} (${compName}). Se notificó a hola@taniapadierna.com.`,
+      type: 'therapeutic_alert',
+      timestamp: nowIso,
+      read: false,
+      emailSimulated: {
+        from: 'Lidacta <notificaciones@taniapadierna.com>',
+        to: 'hola@taniapadierna.com',
+        replyTo: leaderMail,
+        subject: '[ALERTA LIDACTA] Detección de Caso con Naturaleza Terapéutica',
+        bodyText: `Estimada Tania:\n\nSe ha activado el Protocolo Ético de Límite Terapéutico en Lidacta.\n\n• Nombre del Líder: ${params.leaderName}\n• Empresa: ${compName}\n• Fecha/Hora: ${formattedDateTime}\n• Etapa actual: Etapa ${stageNum}\n• Resumen contextual: ${params.caseSummary}\n\nAcción realizada en chat: Orientación cálida hacia profesionales de la salud mental / PAE sin bloquear la plataforma.`,
+        realEmailSent: true,
+      },
+    };
+    setNotifications((prev) => [adminNotif, ...prev]);
+
+    return { success: true, alertItem };
+  };
+
   const sendMessageInActiveSession = async (text: string, isPractice: boolean = false) => {
     if (!activeMentorship || !text.trim()) return;
 
@@ -1181,6 +1324,24 @@ El Equipo de Lidacta`;
           });
         } else {
           autoDetectAndLogResources(currentStage, activeMentorship, text, coachReply.replyText);
+        }
+
+        // Protocolo Ético: Detección automática y despacho de Alerta de Límite Terapéutico
+        const isTherapeutic = Boolean(
+          coachReply.isTherapeuticCase ||
+          coachReply.therapeuticReason ||
+          isTherapeuticText(text)
+        );
+
+        if (isTherapeutic) {
+          triggerTherapeuticAlert({
+            leaderName: activeMentorship.leaderName || currentUser.name,
+            leaderEmail: currentUser.email || `${activeMentorship.leaderId}@empresa.com`,
+            companyName: activeMentorship.companyName || currentUser.companyName,
+            currentStage: currentStage,
+            caseSummary: coachReply.therapeuticReason || `Consulta con posible naturaleza clínica/terapéutica detectada en mensaje: "${text.substring(0, 160)}"`,
+            userMessageSnippet: text,
+          }).catch((err) => console.error('Error triggering therapeutic alert:', err));
         }
       }
     } catch (err) {
@@ -1411,6 +1572,7 @@ El Equipo de Lidacta`;
     let processedCount = 0;
 
     const newNotifications: NotificationItem[] = [];
+    const newSystemAlerts: SystemAlertItem[] = [];
 
     const updatedMentorships = await Promise.all(
       mentorships.map(async (session) => {
@@ -1597,6 +1759,28 @@ El Equipo de Lidacta`;
                 realEmailSent: true,
               },
             });
+
+            newSystemAlerts.push({
+              id: `alert_inact_${session.id}_${Date.now()}`,
+              timestamp: nowIso,
+              leaderName: session.leaderName,
+              companyName: session.companyName,
+              type: 'inactivity_day8',
+              typeName: 'Inactividad Día 8',
+              status: 'Correo Enviado',
+              caseSummary: `Inactividad de 8 días en Etapa 5 tras definir compromiso "${session.actionPlan?.what || session.title}". Último acceso registrado: ${lastActiveFormatted}.`,
+              emailRecipient: 'hola@taniapadierna.com',
+              currentStage: 5,
+              mentorshipId: session.id,
+              leaderEmail,
+              leaderPosition,
+              details: {
+                lastActiveFormatted,
+                pendingAction: session.actionPlan?.what,
+                plannedDate: session.actionPlan?.when,
+                teamMember: session.actionPlan?.withWhom,
+              },
+            });
           } catch (e) {
             console.error('Error dispatching stage 5 inactivity alert to admin:', e);
           }
@@ -1612,6 +1796,10 @@ El Equipo de Lidacta`;
 
     if (newNotifications.length > 0) {
       setNotifications((prev) => [...newNotifications, ...prev]);
+    }
+
+    if (newSystemAlerts.length > 0) {
+      setSystemAlerts((prev) => [...newSystemAlerts, ...prev]);
     }
 
     setMentorships(updatedMentorships);
@@ -2879,6 +3067,8 @@ El Equipo de Lidacta`;
         dbLatencyMs,
         recommendedResources,
         recordResourceRecommendation,
+        systemAlerts,
+        triggerTherapeuticAlert,
         checkAndProcessStage5FollowUps,
         triggerStage5FollowUpCheck,
       }}

@@ -255,7 +255,80 @@ export default async function handler(req: any, res: any) {
 </html>`;
       defaultText = `Estimada Tania:\n\nSe ha detectado inactividad de 8 días calendario tras finalizar la Etapa 5 en Lidacta.\n\n• Nombre del Líder: ${recipientName}\n• Empresa: ${compName}\n• Puesto / Área: ${leaderPosition} (${leaderArea})\n• Fecha del último acceso: ${lastActiveFormatted}\n• Etapa actual: Etapa 5 (Compromiso y Plan de Acción)\n• Desafío en curso: "${challengeTitle}"\n\nResumen breve de su compromiso no finalizado:\n• Acción comprometida: ${actionWhat}\n• Fecha prevista: ${actionWhen}\n• Con quién: ${actionWithWhom}\n• Aspectos a cuidar: ${actionCare}\n\nContacto del líder:\n• Email: ${targetLeaderEmail}\n• WhatsApp: ${leaderWhatsapp}\n\nTe sugerimos contactar al líder vía correo o WhatsApp para verificar cómo le fue con su acción, resolver posibles dudas y animarlo a ingresar a Lidacta para concluir su reflexión en la Etapa 6.\n\nAtentamente,\nSistema Automatizado de Monitoreo Lidacta`;
 
-    // 4. BIENVENIDA RECURSOS HUMANOS / LÍDER
+    // 4. ALERTA DE LÍMITE TERAPÉUTICO (A LA ADMINISTRADORA: hola@taniapadierna.com)
+    } else if (type === 'therapeutic_alert') {
+      finalSubject = subject || '[ALERTA LIDACTA] Detección de Caso con Naturaleza Terapéutica';
+      const stageNameText = body.stageName || (body.currentStage ? `Etapa ${body.currentStage}` : 'Etapa 1');
+      const dateTimeText = body.dateTimeFormatted || body.timestamp || new Date().toLocaleString('es-MX', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      const contextSummary = body.contextSummary || body.reason || body.summary || 'El líder ha abordado temas de índole terapéutica, diagnósticos psicológicos o crisis emocionales personales que exceden el alcance del desarrollo de liderazgo laboral.';
+
+      defaultHtml = `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><title>${finalSubject}</title></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8F6F4; margin: 0; padding: 24px; color: #2D1B4E;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(45, 27, 78, 0.08); border: 2px solid #842029;">
+    <tr>
+      <td style="background-color: #2D1B4E; padding: 32px 24px; text-align: center;">
+        <h1 style="color: #FFF7EF; font-size: 24px; margin: 0 0 8px 0; font-weight: 800;">LIDACTA</h1>
+        <p style="color: #F7B538; font-size: 13px; margin: 0; font-weight: 700; text-transform: uppercase;">Alerta de Límite Terapéutico · Monitoreo Ético</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 32px 28px;">
+        <span style="display: inline-block; padding: 4px 12px; background-color: #F8D7DA; color: #842029; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; margin-bottom: 12px;">🚨 Límite Terapéutico Detectado</span>
+        <h2 style="font-size: 20px; color: #2D1B4E; margin: 0 0 16px 0;">Estimada Tania:</h2>
+        <p style="font-size: 14px; line-height: 1.6; color: #4A3F55; margin: 0 0 16px 0;">
+          El sistema de supervisión de Lidacta ha detectado una consulta o intervención de un líder que aborda temas de <strong>naturaleza terapéutica, diagnósticos psicológicos o crisis emocionales personales</strong>, excediendo los límites metodológicos de mentoría laboral:
+        </p>
+
+        <!-- Ficha de Datos del Caso -->
+        <div style="background-color: #FFF7EF; border: 1px solid #EADBCE; padding: 20px; border-radius: 12px; margin: 0 0 20px 0;">
+          <h4 style="font-size: 13px; font-weight: 800; color: #2D1B4E; margin: 0 0 12px 0; text-transform: uppercase; border-bottom: 1px solid #EADBCE; padding-bottom: 6px;">📋 Datos del Caso Detectado:</h4>
+          <p style="font-size: 13px; color: #4A3F55; margin: 0 0 8px 0;">• <strong>Nombre del Líder:</strong> <span style="color: #2D1B4E; font-weight: 700;">${recipientName}</span></p>
+          <p style="font-size: 13px; color: #4A3F55; margin: 0 0 8px 0;">• <strong>Empresa:</strong> <span style="color: #2D1B4E; font-weight: 700;">${compName}</span></p>
+          <p style="font-size: 13px; color: #4A3F55; margin: 0 0 8px 0;">• <strong>Fecha/Hora:</strong> <span style="color: #2D1B4E; font-weight: 700;">${dateTimeText}</span></p>
+          <p style="font-size: 13px; color: #4A3F55; margin: 0 0 8px 0;">• <strong>Etapa actual:</strong> <span style="background-color: #FFD3BF; color: #BF3A1B; padding: 2px 8px; border-radius: 6px; font-weight: 700;">${stageNameText}</span></p>
+          <p style="font-size: 13px; color: #4A3F55; margin: 0;">• <strong>Correo del Líder:</strong> <a href="mailto:${targetLeaderEmail}" style="color: #BF3A1B;">${targetLeaderEmail}</a></p>
+        </div>
+
+        <!-- Resumen Contextual Breve -->
+        <div style="background-color: #F8F6F4; border-left: 4px solid #842029; padding: 16px; border-radius: 8px; margin: 0 0 20px 0;">
+          <h4 style="font-size: 13px; font-weight: 800; color: #842029; margin: 0 0 8px 0; text-transform: uppercase;">⚠️ Resumen Contextual de la Situación Detectada:</h4>
+          <p style="font-size: 13px; color: #2D1B4E; margin: 0; line-height: 1.6; font-style: italic;">
+            "${contextSummary}"
+          </p>
+        </div>
+
+        <!-- Acción Realizada en Chat -->
+        <div style="background-color: #E2F7E1; border: 1px solid #A3D9A5; padding: 14px 18px; border-radius: 10px; margin: 0 0 20px 0;">
+          <p style="font-size: 12px; color: #1E4620; margin: 0; line-height: 1.5;">
+            <strong>✓ Protocolo de Contención Aplicado:</strong> Lidacta respondió con calidez y respeto, derivando amablemente al líder hacia profesionales de la salud mental o al área de Recursos Humanos/PAE, manteniendo el flujo sin bloquear la interfaz.
+          </p>
+        </div>
+
+        <div style="border-top: 1px solid #EADBCE; padding-top: 16px; margin-top: 20px;">
+          <p style="font-size: 14px; font-weight: 800; color: #2D1B4E; margin: 0 0 4px 0;">Lidacta</p>
+          <p style="font-size: 12px; color: #BF3A1B; margin: 0; font-weight: 600;">Protocolo Ético de Supervisión y Límites de Rol</p>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="background-color: #FFF7EF; padding: 18px 24px; text-align: center; border-top: 1px solid #EADBCE;">
+        <p style="font-size: 11px; color: #4A3F55; margin: 0;">Alerta confidencial para la administradora · hola@taniapadierna.com</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+      defaultText = `[ALERTA LIDACTA] Detección de Caso con Naturaleza Terapéutica\n\nEstimada Tania:\n\nEl sistema de Lidacta ha detectado una consulta o intervención con naturaleza terapéutica, diagnósticos psicológicos o crisis emocionales personales.\n\n📋 DATOS DEL CASO:\n• Nombre del Líder: ${recipientName}\n• Empresa: ${compName}\n• Fecha/Hora: ${dateTimeText}\n• Etapa actual: ${stageNameText}\n• Correo del Líder: ${targetLeaderEmail}\n\n⚠️ RESUMEN CONTEXTUAL DE LA SITUACIÓN DETECTADA:\n"${contextSummary}"\n\n✓ Protocolo aplicado: Lidacta respondió amablemente orientando al líder hacia un profesional de la salud mental adecuado o al programa de bienestar de su empresa, continuando el flujo sin bloquear la interfaz.\n\nAtentamente,\nSistema de Supervisión Ética Lidacta`;
+
+    // 5. BIENVENIDA RECURSOS HUMANOS / LÍDER
     } else {
       finalSubject = subject || `¡Te damos la bienvenida a Lidacta, ${recipientName}!`;
       const normalizedRole = (role || '')
