@@ -123,6 +123,7 @@ export const LeaderView: React.FC = () => {
     markActionCompleted,
     saveLearnings,
     isSendingMessage,
+    showToast,
   } = useLidacta();
 
   // Filter mentorships for this leader
@@ -158,6 +159,21 @@ export const LeaderView: React.FC = () => {
   const [learningWhatDidnt, setLearningWhatDidnt] = useState('');
   const [learningInsights, setLearningInsights] = useState('');
   const [learningFuture, setLearningFuture] = useState('');
+  const [justSavedLearnings, setJustSavedLearnings] = useState(false);
+  const [isSavingLearnings, setIsSavingLearnings] = useState(false);
+
+  // Stage 6 validation: requires that the 3 fields have non-empty text (.trim().length > 0)
+  const isLearningsValid =
+    learningWhatHappened.trim().length > 0 &&
+    learningWhatWorked.trim().length > 0 &&
+    learningInsights.trim().length > 0;
+
+  // Check if learnings were previously saved in the session
+  const hasSavedLearnings = Boolean(
+    activeMentorship?.learnings?.whatHappened ||
+    activeMentorship?.learnings?.whatWorked ||
+    activeMentorship?.learnings?.insights
+  );
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mainContainerRef = useRef<HTMLElement>(null);
@@ -459,14 +475,30 @@ export const LeaderView: React.FC = () => {
   };
 
   const handleSaveLearnings = () => {
-    if (!learningWhatHappened && !learningInsights) return;
-    saveLearnings({
-      whatHappened: learningWhatHappened,
-      whatWorked: learningWhatWorked,
-      whatDidnt: learningWhatDidnt,
-      insights: learningInsights,
-      futureAdjustments: learningFuture,
-    });
+    if (!isLearningsValid) return;
+    setIsSavingLearnings(true);
+
+    try {
+      saveLearnings({
+        whatHappened: learningWhatHappened.trim(),
+        whatWorked: learningWhatWorked.trim(),
+        whatDidnt: learningWhatDidnt.trim() || '',
+        insights: learningInsights.trim(),
+        futureAdjustments: learningFuture.trim() || '',
+      });
+
+      setJustSavedLearnings(true);
+      showToast('¡Reflexión guardada exitosamente! Tu aprendizaje ha sido registrado.', 'success');
+
+      setTimeout(() => {
+        setJustSavedLearnings(false);
+      }, 3500);
+    } catch (err) {
+      console.error('Error saving learnings:', err);
+      showToast('Hubo un error al guardar tu reflexión. Intenta de nuevo.', 'error');
+    } finally {
+      setIsSavingLearnings(false);
+    }
   };
 
   const renderSingleMessage = (msg: {
@@ -1598,63 +1630,120 @@ export const LeaderView: React.FC = () => {
                           {/* Stage 6: Learnings & Reflections */}
                           {st === 6 && (
                             <div className="p-4 sm:p-5 bg-white border border-[#493447]/15 rounded-2xl shadow-sm space-y-4">
-                              <div className="flex items-center gap-2">
-                                <BookOpen className="w-4 h-4 text-[#BF3A1B] shrink-0" />
-                                <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
-                                  Etapa 6: Aprender - Ajustar (Reflexión indispensable)
-                                </h4>
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <div className="flex items-center gap-2">
+                                  <BookOpen className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                                  <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
+                                    Etapa 6: Aprender - Ajustar (Reflexión indispensable)
+                                  </h4>
+                                </div>
+                                {hasSavedLearnings && (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E2F7E1] text-[#246B2A] text-[11px] font-semibold border border-[#246B2A]/20">
+                                    <CheckCircle2 className="w-3 h-3 text-[#246B2A]" />
+                                    Reflexión guardada
+                                  </span>
+                                )}
                               </div>
 
                               <div className="space-y-3 text-xs">
                                 <div>
-                                  <label className="font-bold text-[#2D1B4E]">¿Qué ocurrió después de tu acción?</label>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <label className="font-bold text-[#2D1B4E]">¿Qué ocurrió después de tu acción?</label>
+                                    <span className="text-[10px] text-[#493447]/60 font-medium">Requerido</span>
+                                  </div>
                                   <textarea
                                     value={learningWhatHappened}
                                     onChange={(e) => setLearningWhatHappened(e.target.value)}
                                     placeholder="Describe cómo reaccionó la otra persona o el equipo..."
                                     rows={2}
-                                    className="w-full mt-1 p-2.5 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs"
+                                    className="w-full p-2.5 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
                                   />
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   <div>
-                                    <label className="font-bold text-[#2D1B4E]">¿Qué funcionó?</label>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <label className="font-bold text-[#2D1B4E]">¿Qué funcionó?</label>
+                                      <span className="text-[10px] text-[#493447]/60 font-medium">Requerido</span>
+                                    </div>
                                     <input
                                       type="text"
                                       value={learningWhatWorked}
                                       onChange={(e) => setLearningWhatWorked(e.target.value)}
                                       placeholder="Lo que dio buen resultado..."
-                                      className="w-full mt-1 p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs"
+                                      className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
                                     />
                                   </div>
                                   <div>
-                                    <label className="font-bold text-[#2D1B4E]">¿De qué te das cuenta y qué aprendes?</label>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <label className="font-bold text-[#2D1B4E]">¿De qué te das cuenta y qué aprendes?</label>
+                                      <span className="text-[10px] text-[#493447]/60 font-medium">Requerido</span>
+                                    </div>
                                     <input
                                       type="text"
                                       value={learningInsights}
                                       onChange={(e) => setLearningInsights(e.target.value)}
                                       placeholder="Tu insight de liderazgo..."
-                                      className="w-full mt-1 p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs"
+                                      className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
                                     />
                                   </div>
                                 </div>
                               </div>
 
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-[#493447]/10">
-                                <button
-                                  type="button"
-                                  onClick={handleSaveLearnings}
-                                  className="w-full sm:w-auto min-h-[44px] px-4 py-2 bg-neutral-200 text-[#2D1B4E] font-bold text-xs rounded-xl hover:bg-neutral-300 transition-colors cursor-pointer flex items-center justify-center"
-                                >
-                                  Guardar Reflexión
-                                </button>
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[#493447]/10">
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={!isLearningsValid || isSavingLearnings}
+                                    onClick={handleSaveLearnings}
+                                    className={`w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                                      !isLearningsValid
+                                        ? 'bg-neutral-200 text-[#493447]/40 border border-neutral-300 cursor-not-allowed shadow-none'
+                                        : justSavedLearnings
+                                        ? 'bg-[#E2F7E1] text-[#246B2A] border border-[#246B2A]/30 font-bold'
+                                        : 'bg-[#BF3A1B] hover:bg-[#a63014] text-white shadow-sm hover:shadow active:scale-98 cursor-pointer'
+                                    }`}
+                                  >
+                                    {isSavingLearnings ? (
+                                      <>
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        <span>Guardando...</span>
+                                      </>
+                                    ) : justSavedLearnings ? (
+                                      <>
+                                        <CheckCircle2 className="w-4 h-4 text-[#246B2A]" />
+                                        <span>Reflexión Guardada</span>
+                                      </>
+                                    ) : hasSavedLearnings ? (
+                                      <>
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        <span>Actualizar Reflexión</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        <span>Guardar Reflexión</span>
+                                      </>
+                                    )}
+                                  </button>
+                                  {!isLearningsValid ? (
+                                    <span className="text-[11px] text-[#493447]/60 italic">
+                                      Completa los 3 campos de reflexión para habilitar el guardado.
+                                    </span>
+                                  ) : hasSavedLearnings && !justSavedLearnings ? (
+                                    <span className="text-[11px] text-[#246B2A] font-medium flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3 text-[#246B2A]" />
+                                      Reflexión registrada. Puedes editar los campos y actualizarla en cualquier momento.
+                                    </span>
+                                  ) : null}
+                                </div>
                                 {activeMentorship.currentStage === 6 && (
                                   <button
                                     type="button"
                                     onClick={() => advanceStage(7)}
-                                    className="w-full sm:w-auto min-h-[44px] px-4 py-2 bg-[#BF3A1B] text-white font-bold text-xs rounded-xl hover:bg-[#a63014] transition-colors cursor-pointer shadow-xs active:scale-98 flex items-center justify-center"
+                                    className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 bg-[#2D1B4E] text-[#F7B538] font-bold text-xs rounded-xl hover:bg-[#201338] transition-colors cursor-pointer shadow-xs active:scale-98 flex items-center justify-center gap-2"
                                   >
-                                    Concluir e ir a Cierre (Etapa 7) →
+                                    <span>Concluir e ir a Cierre (Etapa 7)</span>
+                                    <ArrowRight className="w-3.5 h-3.5" />
                                   </button>
                                 )}
                               </div>
