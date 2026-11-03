@@ -509,13 +509,38 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const fullContext = `${session.title} ${session.theme || ''} ${text} ${coachReplyText || ''}`.toLowerCase();
     const candidateMatches: RecommendedResourceItem[] = [];
 
-    // Check Internal Library Catalog (Bloque 3)
+    // Contextual evaluation of alignment/utility and implementation difficulty
+    const computeEstimates = (item: any) => {
+      const isHighlySpecific = item.relatedThemes.some((t: string) => fullContext.includes(t.toLowerCase()));
+      const estimatedUtility = isHighlySpecific ? 'Muy Alta' : 'Alta';
+      const utilityReason = `Alineación directa con el desafío de "${session.title}" enfocado en ${item.category || item.title}.`;
+
+      let estimatedDifficulty: 'Baja' | 'Media' | 'Alta' = 'Media';
+      let resistanceOrDoubtNotes = 'Dudas iniciales sobre el tiempo de implementación en jornada de piso.';
+
+      const idLower = (item.id || '').toLowerCase();
+      if (idLower.includes('ehi') || idLower.includes('acuerdos') || idLower.includes('sprints') || idLower.includes('sbi')) {
+        estimatedDifficulty = 'Baja';
+        resistanceOrDoubtNotes = 'Formato ágil de fácil adopción; el líder asimiló la técnica rápidamente sin resistencia.';
+      } else if (idLower.includes('veterano') || idLower.includes('desescalamiento') || idLower.includes('fallacy') || idLower.includes('candor')) {
+        estimatedDifficulty = 'Media';
+        resistanceOrDoubtNotes = 'Resistencia anticipada por diferencias de antigüedad o jerarquía; se requiere modelado cuidadoso del tono.';
+      } else if (idLower.includes('safety') || idLower.includes('reluctant') || idLower.includes('autonomia')) {
+        estimatedDifficulty = 'Alta';
+        resistanceOrDoubtNotes = 'Inseguridad o resistencia cultural ante cambios normativos o reporte de desvíos; demanda acompañamiento constante.';
+      }
+
+      return { estimatedUtility, utilityReason, estimatedDifficulty, resistanceOrDoubtNotes };
+    };
+
+    // 1. Prioritize Internal Library Catalog (Bloque 3)
     for (const item of INTERNAL_LIBRARY_CATALOG) {
       const matchesStage = item.recommendedStages.includes(stage);
       const matchesTheme = item.relatedThemes.some(
         (t) => fullContext.includes(t.toLowerCase()) || (session.theme && session.theme.toLowerCase().includes(t.toLowerCase()))
       );
       if (matchesStage && matchesTheme) {
+        const est = computeEstimates(item);
         candidateMatches.push({
           id: `rec_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           resourceTitle: item.title,
@@ -534,18 +559,23 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
           stage,
           stageName: `Etapa ${stage}`,
           recommendedAt: new Date().toISOString(),
+          estimatedUtility: est.estimatedUtility as any,
+          utilityReason: est.utilityReason,
+          estimatedDifficulty: est.estimatedDifficulty as any,
+          resistanceOrDoubtNotes: est.resistanceOrDoubtNotes,
         });
-        break; // 1 internal resource max per interaction
+        break; // 1 internal resource prioritized per stage interaction
       }
     }
 
-    // Check External Sources Catalog
+    // 2. Delimited External Sources Catalog (only when complementing or deepening)
     for (const item of EXTERNAL_SOURCES_CATALOG) {
       const matchesStage = item.recommendedStages.includes(stage);
       const matchesTheme = item.relatedThemes.some(
         (t) => fullContext.includes(t.toLowerCase()) || (session.theme && session.theme.toLowerCase().includes(t.toLowerCase()))
       );
       if (matchesStage && matchesTheme) {
+        const est = computeEstimates(item);
         candidateMatches.push({
           id: `rec_${Date.now()}_ext_${Math.random().toString(36).substring(2, 6)}`,
           resourceTitle: item.title,
@@ -564,6 +594,10 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
           stage,
           stageName: `Etapa ${stage}`,
           recommendedAt: new Date().toISOString(),
+          estimatedUtility: est.estimatedUtility as any,
+          utilityReason: est.utilityReason,
+          estimatedDifficulty: est.estimatedDifficulty as any,
+          resistanceOrDoubtNotes: est.resistanceOrDoubtNotes,
         });
         break; // 1 external resource max per interaction
       }
@@ -1130,6 +1164,10 @@ El Equipo de Lidacta`;
               theme: coachReply.detectedTheme || activeMentorship.theme || 'Desarrollo de Liderazgo',
               stage: currentStage,
               stageName: `Etapa ${currentStage}`,
+              estimatedUtility: res.estimatedUtility || 'Muy Alta',
+              utilityReason: res.utilityReason || `Alineación contextual con el reto de "${activeMentorship.title}".`,
+              estimatedDifficulty: res.estimatedDifficulty || 'Media',
+              resistanceOrDoubtNotes: res.resistanceOrDoubtNotes || 'Foco en aplicación práctica sin burocracia.',
             });
           });
         } else {

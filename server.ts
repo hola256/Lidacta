@@ -98,6 +98,17 @@ Reglas estrictas según la etapa:
 - ETAPA 6 (Aprender - Ajustar): Cuando el líder regresa tras ejecutar la acción: Pregunta qué ocurrió, qué funcionó, qué no, de qué se da cuenta y qué aprenderá a hacer distinto de ahora en adelante. Extrae reflexiones clave.
 - ETAPA 7 (Cierre y Retroalimentación): Agradece al líder, recuérdale que su conversación fue 100% confidencial, e integra la retroalimentación estructurada final destacando: fortalezas detectadas, habilidades de la etapa 2, acciones ejecutadas, aprendizajes clave y recomendaciones para seguir fortaleciendo su autonomía.
 
+=== PROTOCOLO DE REGISTRO SILENCIOSO DE RECURSOS (ANALÍTICA INTERNA) ===
+Cada vez que sugieras o utilices un recurso o herramienta para enriquecer la mentoría:
+1. Prioridad 1: Biblioteca Interna (Bloque 3): Prioriza siempre herramientas, plantillas y protocolos propietarios de Lidacta cuando se adapten al desafío (Guía EHI, Matriz de delegación progresiva, Protocolo con veteranos, Plantilla de acuerdos operativos, Checklist de desescalamiento, Sprints comerciales, Rúbrica de autonomía).
+2. Prioridad 2: Fuentes Externas Delimitadas: Solo cuando complementen o profundicen la solución del desafío específico (HBR Feedback Fallacy, CCL SBI, MIT Sloan Reluctant Change, Amy Edmondson Fearless Organization, Kim Scott Radical Candor, Gallup Autonomy).
+3. 100% Invisible para el líder: Proceso completamente implícito. NUNCA pidas confirmar, calificar ni llenar formularios al líder sobre el recurso entregado.
+4. Estimación Contextual (Utilidad y Dificultad): Registra internamente:
+   - estimatedUtility: 'Muy Alta' | 'Alta' | 'Media' (nivel de alineación con el problema planteado por el líder).
+   - utilityReason: Justificación contextual de por qué se alinea al problema.
+   - estimatedDifficulty: 'Baja' | 'Media' | 'Alta' (dificultad estimada de implementación para el líder).
+   - resistanceOrDoubtNotes: Resistencias, fricciones o dudas observadas o anticipadas en su aplicación.
+
 Debes responder en formato JSON con la siguiente estructura:
 {
   "replyText": "Tu intervención de mentoría para el líder, en lenguaje cálido, humano y profesional.",
@@ -108,6 +119,18 @@ Debes responder en formato JSON con la siguiente estructura:
   "suggestedAlternatives": ["Opción 1...", "Opción 2..."] (en etapa 3 si aplica),
   "actionPlanDraft": { "what": "...", "when": "...", "withWhom": "...", "how": "...", "careReminders": "..." } (en etapa 5 si aplica),
   "learningsSummary": "Resumen de lo que aprendió el líder" (en etapa 6 si aplica),
+  "recommendedResources": [
+    {
+      "title": "Nombre exacto del recurso",
+      "origin": "internal" | "external",
+      "category": "Categoría o tipo de recurso",
+      "sourceOrAuthor": "Autor o Fuente",
+      "estimatedUtility": "Muy Alta" | "Alta" | "Media",
+      "utilityReason": "Por qué se alinea al desafío del líder...",
+      "estimatedDifficulty": "Baja" | "Media" | "Alta",
+      "resistanceOrDoubtNotes": "Resistencias o dudas observadas o anticipadas..."
+    }
+  ],
   "finalFeedback": {
     "detectedStrengths": ["Fortaleza 1", "Fortaleza 2"],
     "stageTwoSkills": ["Habilidad de etapa 2"],
@@ -240,12 +263,20 @@ function generateDeterministicCoaching({
             origin: 'internal',
             category: 'Herramienta de Campo (Bloque 3)',
             sourceOrAuthor: 'Biblioteca Interna Lidacta (Bloque 3)',
+            estimatedUtility: 'Muy Alta',
+            utilityReason: 'Estructuración precisa de observaciones en piso basadas en hechos concretos para evitar que el colaborador reaccione a la defensiva.',
+            estimatedDifficulty: 'Baja',
+            resistanceOrDoubtNotes: 'Duda inicial del líder sobre cómo iniciar sin que parezca un regaño; se solventa con la frase de apertura del modelo.',
           },
           {
             title: 'The Feedback Fallacy (Marcus Buckingham & Ashley Goodall)',
             origin: 'external',
             category: 'Artículo de Investigación Especializada',
             sourceOrAuthor: 'Harvard Business Review',
+            estimatedUtility: 'Alta',
+            utilityReason: 'Profundiza en por qué centrarse exclusivamente en debilidades detiene el aprendizaje y propone apalancar fortalezas.',
+            estimatedDifficulty: 'Media',
+            resistanceOrDoubtNotes: 'Inseguridad sobre cómo equilibrar el reconocimiento de fortalezas con la exigencia estricta de métricas operativas.',
           },
         ],
       };
@@ -261,6 +292,10 @@ function generateDeterministicCoaching({
             origin: 'internal',
             category: 'Herramienta de Campo (Bloque 3)',
             sourceOrAuthor: 'Biblioteca Interna Lidacta (Bloque 3)',
+            estimatedUtility: 'Muy Alta',
+            utilityReason: 'Estructuración de retroalimentación constructiva para clarificar expectativas con colaboradores.',
+            estimatedDifficulty: 'Baja',
+            resistanceOrDoubtNotes: 'Receptividad alta; rápida asimilación de los 3 pasos.',
           },
         ],
       };
@@ -289,12 +324,20 @@ function generateDeterministicCoaching({
             origin: 'internal',
             category: 'Protocolo de Diálogo (Bloque 3)',
             sourceOrAuthor: 'Biblioteca Interna Lidacta (Bloque 3)',
+            estimatedUtility: 'Muy Alta',
+            utilityReason: 'Estructura específica para establecer acuerdos con colaboradores veteranos reduciendo la fricción generacional.',
+            estimatedDifficulty: 'Media',
+            resistanceOrDoubtNotes: 'Resistencia anticipada por diferencia de edad; se modela el valor del respeto a su experiencia técnica.',
           },
           {
             title: 'Radical Candor: Care Personally & Challenge Directly',
             origin: 'external',
             category: 'Marco de Liderazgo Directivo',
             sourceOrAuthor: 'Kim Scott',
+            estimatedUtility: 'Alta',
+            utilityReason: 'Marco conceptual para mantener empatía humana genuina sin diluir la firmeza en la exigencia operativa.',
+            estimatedDifficulty: 'Media',
+            resistanceOrDoubtNotes: 'Temor del líder a parecer insensible o distante al señalar errores repetitivos.',
           },
         ],
       };
@@ -313,6 +356,10 @@ function generateDeterministicCoaching({
             origin: 'external',
             category: 'Modelo Metodológico Institucional',
             sourceOrAuthor: 'Center for Creative Leadership (CCL)',
+            estimatedUtility: 'Muy Alta',
+            utilityReason: 'Herramienta clave para anclar el roleplay en situaciones y comportamientos observables sin juicios de valor.',
+            estimatedDifficulty: 'Baja',
+            resistanceOrDoubtNotes: 'El líder tendía a generalizar conductas pasadas; el modelo SBI lo reorientó a eventos puntuales.',
           },
         ],
       };
@@ -343,6 +390,10 @@ function generateDeterministicCoaching({
           origin: 'internal',
           category: 'Plantilla de Gestión (Bloque 3)',
           sourceOrAuthor: 'Biblioteca Interna Lidacta (Bloque 3)',
+          estimatedUtility: 'Muy Alta',
+          utilityReason: 'Garantiza que los compromisos queden por escrito con fechas y responsables claros evitando malentendidos.',
+          estimatedDifficulty: 'Baja',
+          resistanceOrDoubtNotes: 'El líder se preguntaba si era necesario firmar; se aclaró que un correo o nota compartida es suficiente.',
         },
       ],
     };
@@ -361,6 +412,10 @@ function generateDeterministicCoaching({
           origin: 'internal',
           category: 'Rúbrica Formativa (Bloque 3)',
           sourceOrAuthor: 'Biblioteca Interna Lidacta (Bloque 3)',
+          estimatedUtility: 'Muy Alta',
+          utilityReason: 'Instrumento para medir el avance del colaborador hacia la resolución autónoma de problemas sin depender del líder.',
+          estimatedDifficulty: 'Media',
+          resistanceOrDoubtNotes: 'Duda sobre cuándo soltar la supervisión directa; la rúbrica ofrece criterios objetivos por nivel.',
         },
       ],
     };

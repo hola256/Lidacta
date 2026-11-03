@@ -156,6 +156,8 @@ export interface NotificationItem {
 }
 
 export type ResourceOrigin = 'internal' | 'external';
+export type ResourceUtilityLevel = 'Muy Alta' | 'Alta' | 'Media';
+export type ResourceDifficultyLevel = 'Baja' | 'Media' | 'Alta';
 
 export interface RecommendedResourceItem {
   id: string;
@@ -177,4 +179,10 @@ export interface RecommendedResourceItem {
   stageName: string;
   recommendedAt: string;
   timestamp?: string;
+  // Context-estimated Utility & Alignment
+  estimatedUtility?: ResourceUtilityLevel;
+  utilityReason?: string;
+  // Context-estimated Difficulty & Resistance
+  estimatedDifficulty?: ResourceDifficultyLevel;
+  resistanceOrDoubtNotes?: string;
 }

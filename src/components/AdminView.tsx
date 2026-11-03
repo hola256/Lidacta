@@ -83,6 +83,7 @@ export const AdminView: React.FC = () => {
   const [resourceFilterLeader, setResourceFilterLeader] = useState<string>('all');
   const [resourceFilterTheme, setResourceFilterTheme] = useState<string>('all');
   const [resourceFilterOrigin, setResourceFilterOrigin] = useState<'all' | 'internal' | 'external'>('all');
+  const [resourceFilterDifficulty, setResourceFilterDifficulty] = useState<'all' | 'Baja' | 'Media' | 'Alta'>('all');
   const [resourceSearchQuery, setResourceSearchQuery] = useState<string>('');
   const [selectedResourceForDetail, setSelectedResourceForDetail] = useState<any | null>(null);
 
@@ -98,6 +99,17 @@ export const AdminView: React.FC = () => {
     // Unique leaders who have received resources
     const uniqueLeaderIds = new Set(list.map((r) => r.leaderId));
     const uniqueLeadersCount = uniqueLeaderIds.size;
+
+    // Estimated Utility and Alignment Metrics
+    const highUtilityCount = list.filter((r) => r.estimatedUtility === 'Muy Alta' || r.estimatedUtility === 'Alta' || !r.estimatedUtility).length;
+    const highUtilityPercent = total > 0 ? Math.round((highUtilityCount / total) * 100) : 100;
+
+    // Estimated Difficulty Breakdown
+    const difficultyCounts = {
+      baja: list.filter((r) => r.estimatedDifficulty === 'Baja').length,
+      media: list.filter((r) => r.estimatedDifficulty === 'Media' || !r.estimatedDifficulty).length,
+      alta: list.filter((r) => r.estimatedDifficulty === 'Alta').length,
+    };
 
     // Internal Tools frequency count
     const internalFrequency: Record<string, { count: number; tool: any }> = {};
@@ -162,6 +174,8 @@ export const AdminView: React.FC = () => {
       internalPercent,
       externalPercent,
       uniqueLeadersCount,
+      highUtilityPercent,
+      difficultyCounts,
       sortedInternalTools,
       sortedExternalSources,
     };
@@ -205,6 +219,9 @@ export const AdminView: React.FC = () => {
       if (resourceFilterOrigin !== 'all' && item.origin !== resourceFilterOrigin) {
         return false;
       }
+      if (resourceFilterDifficulty !== 'all' && (item.estimatedDifficulty || 'Media') !== resourceFilterDifficulty) {
+        return false;
+      }
       if (resourceFilterTheme !== 'all' && item.theme !== resourceFilterTheme && item.challengeTitle !== resourceFilterTheme) {
         return false;
       }
@@ -217,13 +234,15 @@ export const AdminView: React.FC = () => {
         const matchSource = (item.sourceOrAuthor || '').toLowerCase().includes(q);
         const matchTheme = (item.theme || '').toLowerCase().includes(q);
         const matchChallenge = (item.challengeTitle || '').toLowerCase().includes(q);
-        if (!matchTitle && !matchLeader && !matchCompany && !matchCat && !matchSource && !matchTheme && !matchChallenge) {
+        const matchReason = (item.utilityReason || '').toLowerCase().includes(q);
+        const matchNotes = (item.resistanceOrDoubtNotes || '').toLowerCase().includes(q);
+        if (!matchTitle && !matchLeader && !matchCompany && !matchCat && !matchSource && !matchTheme && !matchChallenge && !matchReason && !matchNotes) {
           return false;
         }
       }
       return true;
     });
-  }, [recommendedResources, resourceFilterLeader, resourceFilterOrigin, resourceFilterTheme, resourceSearchQuery]);
+  }, [recommendedResources, resourceFilterLeader, resourceFilterOrigin, resourceFilterDifficulty, resourceFilterTheme, resourceSearchQuery]);
 
   // User Management State (CRUD)
   const [searchUserQuery, setSearchUserQuery] = useState('');
@@ -1321,6 +1340,49 @@ export const AdminView: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* Contextual Diagnosis Bar: Utility & Difficulty */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              <div className="bg-[#246B2A]/5 border border-[#246B2A]/20 rounded-xl p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-[#246B2A]/15 text-[#246B2A] flex items-center justify-center shrink-0">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-bold text-[#2D1B4E] block">Alineación / Utilidad Estimada</span>
+                    <span className="text-[10px] text-[#4A3F55]/70">Nivel de pertinencia con el problema del líder</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-black text-[#246B2A] bg-emerald-100/80 px-2.5 py-1 rounded-full border border-[#246B2A]/30">
+                    {resourceStats.highUtilityPercent}% Alta / Muy Alta
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-[#FFF7EF] border border-[#FFD3BF] rounded-xl p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-[#BF3A1B]/10 text-[#BF3A1B] flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-bold text-[#2D1B4E] block">Dificultad Estimada de Adopción</span>
+                    <span className="text-[10px] text-[#4A3F55]/70">Resistencia o esfuerzo de aplicación en piso</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    Baja: {resourceStats.difficultyCounts.baja}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-[#F7B538]/20 text-[#2D1B4E] border border-[#F7B538]/40">
+                    Media: {resourceStats.difficultyCounts.media}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200">
+                    Alta: {resourceStats.difficultyCounts.alta}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Catalog Tables: Bloque 3 & Fuentes Externas side by side */}
@@ -1504,6 +1566,7 @@ export const AdminView: React.FC = () => {
                   onClick={() => {
                     setResourceFilterLeader('all');
                     setResourceFilterOrigin('all');
+                    setResourceFilterDifficulty('all');
                     setResourceFilterTheme('all');
                     setResourceSearchQuery('');
                   }}
@@ -1515,7 +1578,7 @@ export const AdminView: React.FC = () => {
             </div>
 
             {/* Filter Bar */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
               {/* Leader Filter */}
               <div>
                 <label className="block text-[11px] font-bold text-[#4A3F55] mb-1">
@@ -1570,6 +1633,23 @@ export const AdminView: React.FC = () => {
                 </select>
               </div>
 
+              {/* Difficulty Filter */}
+              <div>
+                <label className="block text-[11px] font-bold text-[#4A3F55] mb-1">
+                  Dificultad Estimada:
+                </label>
+                <select
+                  value={resourceFilterDifficulty}
+                  onChange={(e) => setResourceFilterDifficulty(e.target.value as any)}
+                  className="w-full text-xs font-medium border border-[#493447]/20 rounded-xl px-3 py-2 bg-white text-[#2D1B4E] focus:outline-none focus:ring-2 focus:ring-[#BF3A1B]/30"
+                >
+                  <option value="all">Todas las Dificultades</option>
+                  <option value="Baja">Baja (Fácil adopción)</option>
+                  <option value="Media">Media (Fricción moderada)</option>
+                  <option value="Alta">Alta (Resistencia cultural)</option>
+                </select>
+              </div>
+
               {/* Text Search */}
               <div>
                 <label className="block text-[11px] font-bold text-[#4A3F55] mb-1">
@@ -1581,7 +1661,7 @@ export const AdminView: React.FC = () => {
                     type="text"
                     value={resourceSearchQuery}
                     onChange={(e) => setResourceSearchQuery(e.target.value)}
-                    placeholder="Buscar título, autor, empresa..."
+                    placeholder="Buscar título, tema, notas..."
                     className="w-full text-xs border border-[#493447]/20 rounded-xl pl-8 pr-3 py-2 bg-white text-[#2D1B4E] focus:outline-none focus:ring-2 focus:ring-[#BF3A1B]/30"
                   />
                 </div>
@@ -1605,6 +1685,8 @@ export const AdminView: React.FC = () => {
                     <th className="py-3 px-3">Recurso Recomendado</th>
                     <th className="py-3 px-3">Origen</th>
                     <th className="py-3 px-3">Desafío / Tema</th>
+                    <th className="py-3 px-3 text-center">Alineación / Utilidad</th>
+                    <th className="py-3 px-3 text-center">Dificultad Estimada</th>
                     <th className="py-3 px-3 text-center">Etapa</th>
                     <th className="py-3 px-3">Fecha y Hora</th>
                     <th className="py-3 px-3 text-center">Acciones</th>
@@ -1613,7 +1695,7 @@ export const AdminView: React.FC = () => {
                 <tbody className="divide-y divide-[#493447]/10">
                   {filteredRecommendedResources.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-xs text-[#4A3F55]/60">
+                      <td colSpan={9} className="py-8 text-center text-xs text-[#4A3F55]/60">
                         No se encontraron recursos que coincidan con los filtros seleccionados.
                       </td>
                     </tr>
@@ -1649,6 +1731,37 @@ export const AdminView: React.FC = () => {
                         <td className="py-3 px-3 max-w-xs">
                           <span className="inline-block text-[11px] text-[#4A3F55] font-medium bg-[#FFF7EF] border border-[#FFD3BF] px-2 py-0.5 rounded-md truncate max-w-full">
                             {item.theme || item.challengeTitle}
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                              item.estimatedUtility === 'Muy Alta' || !item.estimatedUtility
+                                ? 'bg-emerald-50 text-[#246B2A] border-emerald-200'
+                                : item.estimatedUtility === 'Alta'
+                                ? 'bg-green-50 text-green-800 border-green-200'
+                                : 'bg-amber-50 text-amber-800 border-amber-200'
+                            }`}
+                            title={item.utilityReason || 'Alineado al contexto'}
+                          >
+                            <Sparkles className="w-2.5 h-2.5" />
+                            <span>{item.estimatedUtility || 'Muy Alta'}</span>
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                              item.estimatedDifficulty === 'Baja'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                : item.estimatedDifficulty === 'Alta'
+                                ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                : 'bg-[#F7B538]/15 text-[#2D1B4E] border-[#F7B538]/40'
+                            }`}
+                            title={item.resistanceOrDoubtNotes || 'Dificultad estimada'}
+                          >
+                            <span>{item.estimatedDifficulty || 'Media'}</span>
                           </span>
                         </td>
 
@@ -1779,6 +1892,44 @@ export const AdminView: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Contextual Utility and Alignment */}
+              <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-[11px] text-emerald-900 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#246B2A]" />
+                    <span>Alineación & Utilidad Estimada (por Contexto):</span>
+                  </span>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-[#246B2A] border border-emerald-300">
+                    {selectedResourceForDetail.estimatedUtility || 'Muy Alta'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-950/80 leading-relaxed pt-0.5">
+                  {selectedResourceForDetail.utilityReason || 'Alineado directamente con la problemática de gestión planteada por el líder en su jornada operativa.'}
+                </p>
+              </div>
+
+              {/* Contextual Difficulty and Resistance */}
+              <div className="bg-[#FFF7EF] border border-[#FFD3BF] rounded-xl p-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-[11px] text-[#2D1B4E] flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                    <span>Dificultad de Implementación & Puntos de Resistencia:</span>
+                  </span>
+                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
+                    selectedResourceForDetail.estimatedDifficulty === 'Baja'
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                      : selectedResourceForDetail.estimatedDifficulty === 'Alta'
+                      ? 'bg-rose-100 text-rose-800 border-rose-300'
+                      : 'bg-[#F7B538]/25 text-[#2D1B4E] border-[#F7B538]/50'
+                  }`}>
+                    Dificultad: {selectedResourceForDetail.estimatedDifficulty || 'Media'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#4A3F55]/90 leading-relaxed pt-0.5">
+                  {selectedResourceForDetail.resistanceOrDoubtNotes || 'Foco en aplicación inmediata sin fricciones o dudas significativas registradas.'}
+                </p>
+              </div>
 
               {selectedResourceForDetail.urlOrRef && (
                 <div>

@@ -143,4 +143,47 @@ describe('Analítica de Recursos Recomendados por Lidacta', () => {
     assert.equal(added.stage, 2);
     assert.equal(added.leaderId, 'usr_nexus_leader1');
   });
+
+  it('debe contener campos de Utilidad y Dificultad estimadas por contexto en todos los recursos iniciales', () => {
+    const list = INITIAL_RECOMMENDED_RESOURCES;
+    assert.ok(list.length >= 10);
+
+    for (const item of list) {
+      assert.ok(
+        item.estimatedUtility === 'Muy Alta' ||
+        item.estimatedUtility === 'Alta' ||
+        item.estimatedUtility === 'Media',
+        `estimatedUtility inválido en ${item.id}: ${item.estimatedUtility}`
+      );
+      assert.ok(
+        item.estimatedDifficulty === 'Baja' ||
+        item.estimatedDifficulty === 'Media' ||
+        item.estimatedDifficulty === 'Alta',
+        `estimatedDifficulty inválido en ${item.id}: ${item.estimatedDifficulty}`
+      );
+      assert.ok(typeof item.utilityReason === 'string' && item.utilityReason.length > 5);
+      assert.ok(typeof item.resistanceOrDoubtNotes === 'string' && item.resistanceOrDoubtNotes.length > 5);
+    }
+  });
+
+  it('debe filtrar adecuadamente por nivel de dificultad estimada (Baja, Media, Alta)', () => {
+    const list = INITIAL_RECOMMENDED_RESOURCES;
+    const bajaItems = list.filter((r) => r.estimatedDifficulty === 'Baja');
+    const mediaItems = list.filter((r) => r.estimatedDifficulty === 'Media');
+    const altaItems = list.filter((r) => r.estimatedDifficulty === 'Alta');
+
+    assert.ok(bajaItems.length > 0);
+    assert.ok(mediaItems.length > 0);
+    assert.ok(altaItems.length > 0);
+    assert.equal(bajaItems.length + mediaItems.length + altaItems.length, list.length);
+  });
+
+  it('debe garantizar la prioridad de la Biblioteca Interna (Bloque 3) antes que fuentes externas', () => {
+    const list = INITIAL_RECOMMENDED_RESOURCES;
+    const internalCount = list.filter((r) => r.origin === 'internal').length;
+    const externalCount = list.filter((r) => r.origin === 'external').length;
+
+    // La biblioteca interna debe representar la mayoría de los recursos recomendados
+    assert.ok(internalCount > externalCount, 'La Biblioteca Interna debe ser la fuente prioritaria');
+  });
 });
