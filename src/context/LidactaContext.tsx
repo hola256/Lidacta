@@ -169,6 +169,15 @@ interface LidactaContextType {
   recordResourceRecommendation: (
     resource: Omit<RecommendedResourceItem, 'id' | 'recommendedAt'>
   ) => void;
+
+  // Stage 5 Automated Follow-ups & Day 8 Inactivity Monitoring
+  checkAndProcessStage5FollowUps: (options?: { simulatedNow?: string; force?: boolean }) => Promise<{
+    processed: number;
+    sent48h: number;
+    sent5d: number;
+    sentAdminAlert: number;
+  }>;
+  triggerStage5FollowUpCheck: () => Promise<void>;
 }
 
 const LidactaContext = createContext<LidactaContextType | undefined>(undefined);
@@ -1221,7 +1230,8 @@ El Equipo de Lidacta`;
     }
 
     const isCompletion = nextStage === 7;
-    const newStatus = isCompletion ? 'completed' : nextStage === 5 ? 'in_action' : 'active';
+    const isEnteringStage5 = nextStage === 5;
+    const newStatus = isCompletion ? 'completed' : isEnteringStage5 ? 'in_action' : 'active';
 
     setMentorships((prev) =>
       prev.map((m) =>
@@ -1232,6 +1242,7 @@ El Equipo de Lidacta`;
               status: newStatus,
               stageHistory: updatedHistory,
               completedAt: isCompletion ? now : m.completedAt,
+              stage5EnteredAt: isEnteringStage5 ? (m.stage5EnteredAt || now) : m.stage5EnteredAt,
               lastActiveAt: now,
             }
           : m
@@ -1336,14 +1347,22 @@ El Equipo de Lidacta`;
 
   const updateActionPlan = (plan: MentorshipSession['actionPlan']) => {
     if (!activeMentorship || !plan) return;
+    const now = new Date().toISOString();
+    const stage5Time = plan.stage5EnteredAt || activeMentorship.stage5EnteredAt || now;
+    const updatedPlan = {
+      ...plan,
+      stage5EnteredAt: stage5Time,
+    };
+
     setMentorships((prev) =>
       prev.map((m) =>
         m.id === activeMentorship.id
           ? {
               ...m,
-              actionPlan: plan,
+              actionPlan: updatedPlan,
+              stage5EnteredAt: stage5Time,
               status: 'in_action',
-              lastActiveAt: new Date().toISOString(),
+              lastActiveAt: now,
             }
           : m
       )
@@ -1358,7 +1377,7 @@ El Equipo de Lidacta`;
       title: 'Recordatorio de tu Plan de Acción',
       message: `${currentUser.name}, tienes programada tu acción: "${plan.what}". Recuerda cuidar: ${plan.careReminders}`,
       type: 'action_reminder',
-      timestamp: new Date().toISOString(),
+      timestamp: now,
       read: false,
       emailSimulated: {
         to: currentUser.email,
@@ -1369,6 +1388,261 @@ El Equipo de Lidacta`;
 
     setNotifications((prev) => [reminderNotif, ...prev]);
   };
+
+  /**
+   * Procesa de forma automatizada los correos de acompañamiento de Etapa 5 (48h y 5 días)
+   * y despacha la alerta de inactividad de 8 días para la Administradora (hola@taniapadierna.com).
+   */
+  const checkAndProcessStage5FollowUps = async (options?: {
+    simulatedNow?: string;
+    force?: boolean;
+  }): Promise<{
+    processed: number;
+    sent48h: number;
+    sent5d: number;
+    sentAdminAlert: number;
+  }> => {
+    const currentTimeMs = options?.simulatedNow
+      ? new Date(options.simulatedNow).getTime()
+      : Date.now();
+    let sent48hCount = 0;
+    let sent5dCount = 0;
+    let sentAdminAlertCount = 0;
+    let processedCount = 0;
+
+    const newNotifications: NotificationItem[] = [];
+
+    const updatedMentorships = await Promise.all(
+      mentorships.map(async (session) => {
+        // Evaluar si la sesión está en etapa 5 o tiene plan de acción registrado
+        const hasStage5 =
+          session.currentStage === 5 ||
+          Boolean(session.stage5EnteredAt) ||
+          Boolean(session.actionPlan?.stage5EnteredAt) ||
+          session.stageHistory.some((h) => h.stage === 5);
+
+        if (!hasStage5) return session;
+        processedCount++;
+
+        const stage5TimeStr =
+          session.stage5EnteredAt ||
+          session.actionPlan?.stage5EnteredAt ||
+          session.stageHistory.find((h) => h.stage === 5)?.enteredAt ||
+          session.startedAt;
+        const stage5TimeMs = new Date(stage5TimeStr).getTime();
+        const elapsedHours = Math.max(0, (currentTimeMs - stage5TimeMs) / (1000 * 60 * 60));
+        const elapsedDays = elapsedHours / 24;
+
+        // Recuperar detalles del perfil del líder
+        const leaderUser = allUsers.find(
+          (u) =>
+            u.id === session.leaderId ||
+            (u.email && session.leaderId && u.id.toLowerCase() === session.leaderId.toLowerCase())
+        );
+        const leaderEmail =
+          leaderUser?.email ||
+          (session.leaderName
+            ? `${session.leaderName.toLowerCase().replace(/\s+/g, '.')}@${(session.companyName || 'empresa').toLowerCase().replace(/\s+/g, '')}.com`
+            : 'lider@empresa.com');
+        const leaderPosition = leaderUser?.position || 'Líder Operativo';
+        const leaderArea = leaderUser?.area || session.leaderArea || 'Operaciones';
+        const leaderWhatsapp = leaderUser?.whatsapp || '+52 55 9876 5432';
+        const nowIso = new Date(currentTimeMs).toISOString();
+
+        let updatedSession = { ...session };
+        let actionPlanUpdated = session.actionPlan ? { ...session.actionPlan } : undefined;
+
+        // 1. Correo 1 (a las 48 horas): Asunto de apoyo continuo para revisar el primer paso del compromiso del líder.
+        const alreadySent48h = session.email48hSent || session.actionPlan?.email48hSent;
+        if ((elapsedHours >= 48 || options?.force) && !alreadySent48h) {
+          try {
+            await emailService.sendStage5FollowUp48h({
+              leaderEmail,
+              leaderName: session.leaderName,
+              companyName: session.companyName,
+              challengeTitle: session.title,
+              actionPlan: session.actionPlan,
+            });
+            sent48hCount++;
+            updatedSession.email48hSent = true;
+            updatedSession.email48hSentAt = nowIso;
+            if (actionPlanUpdated) {
+              actionPlanUpdated.email48hSent = true;
+              actionPlanUpdated.email48hSentAt = nowIso;
+            }
+
+            newNotifications.push({
+              id: `notif_${Date.now()}_stage5_48h_${session.id}`,
+              recipientRole: 'leader',
+              recipientUserId: session.leaderId,
+              companyId: session.companyId,
+              title: 'Apoyo continuo Lidacta (48 hrs tras tu plan)',
+              message: `${session.leaderName}, han transcurrido 48 horas desde tu plan de acción. Estamos contigo para acompañarte en tu primer paso con "${session.actionPlan?.what || session.title}".`,
+              type: 'stage5_followup',
+              timestamp: nowIso,
+              read: false,
+              emailSimulated: {
+                from: 'Lidacta <notificaciones@taniapadierna.com>',
+                to: leaderEmail,
+                replyTo: 'hola@taniapadierna.com',
+                subject: 'Apoyo continuo para revisar el primer paso de tu compromiso en Lidacta',
+                bodyText: `¡Hola ${session.leaderName}!\n\nHan transcurrido 48 horas desde que definiste tu plan de acción en Lidacta para tu desafío: "${session.title}".\n\n• ¿Qué harás?: ${session.actionPlan?.what || 'Conversación 1 a 1'}\n• ¿Cuándo?: ${session.actionPlan?.when || 'Esta semana'}\n• ¿Con quién?: ${session.actionPlan?.withWhom || 'Equipo'}\n• Qué vas a cuidar: ${session.actionPlan?.careReminders || 'Escucha activa'}\n\nRecuerda: El liderazgo se forja en las conversaciones reales del día a día.`,
+                realEmailSent: true,
+              },
+            });
+          } catch (e) {
+            console.error('Error dispatching stage 5 48h follow-up:', e);
+          }
+        }
+
+        // 2. Correo 2 (a los 5 días): Asunto de seguimiento previo para consolidar avances antes de pasar a la Etapa 6.
+        const alreadySent5d = session.email5dSent || session.actionPlan?.email5dSent;
+        if ((elapsedDays >= 5 || options?.force) && !alreadySent5d) {
+          try {
+            await emailService.sendStage5FollowUp5d({
+              leaderEmail,
+              leaderName: session.leaderName,
+              companyName: session.companyName,
+              challengeTitle: session.title,
+              actionPlan: session.actionPlan,
+            });
+            sent5dCount++;
+            updatedSession.email5dSent = true;
+            updatedSession.email5dSentAt = nowIso;
+            if (actionPlanUpdated) {
+              actionPlanUpdated.email5dSent = true;
+              actionPlanUpdated.email5dSentAt = nowIso;
+            }
+
+            newNotifications.push({
+              id: `notif_${Date.now()}_stage5_5d_${session.id}`,
+              recipientRole: 'leader',
+              recipientUserId: session.leaderId,
+              companyId: session.companyId,
+              title: 'Seguimiento de avances hacia la Etapa 6 (5 días)',
+              message: `${session.leaderName}, es momento de consolidar avances de tu compromiso antes de pasar a la Etapa 6 (Aprender y reflexionar tras la acción).`,
+              type: 'stage5_followup',
+              timestamp: nowIso,
+              read: false,
+              emailSimulated: {
+                from: 'Lidacta <notificaciones@taniapadierna.com>',
+                to: leaderEmail,
+                replyTo: 'hola@taniapadierna.com',
+                subject: 'Seguimiento de tu plan de acción en Lidacta: consolidando avances hacia la Etapa 6',
+                bodyText: `¡Hola ${session.leaderName}!\n\nHan transcurrido 5 días desde que estableciste tu plan de acción en Lidacta.\n\nEs un excelente momento para hacer una pausa previa: ¿pudiste llevar a cabo la acción acordada? ¿Qué funcionó y qué respuestas observaste en tu equipo?\n\nTe invitamos a ingresar a Lidacta para concluir tu plan y avanzar a la Etapa 6.`,
+                realEmailSent: true,
+              },
+            });
+          } catch (e) {
+            console.error('Error dispatching stage 5 5d follow-up:', e);
+          }
+        }
+
+        // 3. Alerta de Inactividad para la Administradora (a partir del Día 8):
+        // Si transcurren 8 días calendario tras finalizar la Etapa 5 sin que el líder haya ingresado a la plataforma
+        // o interactuado con Lidacta, envía un correo automático de alerta a hola@taniapadierna.com.
+        // Contenido de la alerta: Nombre del Líder, Empresa, Fecha del último acceso, Etapa actual (Etapa 5) y resumen breve de su compromiso no finalizado.
+        const lastActiveTimeMs = new Date(session.lastActiveAt || stage5TimeStr).getTime();
+        const daysSinceLastActive = Math.max(0, (currentTimeMs - lastActiveTimeMs) / (1000 * 60 * 60 * 24));
+        const isInactiveInStage5 =
+          session.currentStage === 5 &&
+          (daysSinceLastActive >= 8 || elapsedDays >= 8 || options?.force);
+        const alreadySentAdminAlert =
+          session.adminInactivityAlertSent || session.actionPlan?.adminInactivityAlertSent;
+
+        if (isInactiveInStage5 && !alreadySentAdminAlert) {
+          try {
+            const lastActiveDate = new Date(session.lastActiveAt || stage5TimeStr);
+            const lastActiveFormatted = `${lastActiveDate.toLocaleDateString('es-MX', {
+              day: '2-digit',
+              month: 'long',
+              year: 'numeric',
+            })}, ${lastActiveDate.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} hrs`;
+
+            await emailService.sendStage5InactivityAlertToAdmin({
+              leaderEmail,
+              leaderName: session.leaderName,
+              companyName: session.companyName,
+              challengeTitle: session.title,
+              leaderPosition,
+              leaderArea,
+              leaderWhatsapp,
+              lastActiveAt: session.lastActiveAt,
+              lastActiveFormatted,
+              actionPlan: session.actionPlan,
+            });
+            sentAdminAlertCount++;
+            updatedSession.adminInactivityAlertSent = true;
+            updatedSession.adminInactivityAlertSentAt = nowIso;
+            if (actionPlanUpdated) {
+              actionPlanUpdated.adminInactivityAlertSent = true;
+              actionPlanUpdated.adminInactivityAlertSentAt = nowIso;
+            }
+
+            newNotifications.push({
+              id: `notif_${Date.now()}_stage5_inactivity_${session.id}`,
+              recipientRole: 'admin',
+              companyId: session.companyId,
+              title: `🚨 Alerta de Inactividad (Día 8): ${session.leaderName} en Etapa 5`,
+              message: `Han transcurrido más de 8 días sin actividad en la plataforma desde que ${session.leaderName} (${session.companyName}) definió su compromiso en la Etapa 5.`,
+              type: 'inactivity_alert',
+              timestamp: nowIso,
+              read: false,
+              emailSimulated: {
+                from: 'Lidacta <notificaciones@taniapadierna.com>',
+                to: 'hola@taniapadierna.com',
+                replyTo: leaderEmail,
+                subject: `🚨 Alerta de Inactividad (Día 8): ${session.leaderName} (${session.companyName}) sin avances en Etapa 5`,
+                bodyText: `Estimada Tania,\n\nEl sistema de monitoreo de Lidacta ha detectado que han transcurrido 8 días calendario desde que ${session.leaderName} definió su compromiso en la Etapa 5 sin que haya ingresado a la plataforma ni registrado avances hacia la Etapa 6.\n\n📋 DATOS DEL LÍDER E INACTIVIDAD:\n• Nombre del Líder: ${session.leaderName}\n• Empresa: ${session.companyName}\n• Puesto / Área: ${leaderPosition} (Área: ${leaderArea})\n• Fecha del último acceso: ${lastActiveFormatted}\n• Etapa actual: Etapa 5 (Compromiso y Plan de Acción)\n• Desafío en curso: "${session.title}"\n\n⚠️ RESUMEN BREVE DE SU COMPROMISO NO FINALIZADO:\n• Acción comprometida: ${session.actionPlan?.what || 'Conversación de liderazgo'}\n• Fecha prevista: ${session.actionPlan?.when || 'No especificada'}\n• Con quién: ${session.actionPlan?.withWhom || 'Equipo'}\n• Aspectos a cuidar: ${session.actionPlan?.careReminders || 'Foco en hechos objetivos'}\n\n📞 DATOS DE CONTACTO DIRECTO:\n• Correo electrónico: ${leaderEmail}\n• WhatsApp: ${leaderWhatsapp}\n\nRecomendación de intervención: Te sugerimos contactar al líder para apoyarlo a resolver posibles dudas, indagar si enfrentó algún obstáculo no previsto e invitarlo a retomar su proceso en la Etapa 6 de Lidacta.`,
+                realEmailSent: true,
+              },
+            });
+          } catch (e) {
+            console.error('Error dispatching stage 5 inactivity alert to admin:', e);
+          }
+        }
+
+        if (actionPlanUpdated) {
+          updatedSession.actionPlan = actionPlanUpdated;
+        }
+
+        return updatedSession;
+      })
+    );
+
+    if (newNotifications.length > 0) {
+      setNotifications((prev) => [...newNotifications, ...prev]);
+    }
+
+    setMentorships(updatedMentorships);
+
+    return {
+      processed: processedCount,
+      sent48h: sent48hCount,
+      sent5d: sent5dCount,
+      sentAdminAlert: sentAdminAlertCount,
+    };
+  };
+
+  const triggerStage5FollowUpCheck = async () => {
+    const res = await checkAndProcessStage5FollowUps();
+    if (res.sentAdminAlert > 0 || res.sent48h > 0 || res.sent5d > 0) {
+      showToast(
+        `Monitoreo de Etapa 5 ejecutado: ${res.sent48h} de 48h, ${res.sent5d} de 5d y ${res.sentAdminAlert} alertas de inactividad a Tania Padierna.`,
+        'info'
+      );
+    } else {
+      showToast('Monitoreo de Etapa 5 al día: líderes con notificaciones al corriente.', 'success');
+    }
+  };
+
+  // Verificación periódica al montar la aplicación
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      checkAndProcessStage5FollowUps().catch(() => {});
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const markActionCompleted = () => {
     if (!activeMentorship || !activeMentorship.actionPlan) return;
@@ -2605,6 +2879,8 @@ El Equipo de Lidacta`;
         dbLatencyMs,
         recommendedResources,
         recordResourceRecommendation,
+        checkAndProcessStage5FollowUps,
+        triggerStage5FollowUpCheck,
       }}
     >
       {children}

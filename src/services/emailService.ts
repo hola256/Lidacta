@@ -152,6 +152,173 @@ export class EmailService {
       };
     }
   }
+
+  /**
+   * Envía correo de acompañamiento de Etapa 5 (48 horas) al Líder.
+   */
+  async sendStage5FollowUp48h(params: {
+    leaderEmail: string;
+    leaderName: string;
+    companyName?: string;
+    challengeTitle?: string;
+    actionPlan?: any;
+  }): Promise<EmailServiceResult> {
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/send-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          to: params.leaderEmail,
+          email: params.leaderEmail,
+          name: params.leaderName,
+          companyName: params.companyName,
+          challengeTitle: params.challengeTitle,
+          actionPlan: params.actionPlan,
+          type: 'stage5_48h',
+          subject: 'Apoyo continuo para revisar el primer paso de tu compromiso en Lidacta',
+          replyTo: 'hola@taniapadierna.com',
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.success) {
+        return {
+          success: true,
+          emailId: data.emailId || data.id,
+          realSent: data.realSent ?? true,
+          message: data.message || 'Correo de apoyo 48h enviado exitosamente.',
+        };
+      }
+      return {
+        success: false,
+        error: data.error || data.message || 'Error al despachar correo 48h',
+      };
+    } catch (error) {
+      console.error('Error despachando correo 48h:', error);
+      return {
+        success: false,
+        error: (error as any)?.message || 'Error de red en correo 48h',
+      };
+    }
+  }
+
+  /**
+   * Envía correo de acompañamiento de Etapa 5 (5 días) al Líder.
+   */
+  async sendStage5FollowUp5d(params: {
+    leaderEmail: string;
+    leaderName: string;
+    companyName?: string;
+    challengeTitle?: string;
+    actionPlan?: any;
+  }): Promise<EmailServiceResult> {
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/send-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          to: params.leaderEmail,
+          email: params.leaderEmail,
+          name: params.leaderName,
+          companyName: params.companyName,
+          challengeTitle: params.challengeTitle,
+          actionPlan: params.actionPlan,
+          type: 'stage5_5d',
+          subject: 'Seguimiento de tu plan de acción en Lidacta: consolidando avances hacia la Etapa 6',
+          replyTo: 'hola@taniapadierna.com',
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.success) {
+        return {
+          success: true,
+          emailId: data.emailId || data.id,
+          realSent: data.realSent ?? true,
+          message: data.message || 'Correo de seguimiento 5d enviado exitosamente.',
+        };
+      }
+      return {
+        success: false,
+        error: data.error || data.message || 'Error al despachar correo 5d',
+      };
+    } catch (error) {
+      console.error('Error despachando correo 5d:', error);
+      return {
+        success: false,
+        error: (error as any)?.message || 'Error de red en correo 5d',
+      };
+    }
+  }
+
+  /**
+   * Envía alerta de inactividad (Día 8) a la Administradora (hola@taniapadierna.com).
+   */
+  async sendStage5InactivityAlertToAdmin(params: {
+    leaderEmail: string;
+    leaderName: string;
+    companyName?: string;
+    challengeTitle?: string;
+    leaderPosition?: string;
+    leaderArea?: string;
+    leaderWhatsapp?: string;
+    lastActiveAt?: string;
+    lastActiveFormatted?: string;
+    actionPlan?: any;
+  }): Promise<EmailServiceResult> {
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/send-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          to: 'hola@taniapadierna.com',
+          email: 'hola@taniapadierna.com',
+          leaderEmail: params.leaderEmail,
+          leaderName: params.leaderName,
+          companyName: params.companyName,
+          challengeTitle: params.challengeTitle,
+          leaderPosition: params.leaderPosition,
+          leaderArea: params.leaderArea,
+          leaderWhatsapp: params.leaderWhatsapp,
+          lastActiveAt: params.lastActiveAt,
+          lastActiveFormatted: params.lastActiveFormatted,
+          actionPlan: params.actionPlan,
+          type: 'stage5_inactivity_admin',
+          subject: `🚨 Alerta de Inactividad (Día 8): ${params.leaderName} (${params.companyName || 'Empresa'}) sin avances en Etapa 5`,
+          replyTo: params.leaderEmail || 'hola@taniapadierna.com',
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.success) {
+        return {
+          success: true,
+          emailId: data.emailId || data.id,
+          realSent: data.realSent ?? true,
+          message: data.message || 'Alerta de inactividad Día 8 enviada a Administradora.',
+        };
+      }
+      return {
+        success: false,
+        error: data.error || data.message || 'Error al enviar alerta Día 8',
+      };
+    } catch (error) {
+      console.error('Error despachando alerta Día 8 a Administradora:', error);
+      return {
+        success: false,
+        error: (error as any)?.message || 'Error de red en alerta Día 8',
+      };
+    }
+  }
 }
 
 export const emailService = EmailService.getInstance();

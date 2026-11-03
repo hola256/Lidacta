@@ -65,6 +65,8 @@ export const AdminView: React.FC = () => {
     impersonateUser,
     impersonateRole,
     openRoleWelcomeModal,
+    checkAndProcessStage5FollowUps,
+    triggerStage5FollowUpCheck,
   } = useLidacta();
 
   const [isInspectorModalOpen, setIsInspectorModalOpen] = useState(false);
@@ -902,6 +904,238 @@ export const AdminView: React.FC = () => {
                   placeholder="Buscar..."
                   className="w-full p-2 bg-[#FFF7EF] border border-[#493447]/15 rounded-lg text-xs text-[#2D1B4E]"
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Panel de Monitoreo Automatizado de Etapa 5 y Alertas de Inactividad (Día 8) */}
+          <div className="bg-white border-2 border-[#BF3A1B]/40 rounded-2xl p-6 shadow-sm space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-[#493447]/10 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-[#FFD3BF] text-[#BF3A1B] rounded-lg">
+                    <AlertTriangle className="w-4 h-4" />
+                  </span>
+                  <h3 className="font-heading font-extrabold text-base text-[#2D1B4E]">
+                    Monitoreo Automatizado Etapa 5 & Alertas de Inactividad (Día 8)
+                  </h3>
+                </div>
+                <p className="text-xs text-[#4A3F55]/80 mt-1">
+                  Acompañamiento programado vía Resend (48 hrs y 5 días) y alertas automáticas a <strong>hola@taniapadierna.com</strong> ante líderes inactivos.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => triggerStage5FollowUpCheck()}
+                  className="px-3.5 py-2 bg-[#FFF7EF] hover:bg-[#FFEAD8] border border-[#BF3A1B]/30 text-[#BF3A1B] rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-xs"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Verificar Inactividad Ahora</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Alerta Destacada de Inactividad Día 8 (Si existen líderes inactivos >= 8 días) */}
+            {mentorships
+              .filter((m) => {
+                const stage5Date = m.stage5EnteredAt || m.actionPlan?.stage5EnteredAt || m.startedAt;
+                const lastDate = m.lastActiveAt || stage5Date;
+                const daysDiff = (Date.now() - new Date(lastDate).getTime()) / (1000 * 60 * 60 * 24);
+                return m.currentStage === 5 && (daysDiff >= 8 || m.adminInactivityAlertSent);
+              })
+              .map((inactive) => {
+                const actionPlan = inactive.actionPlan || ({} as any);
+                const leaderUser = allUsers.find((u) => u.id === inactive.leaderId);
+                const lastActiveDate = new Date(inactive.lastActiveAt);
+                const lastActiveFormatted = `${lastActiveDate.toLocaleDateString('es-MX', {
+                  day: '2-digit',
+                  month: 'long',
+                  year: 'numeric',
+                })}, ${lastActiveDate.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} hrs`;
+
+                const alertNotif = notifications.find(
+                  (n) => n.type === 'inactivity_alert' && n.title.includes(inactive.leaderName)
+                );
+
+                return (
+                  <div
+                    key={inactive.id}
+                    className="p-5 bg-[#FFF7EF] border-2 border-[#BF3A1B] rounded-2xl space-y-4 shadow-sm animate-in fade-in"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#BF3A1B]/20 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-1 bg-red-100 text-red-700 font-extrabold text-[11px] rounded-full uppercase tracking-wider flex items-center gap-1">
+                          🚨 Alerta Día 8 Activada
+                        </span>
+                        <span className="text-xs font-bold text-[#2D1B4E]">
+                          Líder inactivo en Etapa 5 tras definir su compromiso
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-semibold text-[#BF3A1B] bg-white px-2.5 py-1 rounded-lg border border-[#BF3A1B]/30">
+                        Despachado a: <strong>hola@taniapadierna.com</strong>
+                      </span>
+                    </div>
+
+                    {/* Ficha Requerida por la instrucción */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      {/* Datos del Líder */}
+                      <div className="bg-white p-4 rounded-xl border border-[#493447]/10 space-y-2">
+                        <h4 className="font-bold text-[#2D1B4E] uppercase text-[11px] tracking-wider border-b border-[#493447]/10 pb-1.5 flex items-center justify-between">
+                          <span>📋 Datos del Líder e Inactividad</span>
+                          <span className="text-[10px] text-red-600 font-bold">&gt; 8 Días sin ingreso</span>
+                        </h4>
+                        <div className="space-y-1.5 text-[#4A3F55]">
+                          <p>
+                            • <strong>Nombre del Líder:</strong>{' '}
+                            <span className="font-bold text-[#2D1B4E]">{inactive.leaderName}</span>
+                          </p>
+                          <p>
+                            • <strong>Empresa:</strong>{' '}
+                            <span className="font-bold text-[#2D1B4E]">{inactive.companyName}</span>
+                          </p>
+                          <p>
+                            • <strong>Puesto / Área:</strong>{' '}
+                            {leaderUser?.position || 'Gerente de Sucursal'} ({inactive.leaderArea || 'Operaciones'})
+                          </p>
+                          <p>
+                            • <strong>Fecha del último acceso:</strong>{' '}
+                            <span className="font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
+                              {lastActiveFormatted}
+                            </span>
+                          </p>
+                          <p>
+                            • <strong>Etapa actual:</strong>{' '}
+                            <span className="font-bold bg-[#FFD3BF] text-[#BF3A1B] px-2 py-0.5 rounded">
+                              Etapa 5 (Compromiso y Plan de Acción)
+                            </span>
+                          </p>
+                          <p>
+                            • <strong>Desafío en curso:</strong> "{inactive.title}"
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Resumen Breve de su Compromiso No Finalizado */}
+                      <div className="bg-white p-4 rounded-xl border border-[#493447]/10 space-y-2">
+                        <h4 className="font-bold text-[#BF3A1B] uppercase text-[11px] tracking-wider border-b border-[#493447]/10 pb-1.5 flex items-center justify-between">
+                          <span>⚠️ Compromiso No Finalizado</span>
+                          <span className="text-[10px] text-[#BF3A1B] font-semibold">Pendiente de avanzar a Etapa 6</span>
+                        </h4>
+                        <div className="space-y-1.5 text-[#4A3F55]">
+                          <p>
+                            • <strong>¿Qué acción?:</strong>{' '}
+                            <span className="font-semibold text-[#2D1B4E]">
+                              {actionPlan.what || 'No definida'}
+                            </span>
+                          </p>
+                          <p>
+                            • <strong>¿Cuándo?:</strong>{' '}
+                            <span className="font-semibold text-[#2D1B4E]">
+                              {actionPlan.when || 'No definida'}
+                            </span>
+                          </p>
+                          <p>
+                            • <strong>¿Con quién?:</strong>{' '}
+                            <span className="font-semibold text-[#2D1B4E]">
+                              {actionPlan.withWhom || 'No definida'}
+                            </span>
+                          </p>
+                          <p>
+                            • <strong>Aspectos a cuidar:</strong>{' '}
+                            <span className="font-medium text-[#2D1B4E] italic">
+                              "{actionPlan.careReminders || 'Sin notas especiales'}"
+                            </span>
+                          </p>
+                          <div className="pt-1.5 flex items-center gap-2">
+                            <span className="text-[10px] text-[#4A3F55]/70">Contacto directo:</span>
+                            <span className="text-[11px] font-bold text-[#2D1B4E]">
+                              {leaderUser?.whatsapp || '+52 55 9876 5432'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Flujo de Correos Despachados / Acciones de Acompañamiento */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[#BF3A1B]/20">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] font-bold text-[#2D1B4E]">Cadena de Acompañamiento:</span>
+                        <span className="text-[10px] px-2 py-0.5 bg-[#E2F7E1] text-[#246B2A] rounded font-semibold">
+                          ✓ Correo 1 (48 hrs) Enviado
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 bg-[#E2F7E1] text-[#246B2A] rounded font-semibold">
+                          ✓ Correo 2 (5 días) Enviado
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 bg-red-100 text-red-700 rounded font-bold">
+                          🚨 Alerta Día 8 Despachada
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {alertNotif && (
+                          <button
+                            type="button"
+                            onClick={() => openEmailDrawer(alertNotif)}
+                            className="px-3 py-1.5 bg-white border border-[#BF3A1B] text-[#BF3A1B] hover:bg-[#FFD3BF]/30 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer active:scale-95 shadow-xs"
+                          >
+                            <Mail className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                            <span>Ver Correo de Alerta Oficial</span>
+                          </button>
+                        )}
+                        <a
+                          href={`https://wa.me/${(leaderUser?.whatsapp || '525598765432').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                            `Hola ${inactive.leaderName}, te saludo desde Lidacta. Quería darte seguimiento sobre tu compromiso de liderazgo en "${inactive.title}" para saber si pudiste realizar la acción o si requieres apoyo para avanzar a la Etapa 6.`
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 bg-[#25D366] text-white hover:bg-[#20ba59] rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer active:scale-95 shadow-xs"
+                        >
+                          <PhoneCall className="w-3.5 h-3.5" />
+                          <span>Contactar por WhatsApp</span>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+            {/* Resumen de Estado de Acompañamiento para Líderes en Etapa 5 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
+              <div className="p-3 bg-neutral-50 border border-[#493447]/10 rounded-xl space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#4A3F55]/70">
+                  1. Apoyo Continuo (48 Horas)
+                </span>
+                <p className="text-xs font-semibold text-[#2D1B4E]">
+                  Revisar el primer paso del compromiso
+                </p>
+                <p className="text-[11px] text-[#4A3F55]/80">
+                  Despachado automáticamente al cumplirse 48 horas tras guardar el plan en Etapa 5.
+                </p>
+              </div>
+
+              <div className="p-3 bg-neutral-50 border border-[#493447]/10 rounded-xl space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#4A3F55]/70">
+                  2. Consolidación Previa (5 Días)
+                </span>
+                <p className="text-xs font-semibold text-[#2D1B4E]">
+                  Consolidar avances hacia la Etapa 6
+                </p>
+                <p className="text-[11px] text-[#4A3F55]/80">
+                  Invita al líder a reflexionar qué funcionó antes de pasar al aprendizaje formal.
+                </p>
+              </div>
+
+              <div className="p-3 bg-red-50/60 border border-red-200 rounded-xl space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-red-700">
+                  3. Alerta Inactividad (Día 8)
+                </span>
+                <p className="text-xs font-semibold text-red-800">
+                  Notificación a Tania Padierna
+                </p>
+                <p className="text-[11px] text-red-700/80">
+                  Se activa si pasan 8 días sin que el líder ingrese a la plataforma tras la Etapa 5.
+                </p>
               </div>
             </div>
           </div>

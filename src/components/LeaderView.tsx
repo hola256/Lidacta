@@ -1602,6 +1602,56 @@ export const LeaderView: React.FC = () => {
                                 </div>
                               </div>
 
+                              {/* Tarjeta de Acompañamiento Automatizado Lidacta (48h y 5 días) */}
+                              <div className="p-3.5 bg-[#FFF7EF] border border-[#EADBCE] rounded-xl space-y-2 text-xs">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#2D1B4E]">
+                                    <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
+                                    <span>Acompañamiento Automatizado Lidacta</span>
+                                  </div>
+                                  <span className="text-[10px] text-[#BF3A1B] font-semibold bg-[#FFD3BF]/50 px-2 py-0.5 rounded-full">
+                                    Resend Transaccional Activo
+                                  </span>
+                                </div>
+                                <p className="text-[#4A3F55] leading-relaxed">
+                                  Lidacta te acompaña en tu proceso enviándote 2 correos clave para que no te sientas solo/a al ejecutar tu compromiso:
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                  <div className={`p-2.5 rounded-lg border text-[11px] flex items-center justify-between ${
+                                    activeMentorship.email48hSent || activeMentorship.actionPlan?.email48hSent
+                                      ? 'bg-[#E2F7E1] border-[#246B2A]/30 text-[#246B2A]'
+                                      : 'bg-white border-[#493447]/10 text-[#4A3F55]'
+                                  }`}>
+                                    <div className="flex items-center gap-1.5">
+                                      <Clock className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                                      <span className="font-semibold">Correo 1 (48 hrs):</span>
+                                      <span className="truncate">Primer paso</span>
+                                    </div>
+                                    {activeMentorship.email48hSent || activeMentorship.actionPlan?.email48hSent ? (
+                                      <span className="text-[10px] font-bold bg-white/80 px-1.5 py-0.5 rounded text-[#246B2A]">✓ Enviado</span>
+                                    ) : (
+                                      <span className="text-[10px] text-[#4A3F55]/70">Programado</span>
+                                    )}
+                                  </div>
+                                  <div className={`p-2.5 rounded-lg border text-[11px] flex items-center justify-between ${
+                                    activeMentorship.email5dSent || activeMentorship.actionPlan?.email5dSent
+                                      ? 'bg-[#E2F7E1] border-[#246B2A]/30 text-[#246B2A]'
+                                      : 'bg-white border-[#493447]/10 text-[#4A3F55]'
+                                  }`}>
+                                    <div className="flex items-center gap-1.5">
+                                      <Calendar className="w-3.5 h-3.5 text-[#F7B538]" />
+                                      <span className="font-semibold">Correo 2 (5 días):</span>
+                                      <span className="truncate">Consolidación</span>
+                                    </div>
+                                    {activeMentorship.email5dSent || activeMentorship.actionPlan?.email5dSent ? (
+                                      <span className="text-[10px] font-bold bg-white/80 px-1.5 py-0.5 rounded text-[#246B2A]">✓ Enviado</span>
+                                    ) : (
+                                      <span className="text-[10px] text-[#4A3F55]/70">Programado</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-[#493447]/10">
                                 <button
                                   type="button"

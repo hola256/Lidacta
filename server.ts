@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import sendEmailHandler from './api/send-email';
 
 dotenv.config();
 
@@ -1618,95 +1619,7 @@ app.post('/api/register', async (req: Request, res: Response) => {
 
 // POST /api/send-email - Universal Transactional Email Endpoint (Asynchronous & Non-Blocking)
 app.post('/api/send-email', async (req: Request, res: Response) => {
-  try {
-    const { to, subject, html, text, type, userId, email, name, role, companyName, inviteUrl } = req.body;
-    console.log(`[LIDACTA MAILING 📧] Petición recibida en POST /api/send-email:`, { to, email, userId, type, subject });
-
-    serverUsers = readPersistentUsers();
-    let targetUser: ServerUserProfile | undefined;
-    if (userId || email || to) {
-      targetUser = serverUsers.find(
-        (u) =>
-          (userId && u.id === userId) ||
-          (email && u.email.toLowerCase() === String(email).trim().toLowerCase()) ||
-          (to && u.email.toLowerCase() === String(to).trim().toLowerCase())
-      );
-    }
-
-    const targetEmail = to || targetUser?.email || email;
-    if (!targetEmail || !String(targetEmail).includes('@')) {
-      return res.status(400).json({
-        success: false,
-        message: 'Debe proporcionarse un correo destinatario válido ("to" o "email") o un "userId" existente.',
-      });
-    }
-
-    const emailType = type || (subject?.toLowerCase().includes('invit') ? 'invite' : 'welcome');
-
-    let dispatchResult: { realSent: boolean; emailId?: string; error?: string } = { realSent: false };
-    try {
-      if (emailType === 'invite') {
-        const userForInvite = targetUser || {
-          id: userId || `user_${Date.now()}`,
-          name: name || 'Líder Lidacta',
-          email: targetEmail,
-          role: role || 'leader',
-          companyId: 'comp_custom',
-          companyName: companyName || 'Lidacta Platform',
-          position: 'Líder',
-          createdAt: new Date().toISOString(),
-        };
-        dispatchResult = await sendProfileInviteEmail(userForInvite, inviteUrl);
-      } else if (emailType === 'welcome') {
-        const userForWelcome = targetUser || {
-          id: userId || `user_${Date.now()}`,
-          name: name || 'Líder Lidacta',
-          email: targetEmail,
-          role: role || 'leader',
-          companyId: 'comp_custom',
-          companyName: companyName || 'Industrias Nexus Automotriz',
-          position: 'Líder Operativo',
-          createdAt: new Date().toISOString(),
-        };
-        dispatchResult = await sendWelcomeEmail(userForWelcome);
-      } else {
-        dispatchResult = await sendTransactionalEmail({
-          to: targetEmail,
-          subject: subject || 'Notificación de Lidacta',
-          html: html || `<p>${text || 'Notificación de Lidacta'}</p>`,
-          text: text || 'Notificación de Lidacta',
-          replyTo: 'hola@taniapadierna.com',
-          recipientRole: role || targetUser?.role || 'leader',
-          recipientUserId: targetUser?.id,
-          companyId: targetUser?.companyId,
-          type: emailType,
-          title: subject || 'Notificación de Lidacta',
-          message: text ? text.slice(0, 150) : 'Notificación enviada',
-        });
-      }
-    } catch (error) {
-      console.error("Resend delivery failed:", error);
-      dispatchResult = { realSent: false, error: (error as any)?.message };
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: dispatchResult.realSent
-        ? `Correo entregado exitosamente a ${targetEmail} (ID: ${dispatchResult.emailId})`
-        : `Correo procesado para ${targetEmail}`,
-      recipient: targetEmail,
-      type: emailType,
-      realSent: dispatchResult.realSent,
-      emailId: dispatchResult.emailId,
-      error: dispatchResult.error,
-    });
-  } catch (error: any) {
-    console.error('[LIDACTA MAILING ERROR ❌] Error en /api/send-email:', error);
-    return res.status(500).json({
-      success: false,
-      message: error?.message || 'Error al procesar solicitud de envío de correo',
-    });
-  }
+  return sendEmailHandler(req, res);
 });
 
 // POST /api/mail/send-welcome - Trigger welcome email asynchronously

@@ -62,6 +62,13 @@ export interface MentorshipActionPlan {
   careReminders: string;
   isCompleted?: boolean;
   completedAt?: string;
+  stage5EnteredAt?: string;
+  email48hSent?: boolean;
+  email48hSentAt?: string;
+  email5dSent?: boolean;
+  email5dSentAt?: string;
+  adminInactivityAlertSent?: boolean;
+  adminInactivityAlertSentAt?: string;
 }
 
 export interface MentorshipLearnings {
@@ -99,6 +106,14 @@ export interface MentorshipSession {
   startedAt: string;
   lastActiveAt: string;
   completedAt?: string;
+  // Stage 5 follow-up tracking
+  stage5EnteredAt?: string;
+  email48hSent?: boolean;
+  email48hSentAt?: string;
+  email5dSent?: boolean;
+  email5dSentAt?: string;
+  adminInactivityAlertSent?: boolean;
+  adminInactivityAlertSentAt?: string;
   // Extracted and managed stage data
   clarificationAnswers?: string[];
   identifiedSkills: string[];
@@ -140,7 +155,7 @@ export interface NotificationItem {
   companyId: string;
   title: string;
   message: string;
-  type: 'registration' | 'case_started' | 'action_reminder' | 'case_completed' | 'system' | 'mentor_request';
+  type: 'registration' | 'case_started' | 'action_reminder' | 'case_completed' | 'system' | 'mentor_request' | 'stage5_followup' | 'inactivity_alert';
   timestamp: string;
   read: boolean;
   emailSimulated?: {
