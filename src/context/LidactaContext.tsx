@@ -999,13 +999,13 @@ El Equipo de Lidacta`;
       challengeText.slice(0, 60) + (challengeText.length > 60 ? '...' : '');
 
     const stageNames: Record<StageNumber, string> = {
-      1: 'Detectar qué sucede con profundidad',
-      2: 'Analizar y ver desde otras perspectivas',
-      3: 'Diseñar alternativas de solución',
-      4: 'Practicar antes de actuar (Roleplay)',
-      5: 'Definir plan de acción concreto',
-      6: 'Aprender y reflexionar tras la acción',
-      7: 'Cierre y retroalimentación de liderazgo',
+      1: 'Detectar qué sucede',
+      2: 'Analizar perspectivas y habilidades',
+      3: 'Diseñar alternativas',
+      4: 'Practicar antes de actuar',
+      5: 'Actuar (Plan de Acción)',
+      6: 'Aprender y reflexionar',
+      7: 'Cierre y retroalimentación',
     };
 
     const newSession: MentorshipSession = {
@@ -1365,13 +1365,13 @@ El Equipo de Lidacta`;
     const now = new Date().toISOString();
 
     const stageNames: Record<StageNumber, string> = {
-      1: 'Detectar qué sucede con profundidad',
-      2: 'Analizar y ver desde otras perspectivas',
-      3: 'Diseñar alternativas de solución',
-      4: 'Practicar antes de actuar (Roleplay)',
-      5: 'Definir plan de acción concreto',
-      6: 'Aprender y reflexionar tras la acción',
-      7: 'Cierre y retroalimentación de liderazgo',
+      1: 'Detectar qué sucede',
+      2: 'Analizar perspectivas y habilidades',
+      3: 'Diseñar alternativas',
+      4: 'Practicar antes de actuar',
+      5: 'Actuar (Plan de Acción)',
+      6: 'Aprender y reflexionar',
+      7: 'Cierre y retroalimentación',
     };
 
     const updatedHistory = activeMentorship.stageHistory.map((item) => {
@@ -1687,7 +1687,7 @@ El Equipo de Lidacta`;
               recipientUserId: session.leaderId,
               companyId: session.companyId,
               title: 'Seguimiento de avances hacia la Etapa 6 (5 días)',
-              message: `${session.leaderName}, es momento de consolidar avances de tu compromiso antes de pasar a la Etapa 6 (Aprender y reflexionar tras la acción).`,
+              message: `${session.leaderName}, es momento de consolidar avances de tu compromiso antes de pasar a la Etapa 6 (Aprender y reflexionar).`,
               type: 'stage5_followup',
               timestamp: nowIso,
               read: false,
@@ -1927,12 +1927,12 @@ El Equipo de Lidacta`;
 
     const stageNames: Record<number, string> = {
       1: 'Detectar qué sucede',
-      2: 'Analizar perspectivas & Habilidades',
+      2: 'Analizar perspectivas y habilidades',
       3: 'Diseñar alternativas',
       4: 'Practicar antes de actuar',
       5: 'Actuar (Plan de Acción)',
       6: 'Aprender y reflexionar',
-      7: 'Cierre & Retroalimentación',
+      7: 'Cierre y retroalimentación',
     };
 
     const cleanAdminPhone = (adminUser.whatsapp || '+52 55 1234 5678').replace(/[^0-9]/g, '');

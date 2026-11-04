@@ -49,12 +49,12 @@ import { RequestMentorModal } from './RequestMentorModal';
 
 const STAGE_TITLES: Record<StageNumber, string> = {
   1: '1. Detectar qué sucede',
-  2: '2. Analizar perspectivas & Habilidades',
+  2: '2. Analizar perspectivas y habilidades',
   3: '3. Diseñar alternativas',
   4: '4. Practicar antes de actuar',
   5: '5. Actuar (Plan de Acción)',
   6: '6. Aprender y reflexionar',
-  7: '7. Cierre & Retroalimentación',
+  7: '7. Cierre y retroalimentación',
 };
 
 export const STAGE_META: Record<
@@ -64,49 +64,65 @@ export const STAGE_META: Record<
     shortTitle: string;
     subtitle: string;
     objective: string;
+    initialDescription: string;
+    purpose: string;
   }
 > = {
   1: {
     name: 'Etapa 1',
     shortTitle: 'Detectar qué sucede',
-    subtitle: 'Comprender a fondo sin juzgar, validando tu contexto y hechos.',
-    objective: 'Identificar hechos concretos, detonantes y personas involucradas sin juicios previos.',
+    subtitle: 'Comprende mejor la situación que estás enfrentando, sin juicios ni suposiciones.',
+    objective: 'Identificar qué ocurre, qué lo provoca y quiénes están involucrados.',
+    initialDescription: 'Comprende mejor la situación que estás enfrentando, sin juicios ni suposiciones.',
+    purpose: 'Identificar qué ocurre, qué lo provoca y quiénes están involucrados.',
   },
   2: {
     name: 'Etapa 2',
-    shortTitle: 'Analizar perspectivas & Habilidades',
-    subtitle: 'Explorar puntos de vista y descubrir habilidades clave de liderazgo.',
-    objective: 'Explorar la perspectiva de los involucrados y mapear las habilidades indispensables a desplegar.',
+    shortTitle: 'Analizar perspectivas y habilidades',
+    subtitle: 'Explora cómo estás viviendo la situación y qué necesitas poner en juego como líder.',
+    objective: 'Comprender otros puntos de vista e identificar las habilidades que pueden ayudarte a abordar el reto.',
+    initialDescription: 'Explora cómo estás viviendo la situación y qué necesitas poner en juego como líder.',
+    purpose: 'Comprender otros puntos de vista e identificar las habilidades que pueden ayudarte a abordar el reto.',
   },
   3: {
     name: 'Etapa 3',
     shortTitle: 'Diseñar alternativas',
-    subtitle: 'Idear y estructurar caminos viables de solución (tú lideras la salida).',
-    objective: 'Estructurar al menos 2 o 3 alternativas viables; Lidacta acompaña y fortalece.',
+    subtitle: 'Explora distintas formas de abordar la situación y encuentra el camino que mejor se adapte a tu realidad.',
+    objective: 'Construir alternativas viables para que elijas cómo quieres actuar.',
+    initialDescription: 'Explora distintas formas de abordar la situación y encuentra el camino que mejor se adapte a tu realidad.',
+    purpose: 'Construir alternativas viables para que elijas cómo quieres actuar.',
   },
   4: {
     name: 'Etapa 4',
     shortTitle: 'Practicar antes de actuar',
-    subtitle: 'Simulación y roleplay conversacional con voz o texto.',
-    objective: 'Entrenar el diálogo en un entorno seguro antes de la conversación real en el trabajo.',
+    subtitle: 'Prepárate para afrontar la situación practicando una conversación o escenario real.',
+    objective: 'Ensayar cómo actuar en un espacio seguro antes de llevarlo a la práctica.',
+    initialDescription: 'Prepárate para afrontar la situación practicando una conversación o escenario real.',
+    purpose: 'Ensayar cómo actuar en un espacio seguro antes de llevarlo a la práctica.',
   },
   5: {
     name: 'Etapa 5',
     shortTitle: 'Actuar (Plan de Acción)',
-    subtitle: 'Definir compromisos: qué, cuándo, con quién y qué cuidar.',
-    objective: 'Aterrizar la intervención en un plan medible con fecha, hora y recordatorio concreto.',
+    subtitle: 'Convierte lo que has trabajado en una acción concreta que puedas llevar a la práctica.',
+    objective: 'Definir qué harás, cuándo y con quién para avanzar en la situación.',
+    initialDescription: 'Convierte lo que has trabajado en una acción concreta que puedas llevar a la práctica.',
+    purpose: 'Definir qué harás, cuándo y con quién para avanzar en la situación.',
   },
   6: {
     name: 'Etapa 6',
     shortTitle: 'Aprender y reflexionar',
-    subtitle: 'Reflexión indispensable tras la acción para ajustar hábitos.',
-    objective: 'Evaluar qué ocurrió, qué funcionó y consolidar aprendizajes de autonomía directiva.',
+    subtitle: 'Revisa lo que sucedió al poner en práctica tu decisión y descubre qué puedes aprender de la experiencia.',
+    objective: 'Reconocer qué funcionó, qué puedes ajustar y qué te llevas para futuros retos.',
+    initialDescription: 'Revisa lo que sucedió al poner en práctica tu decisión y descubre qué puedes aprender de la experiencia.',
+    purpose: 'Reconocer qué funcionó, qué puedes ajustar y qué te llevas para futuros retos.',
   },
   7: {
     name: 'Etapa 7',
-    shortTitle: 'Cierre & Retroalimentación',
-    subtitle: 'Consolidación de fortalezas y reporte de desarrollo.',
-    objective: 'Obtención del reporte confidencial de retroalimentación de autonomía y cierre del proceso.',
+    shortTitle: 'Cierre y retroalimentación',
+    subtitle: 'Integra tus avances y reconoce las habilidades que has puesto en práctica durante este proceso.',
+    objective: 'Identificar tus aprendizajes, fortalezas y oportunidades para seguir desarrollándote como líder.',
+    initialDescription: 'Integra tus avances y reconoce las habilidades que has puesto en práctica durante este proceso.',
+    purpose: 'Identificar tus aprendizajes, fortalezas y oportunidades para seguir desarrollándote como líder.',
   },
 };
 
@@ -437,25 +453,25 @@ export const LeaderView: React.FC = () => {
 
     switch (st) {
       case 1:
-        return `Hola ${leaderFirstName}. Para comprender a fondo sin juzgar y validar tu contexto: ¿Cuál es el hecho o detonante principal que ocurrió y quiénes están directamente involucrados?`;
+        return `Hola ${leaderFirstName}. Para detectar qué sucede y comprender mejor la situación que estás enfrentando, sin juicios ni suposiciones: ¿Cuál es el hecho o detonante principal que ocurrió y quiénes están directamente involucrados?`;
       case 2:
-        return `En la etapa anterior comprendimos los hechos iniciales sobre "${mentorship.title}". Ahora analicemos perspectivas: ¿Cómo crees que perciben la situación los demás involucrados y qué habilidades de liderazgo necesitas poner en juego para abordarlo?`;
+        return `En la etapa anterior comprendimos los hechos iniciales sobre "${mentorship.title}". En esta Etapa 2 (Analizar perspectivas y habilidades): explora cómo estás viviendo la situación y qué necesitas poner en juego como líder. ¿Cómo crees que perciben la situación los demás involucrados y qué habilidades de liderazgo te ayudarían a abordar el reto?`;
       case 3:
         if (mentorship.id === 'ment_roberto_2' || mentorship.theme?.toLowerCase().includes('delegación')) {
-          return `En la etapa anterior definimos la falta de delegación y el empoderamiento; para avanzar en esta Etapa 3, ¿qué tarea específica te cuesta más trabajo entregar hoy a tu equipo y qué alternativas visualizas?`;
+          return `En la etapa anterior definimos la delegación y el empoderamiento; para avanzar en esta Etapa 3 (Diseñar alternativas) y encontrar el camino que mejor se adapte a tu realidad, ¿qué tarea específica te cuesta más trabajo entregar hoy y qué alternativas viables visualizas para actuar?`;
         }
         if (skillsList) {
-          return `En la etapa anterior definimos la necesidad de trabajar en ${skillsList}; para avanzar en esta Etapa 3 y diseñar alternativas de solución, ¿qué tarea o situación específica te cuesta más trabajo resolver hoy y qué caminos viables visualizas?`;
+          return `En la etapa anterior definimos la necesidad de trabajar en ${skillsList}; para avanzar en esta Etapa 3 (Diseñar alternativas) y encontrar el camino que mejor se adapte a tu realidad, ¿qué alternativas viables construyes para elegir cómo quieres actuar?`;
         }
-        return `En la etapa anterior analizamos las perspectivas y habilidades requeridas; para avanzar en esta Etapa 3 y diseñar alternativas de solución: ¿qué alternativas o caminos viables visualizas tú para resolver esta situación?`;
+        return `En la etapa anterior analizamos las perspectivas y habilidades requeridas; para avanzar en esta Etapa 3 (Diseñar alternativas): explora distintas formas de abordar la situación y encuentra el camino que mejor se adapte a tu realidad. ¿Qué alternativas viables visualizas para actuar?`;
       case 4:
-        return `Tú has diseñado las alternativas clave. Antes de actuar en la vida real, preparemos el terreno en este espacio seguro: ¿Qué diálogo, objeción o postura difícil te gustaría simular o entrenar conmigo?`;
+        return `Tú has diseñado las alternativas clave. En esta Etapa 4 (Practicar antes de actuar): prepárate para afrontar la situación practicando una conversación o escenario real en un espacio seguro antes de llevarlo a la práctica. ¿Qué diálogo, objeción o postura difícil te gustaría ensayar conmigo?`;
       case 5:
-        return `Con las alternativas y la simulación preparadas, aterricemos la intervención en un Plan de Acción concreto: ¿Qué harás exactamente, en qué fecha y hora específica, con quién y qué cuidarás durante ese momento?`;
+        return `Con las alternativas y la preparación listas, entramos a la Etapa 5 (Actuar - Plan de Acción): convierte lo que has trabajado en una acción concreta que puedas llevar a la práctica. ¿Qué harás exactamente, cuándo y con quién para avanzar en la situación?`;
       case 6:
-        return `Tras haber ejecutado tu plan de acción en el trabajo: ¿Qué ocurrió exactamente con tu equipo, qué funcionó, qué no y de qué te das cuenta para tus futuros hábitos de liderazgo?`;
+        return `Tras poner en práctica tu decisión, entramos a la Etapa 6 (Aprender y reflexionar): revisa lo que sucedió al poner en práctica tu decisión y descubre qué puedes aprender de la experiencia. ¿Qué funcionó, qué puedes ajustar y qué te llevas para futuros retos?`;
       case 7:
-        return `Has recorrido el ciclo completo de las 7 etapas con Lidacta. Tu conversación ha sido 100% confidencial. A continuación tienes tu reporte consolidado de retroalimentación de liderazgo y autonomía directiva.`;
+        return `Has completado el ciclo del acompañamiento. En esta Etapa 7 (Cierre y retroalimentación): integra tus avances y reconoce las habilidades que has puesto en práctica. A continuación tienes tu reporte consolidado para seguir desarrollándote como líder.`;
       default:
         return `Apertura de la Etapa ${st}: Comparte tus reflexiones o dudas para avanzar en tu acompañamiento directivo.`;
     }
@@ -1064,13 +1080,13 @@ export const LeaderView: React.FC = () => {
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {[
-                    { num: 1, title: 'Detectar', desc: 'Entender a fondo sin juzgar, validando tu contexto.' },
-                    { num: 2, title: 'Analizar', desc: 'Ver otros ángulos y descubrir habilidades clave.' },
-                    { num: 3, title: 'Alternativas', desc: 'Tú diseñas las salidas; Lidacta fortalece.' },
-                    { num: 4, title: 'Practicar', desc: 'Simulación y roleplay con voz antes de actuar.' },
-                    { num: 5, title: 'Actuar', desc: 'Plan concreto: qué, cuándo, con quién y cómo.' },
-                    { num: 6, title: 'Aprender', desc: 'Reflexionar tras la acción y ajustar hábitos.' },
-                    { num: 7, title: 'Cierre', desc: 'Reporte confidencial de retroalimentación.' },
+                    { num: 1, title: 'Detectar qué sucede', desc: 'Comprende mejor la situación que estás enfrentando, sin juicios ni suposiciones.' },
+                    { num: 2, title: 'Analizar perspectivas y habilidades', desc: 'Explora cómo estás viviendo la situación y qué necesitas poner en juego como líder.' },
+                    { num: 3, title: 'Diseñar alternativas', desc: 'Explora distintas formas de abordar la situación y encuentra el camino que mejor se adapte a tu realidad.' },
+                    { num: 4, title: 'Practicar antes de actuar', desc: 'Prepárate para afrontar la situación practicando una conversación o escenario real.' },
+                    { num: 5, title: 'Actuar (Plan de Acción)', desc: 'Convierte lo que has trabajado en una acción concreta que puedas llevar a la práctica.' },
+                    { num: 6, title: 'Aprender y reflexionar', desc: 'Revisa lo que sucedió al poner en práctica tu decisión y descubre qué puedes aprender de la experiencia.' },
+                    { num: 7, title: 'Cierre y retroalimentación', desc: 'Integra tus avances y reconoce las habilidades que has puesto en práctica durante este proceso.' },
                   ].map((s) => (
                     <div key={s.num} className="p-3.5 bg-white border border-[#493447]/10 rounded-xl space-y-1">
                       <span className="text-[11px] font-bold text-[#BF3A1B]">Etapa {s.num}</span>
@@ -1498,7 +1514,7 @@ export const LeaderView: React.FC = () => {
                                     <Sparkles className="w-4 h-4" />
                                   </div>
                                   <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
-                                    Etapa 4: Practicar antes de actuar (Roleplay opcional)
+                                    Etapa 4: Practicar antes de actuar
                                   </h4>
                                 </div>
                                 <span className="text-[11px] font-semibold text-[#BF3A1B] bg-[#FFD3BF]/40 px-2 py-0.5 rounded w-fit">
@@ -1530,7 +1546,7 @@ export const LeaderView: React.FC = () => {
                                     onClick={() => advanceStage(5)}
                                     className="min-h-[44px] text-xs px-3.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#4A3F55] rounded-xl cursor-pointer flex items-center justify-center font-medium active:scale-98"
                                   >
-                                    ⏭️ Omitir práctica y pasar al Plan de Acción (Etapa 5)
+                                    ⏭️ Omitir práctica y pasar a Actuar (Plan de Acción)
                                   </button>
                                 </div>
                               </div>
@@ -1544,7 +1560,7 @@ export const LeaderView: React.FC = () => {
                                 <div className="flex items-center gap-2">
                                   <Calendar className="w-4 h-4 text-[#BF3A1B] shrink-0" />
                                   <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
-                                    Etapa 5: Plan de Acción Concreto
+                                    Etapa 5: Actuar (Plan de Acción)
                                   </h4>
                                 </div>
                                 {activeMentorship.actionPlan?.isCompleted ? (
@@ -1670,7 +1686,7 @@ export const LeaderView: React.FC = () => {
                                     className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-4 py-2 bg-[#2D1B4E] text-[#F7B538] font-bold text-xs rounded-xl hover:bg-[#493447] transition-colors cursor-pointer shadow-xs active:scale-98"
                                   >
                                     <CheckCircle2 className="w-3.5 h-3.5" />
-                                    <span>Ya ejecuté la acción → Ir a Etapa 6 (Aprender)</span>
+                                    <span>Ya ejecuté la acción → Ir a Etapa 6 (Aprender y reflexionar)</span>
                                   </button>
                                 )}
                               </div>
@@ -1684,7 +1700,7 @@ export const LeaderView: React.FC = () => {
                                 <div className="flex items-center gap-2">
                                   <BookOpen className="w-4 h-4 text-[#BF3A1B] shrink-0" />
                                   <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
-                                    Etapa 6: Aprender - Ajustar (Reflexión indispensable)
+                                    Etapa 6: Aprender y reflexionar
                                   </h4>
                                 </div>
                                 {hasSavedLearnings && (
@@ -1792,7 +1808,7 @@ export const LeaderView: React.FC = () => {
                                     onClick={() => advanceStage(7)}
                                     className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 bg-[#2D1B4E] text-[#F7B538] font-bold text-xs rounded-xl hover:bg-[#201338] transition-colors cursor-pointer shadow-xs active:scale-98 flex items-center justify-center gap-2"
                                   >
-                                    <span>Concluir e ir a Cierre (Etapa 7)</span>
+                                    <span>Concluir e ir a Cierre y retroalimentación (Etapa 7)</span>
                                     <ArrowRight className="w-3.5 h-3.5" />
                                   </button>
                                 )}

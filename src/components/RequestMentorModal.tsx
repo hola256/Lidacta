@@ -397,7 +397,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                     <span className="break-words whitespace-normal">Solicitante: {currentUser.name}</span>
                   </div>
                   <span className="text-[10px] sm:text-[11px] text-[#BF3A1B] bg-[#FFD3BF]/60 px-2 py-0.5 rounded-full font-bold self-start sm:self-auto shrink-0">
-                    {currentStageMeta?.name || `Etapa ${currentStageNum}`}
+                    {currentStageMeta ? `${currentStageMeta.name}: ${currentStageMeta.shortTitle}` : `Etapa ${currentStageNum}`}
                   </span>
                 </div>
                 <div className="text-xs text-[#4A3F55] leading-snug break-words whitespace-normal">
