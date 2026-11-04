@@ -1256,7 +1256,7 @@ export const LeaderView: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => toggleStage(st)}
-                        className={`w-full text-left p-3.5 sm:p-4.5 flex items-center justify-between gap-3 cursor-pointer transition-colors ${
+                        className={`w-full text-left p-3 sm:p-4.5 flex items-start sm:items-center justify-between gap-2.5 sm:gap-3 cursor-pointer transition-colors ${
                           isCurrent
                             ? 'bg-[#FFF7EF]/90 hover:bg-[#FFF7EF]'
                             : isPassed
@@ -1266,9 +1266,9 @@ export const LeaderView: React.FC = () => {
                         aria-expanded={isOpen}
                       >
                         {/* Left: Stage number badge & titles */}
-                        <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
+                        <div className="flex items-start sm:items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
                           <div
-                            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-heading font-extrabold text-sm sm:text-base shrink-0 transition-transform ${
+                            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-heading font-extrabold text-sm sm:text-base shrink-0 mt-0.5 sm:mt-0 transition-transform ${
                               isCurrent
                                 ? 'bg-[#F7B538] text-[#2D1B4E] shadow-xs'
                                 : isPassed
@@ -1279,43 +1279,43 @@ export const LeaderView: React.FC = () => {
                             {isPassed ? <CheckCircle2 className="w-5 h-5 text-[#246B2A]" /> : st}
                           </div>
 
-                          <div className="min-w-0 space-y-0.5">
+                          <div className="min-w-0 flex-1 space-y-0.5">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-heading font-extrabold text-xs sm:text-sm text-[#2D1B4E]">
+                              <span className="font-heading font-extrabold text-xs sm:text-sm text-[#2D1B4E] leading-snug">
                                 {meta.name}: {meta.shortTitle}
                               </span>
                             </div>
-                            <p className="text-[11px] sm:text-xs text-[#4A3F55]/80 line-clamp-1">
+                            <p className="text-[11px] sm:text-xs text-[#4A3F55]/85 line-clamp-2 leading-relaxed">
                               {meta.subtitle}
                             </p>
                           </div>
                         </div>
 
                         {/* Right: Status badge & Chevron */}
-                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 self-center">
                           {isPassed && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-bold bg-[#E2F7E1] text-[#246B2A] border border-[#246B2A]/20">
+                            <span className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg text-[10px] sm:text-xs font-bold bg-[#E2F7E1] text-[#246B2A] border border-[#246B2A]/20">
                               <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                               <span>Completada</span>
                             </span>
                           )}
                           {isCurrent && (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-extrabold bg-[#F7B538] text-[#2D1B4E] shadow-xs">
+                            <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg text-[10px] sm:text-xs font-extrabold bg-[#F7B538] text-[#2D1B4E] shadow-xs">
                               <span className="w-2 h-2 rounded-full bg-[#2D1B4E] animate-ping shrink-0" />
                               <span>En curso</span>
                             </span>
                           )}
                           {isPending && (
-                            <span className="inline-flex items-center px-2 py-1 rounded-lg text-[10px] sm:text-xs font-medium bg-neutral-100 text-[#4A3F55]/60 border border-neutral-200">
+                            <span className="inline-flex items-center px-2 py-0.5 sm:py-1 rounded-lg text-[10px] sm:text-xs font-medium bg-neutral-100 text-[#4A3F55]/60 border border-neutral-200">
                               Pendiente
                             </span>
                           )}
 
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[#4A3F55] hover:text-[#2D1B4E] transition-colors">
+                          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-[#4A3F55] hover:text-[#2D1B4E] transition-colors shrink-0">
                             {isOpen ? (
-                              <ChevronUp className="w-5 h-5 text-[#BF3A1B]" />
+                              <ChevronUp className="w-4 h-4 sm:w-5 sm:h-5 text-[#BF3A1B]" />
                             ) : (
-                              <ChevronDown className="w-5 h-5 text-[#4A3F55]" />
+                              <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5 text-[#4A3F55]" />
                             )}
                           </div>
                         </div>
