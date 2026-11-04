@@ -195,7 +195,10 @@ const LidactaContext = createContext<LidactaContextType | undefined>(undefined);
 
 const STORAGE_KEY_PREFIX = 'lidacta_v2_';
 
-export const ADMIN_OFFICIAL_PASSWORD = 'LidactaAdmin2026!';
+export const ADMIN_OFFICIAL_PASSWORD =
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_ADMIN_PASSWORD) ||
+  (typeof process !== 'undefined' && process.env?.ADMIN_PASSWORD) ||
+  'Admin_Auth_Secured_2026';
 
 export const isTherapeuticText = (text: string): boolean => {
   if (!text || typeof text !== 'string') return false;
@@ -1151,6 +1154,7 @@ El Equipo de Lidacta`;
       id: alertId,
       timestamp: nowIso,
       leaderName: params.leaderName,
+      companyId: currentUser?.companyId || 'comp_general',
       companyName: compName,
       type: 'therapeutic_limit',
       typeName: 'Límite Terapéutico',
@@ -1188,6 +1192,7 @@ El Equipo de Lidacta`;
     const adminNotif: NotificationItem = {
       id: `notif_${nowMs}_therap`,
       recipientRole: 'admin',
+      companyId: currentUser?.companyId || 'comp_general',
       title: `🚨 Alerta: Límite Terapéutico detectado (${params.leaderName})`,
       message: `Lidacta detectó una consulta con naturaleza clínica/terapéutica en la Etapa ${stageNum} de ${params.leaderName} (${compName}). Se notificó a hola@taniapadierna.com.`,
       type: 'therapeutic_alert',
@@ -1764,6 +1769,7 @@ El Equipo de Lidacta`;
               id: `alert_inact_${session.id}_${Date.now()}`,
               timestamp: nowIso,
               leaderName: session.leaderName,
+              companyId: session.companyId,
               companyName: session.companyName,
               type: 'inactivity_day8',
               typeName: 'Inactividad Día 8',

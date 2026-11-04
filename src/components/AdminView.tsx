@@ -3252,6 +3252,7 @@ export const AdminView: React.FC = () => {
                             openEmailDrawer({
                               id: `notif_email_${alert.id}`,
                               recipientRole: 'admin',
+                              companyId: alert.companyId || 'comp_admin',
                               title: isTherap
                                 ? `[ALERTA LIDACTA] Detección de Caso con Naturaleza Terapéutica`
                                 : `🚨 Alerta de Inactividad (Día 8): ${alert.leaderName} (${alert.companyName})`,
@@ -3397,6 +3398,7 @@ export const AdminView: React.FC = () => {
                                   openEmailDrawer({
                                     id: `notif_email_${alert.id}`,
                                     recipientRole: 'admin',
+                                    companyId: alert.companyId || 'comp_admin',
                                     title: isTherap
                                       ? `[ALERTA LIDACTA] Detección de Caso con Naturaleza Terapéutica`
                                       : `🚨 Alerta de Inactividad (Día 8): ${alert.leaderName} (${alert.companyName})`,

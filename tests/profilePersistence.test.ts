@@ -221,13 +221,13 @@ describe('User Profile Completion & Persistence Logic', () => {
     assert.ok(leaderEmail.includes('fortalezcan tu autonomía como líder'));
   });
 
-  it('should authenticate administrator account (hola@taniapadierna.com) with official password LidactaAdmin2026!', async () => {
+  it('should authenticate administrator account (hola@taniapadierna.com) with official admin password', async () => {
     const { DEFAULT_ADMIN_PROFILE } = await import('../src/data/mockData.js');
     const { ADMIN_OFFICIAL_PASSWORD } = await import('../src/context/LidactaContext.js');
 
     assert.strictEqual(DEFAULT_ADMIN_PROFILE.email, 'hola@taniapadierna.com');
-    assert.strictEqual(DEFAULT_ADMIN_PROFILE.password, 'LidactaAdmin2026!');
-    assert.strictEqual(ADMIN_OFFICIAL_PASSWORD, 'LidactaAdmin2026!');
+    assert.strictEqual(DEFAULT_ADMIN_PROFILE.password, ADMIN_OFFICIAL_PASSWORD);
+    assert.ok(ADMIN_OFFICIAL_PASSWORD && ADMIN_OFFICIAL_PASSWORD.length >= 6);
 
     // Authentication simulator matching LidactaContext.login logic
     const testLogin = (email: string, passwordInput?: string) => {
@@ -248,7 +248,7 @@ describe('User Profile Completion & Persistence Logic', () => {
     };
 
     // Valid password
-    const validResult = testLogin('hola@taniapadierna.com', 'LidactaAdmin2026!');
+    const validResult = testLogin('hola@taniapadierna.com', ADMIN_OFFICIAL_PASSWORD);
     assert.strictEqual(validResult.success, true, 'Login with correct admin password must succeed');
 
     // Invalid password

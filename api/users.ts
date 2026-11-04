@@ -32,7 +32,7 @@ const DEFAULT_USERS: UserProfile[] = [
     id: 'user_admin_tania',
     name: 'Tania Padierna',
     email: 'hola@taniapadierna.com',
-    password: 'LidactaAdmin2026!',
+    password: process.env.ADMIN_PASSWORD || 'Admin_Auth_Secured_2026',
     role: 'admin',
     companyId: 'comp_nexus',
     companyName: 'Lidacta Platform',
@@ -294,12 +294,13 @@ async function loadUsers(): Promise<{ users: UserProfile[]; source: string }> {
 
   // Ensure administrator account (hola@taniapadierna.com) always has valid official password
   let hasAdmin = false;
+  const adminPassword = process.env.ADMIN_PASSWORD || 'Admin_Auth_Secured_2026';
   loadedUsers = loadedUsers.map((u) => {
     if (u.email.toLowerCase() === 'hola@taniapadierna.com' || u.id === 'user_admin_tania') {
       hasAdmin = true;
       return {
         ...u,
-        password: u.password || 'LidactaAdmin2026!',
+        password: u.password || adminPassword,
       };
     }
     return u;
@@ -308,7 +309,7 @@ async function loadUsers(): Promise<{ users: UserProfile[]; source: string }> {
   if (!hasAdmin) {
     loadedUsers.unshift({
       ...DEFAULT_USERS[0],
-      password: 'LidactaAdmin2026!',
+      password: adminPassword,
     });
   }
 

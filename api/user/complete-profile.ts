@@ -88,7 +88,7 @@ const DEFAULT_USERS: UserProfile[] = [
     id: 'user_admin_tania',
     name: 'Tania Padierna',
     email: 'hola@taniapadierna.com',
-    password: 'LidactaAdmin2026!',
+    password: process.env.ADMIN_PASSWORD || 'Admin_Auth_Secured_2026',
     role: 'admin',
     companyId: 'comp_nexus',
     companyName: 'Lidacta Platform',

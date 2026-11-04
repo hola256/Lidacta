@@ -153,20 +153,24 @@ export type SystemAlertType = 'therapeutic_limit' | 'inactivity_day8';
 export interface SystemAlertItem {
   id: string;
   type: SystemAlertType;
-  typeName: 'Límite Terapéutico' | 'Inactividad Día 8';
+  typeName: string;
   leaderId?: string;
   leaderName: string;
   leaderEmail?: string;
   leaderPosition?: string;
   leaderArea?: string;
-  companyId: string;
+  companyId?: string;
   companyName: string;
   stage?: StageNumber;
+  currentStage?: number;
   stageName?: string;
+  mentorshipId?: string;
   timestamp: string;
-  status: 'Correo Enviado';
+  status: 'Correo Enviado' | 'Pendiente' | 'Revisado';
   caseSummary: string;
   emailRecipient: string;
+  userMessageSnippet?: string;
+  details?: Record<string, any>;
   realEmailSent?: boolean;
   realEmailId?: string;
 }
@@ -175,7 +179,7 @@ export interface NotificationItem {
   id: string;
   recipientRole: UserRole;
   recipientUserId?: string;
-  companyId: string;
+  companyId?: string;
   title: string;
   message: string;
   type: 'registration' | 'case_started' | 'action_reminder' | 'case_completed' | 'system' | 'mentor_request' | 'stage5_followup' | 'inactivity_alert' | 'therapeutic_alert';
@@ -223,24 +227,4 @@ export interface RecommendedResourceItem {
   // Context-estimated Difficulty & Resistance
   estimatedDifficulty?: ResourceDifficultyLevel;
   resistanceOrDoubtNotes?: string;
-}
-
-export type SystemAlertType = 'therapeutic_limit' | 'inactivity_day8';
-
-export interface SystemAlertItem {
-  id: string;
-  timestamp: string;
-  leaderName: string;
-  companyName: string;
-  type: SystemAlertType;
-  typeName: string; // 'Límite Terapéutico' | 'Inactividad Día 8'
-  status: 'Correo Enviado' | 'Pendiente' | 'Revisado';
-  caseSummary: string;
-  emailRecipient: string; // 'hola@taniapadierna.com'
-  currentStage?: number;
-  mentorshipId?: string;
-  leaderEmail?: string;
-  leaderPosition?: string;
-  userMessageSnippet?: string;
-  details?: Record<string, any>;
 }
