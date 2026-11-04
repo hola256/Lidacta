@@ -483,19 +483,23 @@ export const LeaderView: React.FC = () => {
     }
   };
 
-  const handleSaveActionPlan = () => {
-    if (!actionWhat) return;
+  const handleSaveActionPlan = (silent: boolean = false) => {
+    if (!activeMentorship) return;
     const plan: MentorshipActionPlan = {
-      what: actionWhat,
-      when: actionWhen || 'Próxima jornada laboral',
-      withWhom: actionWithWhom || 'Equipo directo',
-      how: actionHow || 'Diálogo directo y constructivo',
-      careReminders: actionCare || 'Mantener serenidad y acuerdos claros',
+      what: actionWhat.trim() || activeMentorship.actionPlan?.what || 'Conversación de alineación 1 a 1',
+      when: actionWhen.trim() || activeMentorship.actionPlan?.when || 'Próxima jornada laboral',
+      withWhom: actionWithWhom.trim() || activeMentorship.actionPlan?.withWhom || 'Equipo directo',
+      how: actionHow.trim() || activeMentorship.actionPlan?.how || 'Diálogo directo y constructivo',
+      careReminders: actionCare.trim() || activeMentorship.actionPlan?.careReminders || 'Mantener serenidad y acuerdos claros',
       shareWithHR: actionShareWithHR,
-      isCompleted: false,
+      shareActionPlanWithHR: actionShareWithHR,
+      actionPlanShared: actionShareWithHR,
+      isCompleted: activeMentorship.actionPlan?.isCompleted || false,
     };
     updateActionPlan(plan);
-    showToast('Plan de acción guardado exitosamente.', 'success');
+    if (!silent) {
+      showToast('Plan de acción guardado exitosamente.', 'success');
+    }
   };
 
   const handleSaveLearnings = () => {
@@ -1649,6 +1653,7 @@ export const LeaderView: React.FC = () => {
                                     type="text"
                                     value={actionWhat}
                                     onChange={(e) => setActionWhat(e.target.value)}
+                                    onBlur={() => handleSaveActionPlan(true)}
                                     placeholder="Ej. Conversación 1 a 1 de alineación"
                                     className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
                                   />
@@ -1659,6 +1664,7 @@ export const LeaderView: React.FC = () => {
                                     type="text"
                                     value={actionWhen}
                                     onChange={(e) => setActionWhen(e.target.value)}
+                                    onBlur={() => handleSaveActionPlan(true)}
                                     placeholder="Ej. Jueves 17 a las 15:30 hrs"
                                     className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
                                   />
@@ -1669,6 +1675,7 @@ export const LeaderView: React.FC = () => {
                                     type="text"
                                     value={actionWithWhom}
                                     onChange={(e) => setActionWithWhom(e.target.value)}
+                                    onBlur={() => handleSaveActionPlan(true)}
                                     placeholder="Ej. Supervisor de turno"
                                     className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
                                   />
@@ -1679,6 +1686,7 @@ export const LeaderView: React.FC = () => {
                                     type="text"
                                     value={actionCare}
                                     onChange={(e) => setActionCare(e.target.value)}
+                                    onBlur={() => handleSaveActionPlan(true)}
                                     placeholder="Ej. Mantener serenidad y escuchar con empatía"
                                     className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
                                   />
@@ -1691,7 +1699,23 @@ export const LeaderView: React.FC = () => {
                                   <input
                                     type="checkbox"
                                     checked={actionShareWithHR}
-                                    onChange={(e) => setActionShareWithHR(e.target.checked)}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setActionShareWithHR(checked);
+                                      if (activeMentorship) {
+                                        updateActionPlan({
+                                          what: actionWhat.trim() || activeMentorship.actionPlan?.what || 'Conversación de alineación 1 a 1',
+                                          when: actionWhen.trim() || activeMentorship.actionPlan?.when || 'Próxima jornada laboral',
+                                          withWhom: actionWithWhom.trim() || activeMentorship.actionPlan?.withWhom || 'Equipo directo',
+                                          how: actionHow.trim() || activeMentorship.actionPlan?.how || 'Diálogo directo y constructivo',
+                                          careReminders: actionCare.trim() || activeMentorship.actionPlan?.careReminders || 'Mantener serenidad y acuerdos claros',
+                                          shareWithHR: checked,
+                                          shareActionPlanWithHR: checked,
+                                          actionPlanShared: checked,
+                                          isCompleted: activeMentorship.actionPlan?.isCompleted || false,
+                                        });
+                                      }
+                                    }}
                                     className="mt-0.5 w-4 h-4 rounded text-[#BF3A1B] border-[#493447]/30 focus:ring-[#BF3A1B] cursor-pointer shrink-0 accent-[#BF3A1B]"
                                   />
                                   <div className="space-y-0.5">
@@ -1717,7 +1741,7 @@ export const LeaderView: React.FC = () => {
                                   </span>
                                 </div>
                                 <p className="text-[#4A3F55] leading-relaxed">
-                                  Lidacta te acompaña en tu proceso enviándote 2 correos clave para que no te sientas solo/a al ejecutar tu compromiso:
+                                  Lidacta te acompaña en tu proceso enviándote 2 correos clave para que no te sientas solo/a al ejecutar tu compromiso, mantente pendiente de tu email.
                                 </p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                                   <div className={`p-2.5 rounded-lg border text-[11px] flex items-center justify-between ${
@@ -1755,27 +1779,19 @@ export const LeaderView: React.FC = () => {
                                 </div>
                               </div>
 
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-[#493447]/10">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2.5 pt-3 border-t border-[#493447]/10">
                                 <button
                                   type="button"
-                                  onClick={handleSaveActionPlan}
-                                  className="w-full sm:w-auto min-h-[44px] px-4 py-2 bg-[#BF3A1B] text-white font-bold text-xs rounded-xl hover:bg-[#a63014] transition-colors cursor-pointer shadow-xs active:scale-98 flex items-center justify-center"
+                                  onClick={() => {
+                                    handleSaveActionPlan(true);
+                                    markActionCompleted();
+                                    advanceStage(6);
+                                  }}
+                                  className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2568] text-[#F7B538] font-bold text-xs rounded-xl transition-all cursor-pointer shadow-xs active:scale-98"
                                 >
-                                  Guardar y Activar Recordatorio
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Ya ejecuté la acción → Ir a Etapa 6 (Aprender y reflexionar)</span>
                                 </button>
-                                {!activeMentorship.actionPlan?.isCompleted && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      markActionCompleted();
-                                      advanceStage(6);
-                                    }}
-                                    className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-4 py-2 bg-[#2D1B4E] text-[#F7B538] font-bold text-xs rounded-xl hover:bg-[#493447] transition-colors cursor-pointer shadow-xs active:scale-98"
-                                  >
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                    <span>Ya ejecuté la acción → Ir a Etapa 6 (Aprender y reflexionar)</span>
-                                  </button>
-                                )}
                               </div>
                             </div>
                           )}
