@@ -168,6 +168,7 @@ export const LeaderView: React.FC = () => {
   const [actionWithWhom, setActionWithWhom] = useState('');
   const [actionHow, setActionHow] = useState('');
   const [actionCare, setActionCare] = useState('');
+  const [actionShareWithHR, setActionShareWithHR] = useState(false);
 
   // Stage 6 learnings state form
   const [learningWhatHappened, setLearningWhatHappened] = useState('');
@@ -175,6 +176,7 @@ export const LeaderView: React.FC = () => {
   const [learningWhatDidnt, setLearningWhatDidnt] = useState('');
   const [learningInsights, setLearningInsights] = useState('');
   const [learningFuture, setLearningFuture] = useState('');
+  const [learningShareWithHR, setLearningShareWithHR] = useState('');
   const [justSavedLearnings, setJustSavedLearnings] = useState(false);
   const [isSavingLearnings, setIsSavingLearnings] = useState(false);
 
@@ -300,12 +302,14 @@ export const LeaderView: React.FC = () => {
         setActionWithWhom(activeMentorship.actionPlan.withWhom || '');
         setActionHow(activeMentorship.actionPlan.how || '');
         setActionCare(activeMentorship.actionPlan.careReminders || '');
+        setActionShareWithHR(Boolean(activeMentorship.actionPlan.shareWithHR));
       } else {
         setActionWhat('');
         setActionWhen('');
         setActionWithWhom('');
         setActionHow('');
         setActionCare('');
+        setActionShareWithHR(false);
       }
 
       if (activeMentorship.learnings) {
@@ -314,12 +318,14 @@ export const LeaderView: React.FC = () => {
         setLearningWhatDidnt(activeMentorship.learnings.whatDidnt || '');
         setLearningInsights(activeMentorship.learnings.insights || '');
         setLearningFuture(activeMentorship.learnings.futureAdjustments || '');
+        setLearningShareWithHR(activeMentorship.learnings.sharedLearningWithHR || '');
       } else {
         setLearningWhatHappened('');
         setLearningWhatWorked('');
         setLearningWhatDidnt('');
         setLearningInsights('');
         setLearningFuture('');
+        setLearningShareWithHR('');
       }
     }
   }, [activeMentorship]);
@@ -485,9 +491,11 @@ export const LeaderView: React.FC = () => {
       withWhom: actionWithWhom || 'Equipo directo',
       how: actionHow || 'Diálogo directo y constructivo',
       careReminders: actionCare || 'Mantener serenidad y acuerdos claros',
+      shareWithHR: actionShareWithHR,
       isCompleted: false,
     };
     updateActionPlan(plan);
+    showToast('Plan de acción guardado exitosamente.', 'success');
   };
 
   const handleSaveLearnings = () => {
@@ -501,6 +509,7 @@ export const LeaderView: React.FC = () => {
         whatDidnt: learningWhatDidnt.trim() || '',
         insights: learningInsights.trim(),
         futureAdjustments: learningFuture.trim() || '',
+        sharedLearningWithHR: learningShareWithHR.trim(),
       });
 
       setJustSavedLearnings(true);
@@ -1118,7 +1127,7 @@ export const LeaderView: React.FC = () => {
                   <div className="flex-1 min-w-0 flex items-center gap-2 px-3.5 py-2.5 bg-[#FFF7EF] border border-[#FFD3BF] rounded-xl text-xs sm:text-sm text-[#2D1B4E] font-medium leading-snug shadow-2xs">
                     <ShieldCheck className="w-4 h-4 text-[#BF3A1B] shrink-0" />
                     <span className="line-clamp-2 sm:line-clamp-none">
-                      Conversación 100% confidencial con tu mentor Lidacta. Recursos Humanos solo ve indicadores de desarrollo
+                      Conversaciones privadas y confidenciales. Recursos Humanos no tiene acceso a tus conversaciones con Lidacta. Tú decides qué acciones y aprendizajes deseas compartir con tu organización.
                     </span>
                   </div>
                 </div>
@@ -1676,6 +1685,26 @@ export const LeaderView: React.FC = () => {
                                 </div>
                               </div>
 
+                              {/* Casilla de Autorización de Compartición con RH (Opt-in) */}
+                              <div className="p-3.5 bg-neutral-50 border border-[#493447]/15 rounded-xl space-y-1">
+                                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={actionShareWithHR}
+                                    onChange={(e) => setActionShareWithHR(e.target.checked)}
+                                    className="mt-0.5 w-4 h-4 rounded text-[#BF3A1B] border-[#493447]/30 focus:ring-[#BF3A1B] cursor-pointer shrink-0 accent-[#BF3A1B]"
+                                  />
+                                  <div className="space-y-0.5">
+                                    <span className="font-bold text-xs text-[#2D1B4E]">
+                                      Autorizo compartir este Plan de Acción con el equipo de Recursos Humanos.
+                                    </span>
+                                    <p className="text-[11px] text-[#4A3F55]/70 leading-normal">
+                                      Por defecto tu plan es 100% privado y confidencial. Si no marcas esta casilla, Recursos Humanos solo verá la etapa completada como indicador de avance, sin acceder al contenido redactado.
+                                    </p>
+                                  </div>
+                                </label>
+                              </div>
+
                               {/* Tarjeta de Acompañamiento Automatizado Lidacta (48h y 5 días) */}
                               <div className="p-3.5 bg-[#FFF7EF] border border-[#EADBCE] rounded-xl space-y-2 text-xs">
                                 <div className="flex items-center justify-between">
@@ -1810,6 +1839,28 @@ export const LeaderView: React.FC = () => {
                                       className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
                                     />
                                   </div>
+                                </div>
+
+                                {/* Campo Opcional para Compartir Aprendizajes con Recursos Humanos */}
+                                <div className="mt-3 p-3.5 bg-[#FFF7EF]/80 border border-[#FFD3BF] rounded-xl space-y-1.5">
+                                  <div className="flex items-center justify-between">
+                                    <label className="font-bold text-[#2D1B4E] text-xs">
+                                      ¿Te gustaría compartir con Recursos Humanos algún aprendizaje de este proceso? Puedes escribirlo con tus propias palabras.
+                                    </label>
+                                    <span className="text-[10px] text-[#BF3A1B] font-semibold bg-[#FFD3BF]/60 px-2 py-0.5 rounded-full shrink-0 ml-2">
+                                      Opcional
+                                    </span>
+                                  </div>
+                                  <textarea
+                                    value={learningShareWithHR}
+                                    onChange={(e) => setLearningShareWithHR(e.target.value)}
+                                    placeholder="Escribe aquí voluntariamente el aprendizaje que deseas que el equipo de Recursos Humanos conozca..."
+                                    rows={2}
+                                    className="w-full p-2.5 bg-white border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
+                                  />
+                                  <p className="text-[11px] text-[#4A3F55]/70 leading-normal">
+                                    Este campo es 100% opcional. Si lo dejas vacío, tus reflexiones se mantendrán estrictamente privadas y no se comparte nada con la organización.
+                                  </p>
                                 </div>
                               </div>
 

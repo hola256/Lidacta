@@ -60,6 +60,7 @@ export interface MentorshipActionPlan {
   withWhom: string;
   how: string;
   careReminders: string;
+  shareWithHR?: boolean;
   isCompleted?: boolean;
   completedAt?: string;
   stage5EnteredAt?: string;
@@ -77,6 +78,7 @@ export interface MentorshipLearnings {
   whatDidnt: string;
   insights: string;
   futureAdjustments: string;
+  sharedLearningWithHR?: string;
 }
 
 export interface FinalFeedbackReport {

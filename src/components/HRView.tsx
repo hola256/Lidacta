@@ -296,32 +296,76 @@ export const HRView: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* V. Acción realizada (sin nombres de terceros) */}
-                  <div className="p-3 bg-white rounded-lg border border-[#493447]/10 text-xs space-y-1">
-                    <span className="font-bold text-[#2D1B4E] uppercase text-[10px] tracking-wider block">
-                      V. Acción realizada por el líder:
-                    </span>
-                    <p className="text-[#4A3F55] leading-relaxed">
-                      {m.actionPlan?.what || 'Plan de alineación en proceso de diseño.'}
-                    </p>
-                    {m.actionPlan?.careReminders && (
-                      <p className="text-[11px] text-[#BF3A1B] italic">
-                        Cuidado clave: {m.actionPlan.careReminders}
-                      </p>
+                  {/* V. Plan de Acción (Etapa 5) - Consentimiento Opt-in */}
+                  <div className="p-3 bg-white rounded-lg border border-[#493447]/10 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-[#2D1B4E] uppercase text-[10px] tracking-wider block">
+                        V. Plan de Acción (Etapa 5):
+                      </span>
+                      {m.actionPlan?.shareWithHR ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#246B2A] bg-[#E2F7E1] px-2 py-0.5 rounded-full shrink-0">
+                          <CheckCircle2 className="w-3 h-3 text-[#246B2A]" /> Compartido voluntariamente
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#4A3F55]/70 bg-[#493447]/5 px-2 py-0.5 rounded-full shrink-0">
+                          <Lock className="w-3 h-3 text-[#BF3A1B]" /> Privado y confidencial
+                        </span>
+                      )}
+                    </div>
+
+                    {m.actionPlan?.shareWithHR ? (
+                      <div className="space-y-1">
+                        <p className="text-[#4A3F55] leading-relaxed">
+                          {m.actionPlan.what || 'Plan de alineación registrado.'}
+                        </p>
+                        {m.actionPlan.careReminders && (
+                          <p className="text-[11px] text-[#BF3A1B] italic">
+                            Cuidado clave: {m.actionPlan.careReminders}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-2 bg-[#FFF7EF]/60 rounded-md border border-[#493447]/5">
+                        <p className="text-[#4A3F55]/70 text-[11px] italic">
+                          {m.actionPlan?.isCompleted || m.currentStage >= 5
+                            ? 'Etapa 5 completada · El contenido específico del compromiso se mantiene privado por decisión del líder.'
+                            : 'Sesión activa · Compromiso en desarrollo.'}
+                        </p>
+                      </div>
                     )}
                   </div>
 
-                  {/* VI. Aprendizajes y reflexiones */}
-                  {m.learnings && (
-                    <div className="p-3 bg-white rounded-lg border border-[#493447]/10 text-xs space-y-1">
+                  {/* VI. Aprendizajes y reflexiones (Etapa 6) - Consentimiento Voluntario */}
+                  <div className="p-3 bg-white rounded-lg border border-[#493447]/10 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="font-bold text-[#246B2A] uppercase text-[10px] tracking-wider block">
-                        VI. Aprendizaje y reflexión del líder:
+                        VI. Aprendizaje para la Organización (Etapa 6):
                       </span>
-                      <p className="text-[#4A3F55] leading-relaxed font-leader italic">
-                        "{m.learnings.insights || m.learnings.whatHappened}"
-                      </p>
+                      {m.learnings?.sharedLearningWithHR?.trim() ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#246B2A] bg-[#E2F7E1] px-2 py-0.5 rounded-full shrink-0">
+                          <CheckCircle2 className="w-3 h-3 text-[#246B2A]" /> Compartido por el líder
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#4A3F55]/70 bg-[#493447]/5 px-2 py-0.5 rounded-full shrink-0">
+                          <Lock className="w-3 h-3 text-[#BF3A1B]" /> Privado y confidencial
+                        </span>
+                      )}
                     </div>
-                  )}
+
+                    {m.learnings?.sharedLearningWithHR?.trim() ? (
+                      <p className="text-[#4A3F55] leading-relaxed font-leader italic">
+                        "{m.learnings.sharedLearningWithHR.trim()}"
+                      </p>
+                    ) : (
+                      <div className="p-2 bg-[#FFF7EF]/60 rounded-md border border-[#493447]/5">
+                        <p className="text-[#4A3F55]/70 text-[11px] italic">
+                          {m.learnings || m.currentStage >= 6
+                            ? 'Etapa 6 completada · Las reflexiones personales se mantienen privadas por confidencialidad del proceso.'
+                            : 'Etapa 6 pendiente de reflexión.'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Skills badges */}
                   <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[11px]">
