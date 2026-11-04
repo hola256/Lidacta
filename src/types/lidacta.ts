@@ -61,6 +61,8 @@ export interface MentorshipActionPlan {
   how: string;
   careReminders: string;
   shareWithHR?: boolean;
+  shareActionPlanWithHR?: boolean;
+  actionPlanShared?: boolean;
   isCompleted?: boolean;
   completedAt?: string;
   stage5EnteredAt?: string;
@@ -79,6 +81,7 @@ export interface MentorshipLearnings {
   insights: string;
   futureAdjustments: string;
   sharedLearningWithHR?: string;
+  sharedReflectionToHR?: string;
 }
 
 export interface FinalFeedbackReport {
@@ -116,6 +119,11 @@ export interface MentorshipSession {
   email5dSentAt?: string;
   adminInactivityAlertSent?: boolean;
   adminInactivityAlertSentAt?: string;
+  // Consent flags for sharing with HR
+  shareActionPlanWithHR?: boolean;
+  actionPlanShared?: boolean;
+  sharedReflectionToHR?: string;
+  sharedLearningWithHR?: string;
   // Extracted and managed stage data
   clarificationAnswers?: string[];
   identifiedSkills: string[];

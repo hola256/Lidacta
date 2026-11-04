@@ -304,6 +304,10 @@ export const INITIAL_MENTORSHIPS: MentorshipSession[] = [
     chosenAlternative: 'Conversación 1 a 1 reconociendo su experiencia e integrándolo como modelador de calidad',
     wantsPractice: true,
     practiceFeedback: 'Se practicó roleplay con éxito cuidando no usar frases absolutistas y manteniendo el reconocimiento inicial.',
+    shareActionPlanWithHR: true,
+    actionPlanShared: true,
+    sharedReflectionToHR: 'Cuando reconocemos la experiencia técnica de los colaboradores de mayor antigüedad, los acuerdos operativos se asumen por orgullo profesional y no por imposición.',
+    sharedLearningWithHR: 'Cuando reconocemos la experiencia técnica de los colaboradores de mayor antigüedad, los acuerdos operativos se asumen por orgullo profesional y no por imposición.',
     actionPlan: {
       what: 'Conversación privada de 20 min en sala de juntas antes del relevo de turno.',
       when: 'Jueves 3 de octubre, 15:30 hrs.',
@@ -313,6 +317,8 @@ export const INITIAL_MENTORSHIPS: MentorshipSession[] = [
       isCompleted: true,
       completedAt: '2026-10-06T16:00:00Z',
       shareWithHR: true,
+      shareActionPlanWithHR: true,
+      actionPlanShared: true,
     },
     learnings: {
       whatHappened: 'Ernesto aceptó el compromiso con gusto al sentirse consultado y valorado.',
@@ -321,6 +327,7 @@ export const INITIAL_MENTORSHIPS: MentorshipSession[] = [
       insights: 'La resistencia al cambio casi siempre es miedo a perder estatus o relevancia.',
       futureAdjustments: 'Abordar las anomalías en el día 1 en lugar de acumular semanas de inconformidad.',
       sharedLearningWithHR: 'Cuando reconocemos la experiencia técnica de los colaboradores de mayor antigüedad, los acuerdos operativos se asumen por orgullo profesional y no por imposición.',
+      sharedReflectionToHR: 'Cuando reconocemos la experiencia técnica de los colaboradores de mayor antigüedad, los acuerdos operativos se asumen por orgullo profesional y no por imposición.',
     },
     finalFeedbackReport: {
       detectedStrengths: [

@@ -499,8 +499,92 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   });
 
   const [mentorships, setMentorships] = useState<MentorshipSession[]>(() => {
-    const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}mentorships`);
-    return saved ? JSON.parse(saved) : INITIAL_MENTORSHIPS;
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}mentorships`);
+      if (saved) {
+        const parsed: MentorshipSession[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((m) => {
+            if (m.id === 'ment_roberto_1') {
+              const init = INITIAL_MENTORSHIPS.find((im) => im.id === 'ment_roberto_1');
+              const isShared =
+                m.shareActionPlanWithHR ??
+                m.actionPlanShared ??
+                m.actionPlan?.shareWithHR ??
+                m.actionPlan?.shareActionPlanWithHR ??
+                init?.shareActionPlanWithHR ??
+                true;
+              const reflText =
+                m.sharedReflectionToHR ??
+                m.sharedLearningWithHR ??
+                m.learnings?.sharedLearningWithHR ??
+                m.learnings?.sharedReflectionToHR ??
+                init?.sharedReflectionToHR ??
+                'Cuando reconocemos la experiencia técnica de los colaboradores de mayor antigüedad, los acuerdos operativos se asumen por orgullo profesional y no por imposición.';
+              return {
+                ...m,
+                shareActionPlanWithHR: isShared,
+                actionPlanShared: isShared,
+                sharedReflectionToHR: reflText,
+                sharedLearningWithHR: reflText,
+                actionPlan: m.actionPlan
+                  ? {
+                      ...m.actionPlan,
+                      shareWithHR: isShared,
+                      shareActionPlanWithHR: isShared,
+                      actionPlanShared: isShared,
+                    }
+                  : m.actionPlan,
+                learnings: m.learnings
+                  ? {
+                      ...m.learnings,
+                      sharedLearningWithHR: reflText,
+                      sharedReflectionToHR: reflText,
+                    }
+                  : m.learnings,
+              };
+            }
+            const isShared = Boolean(
+              m.shareActionPlanWithHR ??
+              m.actionPlanShared ??
+              m.actionPlan?.shareWithHR ??
+              m.actionPlan?.shareActionPlanWithHR ??
+              m.actionPlan?.actionPlanShared
+            );
+            const refl = (
+              m.sharedReflectionToHR ??
+              m.sharedLearningWithHR ??
+              m.learnings?.sharedLearningWithHR ??
+              m.learnings?.sharedReflectionToHR ??
+              ''
+            ).trim();
+            return {
+              ...m,
+              shareActionPlanWithHR: isShared,
+              actionPlanShared: isShared,
+              sharedReflectionToHR: refl || undefined,
+              sharedLearningWithHR: refl || undefined,
+              actionPlan: m.actionPlan
+                ? {
+                    ...m.actionPlan,
+                    shareWithHR: isShared,
+                    shareActionPlanWithHR: isShared,
+                    actionPlanShared: isShared,
+                  }
+                : undefined,
+              learnings: m.learnings
+                ? {
+                    ...m.learnings,
+                    sharedLearningWithHR: refl || undefined,
+                    sharedReflectionToHR: refl || undefined,
+                  }
+                : undefined,
+            };
+          });
+        }
+      }
+    } catch {}
+    return INITIAL_MENTORSHIPS;
   });
 
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
@@ -1515,8 +1599,14 @@ El Equipo de Lidacta`;
     if (!activeMentorship || !plan) return;
     const now = new Date().toISOString();
     const stage5Time = plan.stage5EnteredAt || activeMentorship.stage5EnteredAt || now;
-    const updatedPlan = {
+    const isShared = Boolean(
+      plan.shareActionPlanWithHR ?? plan.actionPlanShared ?? plan.shareWithHR ?? false
+    );
+    const updatedPlan: MentorshipActionPlan = {
       ...plan,
+      shareWithHR: isShared,
+      shareActionPlanWithHR: isShared,
+      actionPlanShared: isShared,
       stage5EnteredAt: stage5Time,
     };
 
@@ -1526,6 +1616,8 @@ El Equipo de Lidacta`;
           ? {
               ...m,
               actionPlan: updatedPlan,
+              shareActionPlanWithHR: isShared,
+              actionPlanShared: isShared,
               stage5EnteredAt: stage5Time,
               status: 'in_action',
               lastActiveAt: now,
@@ -1860,12 +1952,22 @@ El Equipo de Lidacta`;
 
   const saveLearnings = (learnings: NonNullable<MentorshipSession['learnings']>) => {
     if (!activeMentorship) return;
+    const reflectionText = (
+      learnings.sharedReflectionToHR ?? learnings.sharedLearningWithHR ?? ''
+    ).trim();
+    const updatedLearnings: MentorshipLearnings = {
+      ...learnings,
+      sharedLearningWithHR: reflectionText,
+      sharedReflectionToHR: reflectionText,
+    };
     setMentorships((prev) =>
       prev.map((m) =>
         m.id === activeMentorship.id
           ? {
               ...m,
-              learnings,
+              learnings: updatedLearnings,
+              sharedReflectionToHR: reflectionText,
+              sharedLearningWithHR: reflectionText,
               lastActiveAt: new Date().toISOString(),
             }
           : m
