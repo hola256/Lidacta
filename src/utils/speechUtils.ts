@@ -185,16 +185,20 @@ export function createSpeechRecognizer(
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         const item = event.results[i];
         if (item.isFinal) {
-          final += item[0].transcript;
+          final += `${item[0].transcript} `;
         } else {
-          interim += item[0].transcript;
+          interim += `${item[0].transcript} `;
         }
       }
 
-      if (final) {
-        onResult(final.trim(), true);
-      } else if (interim) {
-        onResult(interim.trim(), false);
+      const cleanFinal = final.replace(/\s+/g, ' ').trim();
+      const cleanInterim = interim.replace(/\s+/g, ' ').trim();
+
+      if (cleanFinal) {
+        onResult(cleanFinal, true);
+      }
+      if (cleanInterim) {
+        onResult(cleanInterim, false);
       }
     };
 

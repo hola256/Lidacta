@@ -161,6 +161,7 @@ export const LeaderView: React.FC = () => {
   const [speechRecognizer, setSpeechRecognizer] = useState<{ start: () => void; stop: () => void } | null>(null);
   const [isListeningOnboardingMic, setIsListeningOnboardingMic] = useState(false);
   const [onboardingSpeechRecognizer, setOnboardingSpeechRecognizer] = useState<{ start: () => void; stop: () => void } | null>(null);
+  const onboardingBaseTextRef = useRef<string>('');
   const [newChallengePriority, setNewChallengePriority] = useState<'alta' | 'media' | 'baja'>('media');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [mobileHomeTab, setMobileHomeTab] = useState<'prompt' | 'list'>('prompt');
@@ -294,9 +295,22 @@ export const LeaderView: React.FC = () => {
       setSpeechRecognizer(rec);
 
       const onboardingRec = createSpeechRecognizer(
-        (transcript) => {
-          setNewChallengePrompt((prev) => (prev ? `${prev} ${transcript}` : transcript));
-          setIsListeningOnboardingMic(false);
+        (transcript, isFinal) => {
+          const cleanTranscript = transcript.replace(/\s+/g, ' ').trim();
+          if (!cleanTranscript) return;
+
+          if (isFinal) {
+            const updatedBase = onboardingBaseTextRef.current
+              ? `${onboardingBaseTextRef.current} ${cleanTranscript}`.replace(/\s+/g, ' ').trim()
+              : cleanTranscript;
+            onboardingBaseTextRef.current = updatedBase;
+            setNewChallengePrompt(updatedBase);
+          } else {
+            const liveText = onboardingBaseTextRef.current
+              ? `${onboardingBaseTextRef.current} ${cleanTranscript}`.replace(/\s+/g, ' ').trim()
+              : cleanTranscript;
+            setNewChallengePrompt(liveText);
+          }
         },
         () => setIsListeningOnboardingMic(false)
       );
@@ -358,6 +372,7 @@ export const LeaderView: React.FC = () => {
       onboardingSpeechRecognizer?.stop();
       setIsListeningOnboardingMic(false);
     } else {
+      onboardingBaseTextRef.current = newChallengePrompt.replace(/\s+/g, ' ').trim();
       if (onboardingSpeechRecognizer) {
         onboardingSpeechRecognizer.start();
       }
