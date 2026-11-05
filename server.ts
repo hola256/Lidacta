@@ -343,7 +343,7 @@ IMPORTANTE: Responde de forma emp√°tica, humana y reflexiva, validando la emoci√
 Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSON estricto.`;
 
         const geminiCall = ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+          model: 'gemini-2.5-flash',
           contents: prompt,
           config: {
             systemInstruction: systemPrompt,
@@ -358,8 +358,20 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
 
         const response = await Promise.race([geminiCall, timeoutPromise]);
 
-        const rawText = response.text?.trim() || '{}';
-        const parsed = JSON.parse(rawText);
+        const rawText = (response.text || '').trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
+        let parsed: any;
+        try {
+          parsed = JSON.parse(rawText || '{}');
+        } catch {
+          parsed = {
+            replyText: rawText,
+            readyToAdvance: false,
+            advancePrompt: null,
+            identifiedSkills: [],
+            detectedTheme: 'Liderazgo',
+            isTherapeuticCase: false,
+          };
+        }
         return res.json({ success: true, data: parsed });
       } catch (geminiError) {
         console.warn('Gemini API call warning, falling back to deterministic coach engine:', geminiError);
