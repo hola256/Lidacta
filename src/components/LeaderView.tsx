@@ -369,8 +369,11 @@ export const LeaderView: React.FC = () => {
   }, [activeMentorship?.id]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeMentorship?.messages?.length]);
+    if (activeScrollContainerRef.current) {
+      activeScrollContainerRef.current.scrollTop = activeScrollContainerRef.current.scrollHeight;
+    }
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [activeMentorship?.messages?.length, isSendingMessage]);
 
   const toggleOnboardingMic = () => {
     if (isListeningOnboardingMic) {
