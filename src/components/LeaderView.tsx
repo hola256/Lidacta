@@ -1316,15 +1316,12 @@ export const LeaderView: React.FC = () => {
                   const isOpen = !!openStages[st];
                   const meta = STAGE_META[st];
                   const allMessages = [...activeMentorship.messages].filter((m) => (m.stage || 1) === st);
-                  if (!isPending && !allMessages.some((m) => m.sender === 'lidacta')) {
-                    const baseTime = allMessages[0]?.timestamp
-                      ? new Date(allMessages[0].timestamp).getTime() + 1000
-                      : Date.now();
+                  if (!isPending && allMessages.length === 0) {
                     allMessages.push({
                       id: `trigger_${activeMentorship.id}_${st}`,
                       sender: 'lidacta',
                       text: getStageTriggerQuestion(st, activeMentorship),
-                      timestamp: new Date(baseTime).toISOString(),
+                      timestamp: new Date(Date.now() - 1000).toISOString(),
                       stage: st,
                     });
                   }

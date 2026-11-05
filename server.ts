@@ -373,7 +373,12 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
             isTherapeuticCase: false,
           };
         }
-        return res.json({ success: true, text: parsed.replyText, data: parsed });
+        return res.json({
+          success: true,
+          reply: parsed.replyText,
+          text: parsed.replyText,
+          data: { ...parsed, reply: parsed.replyText, replyText: parsed.replyText },
+        });
       } catch (geminiError) {
         console.warn('Gemini API call warning, falling back to deterministic coach engine:', geminiError);
         // Fallback gracefully below
@@ -391,7 +396,16 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
       isPracticeMode,
     });
 
-    return res.json({ success: true, data: fallbackResponse });
+    return res.json({
+      success: true,
+      reply: fallbackResponse.replyText,
+      text: fallbackResponse.replyText,
+      data: {
+        ...fallbackResponse,
+        reply: fallbackResponse.replyText,
+        replyText: fallbackResponse.replyText,
+      },
+    });
   } catch (error: any) {
     console.error('Error in /api/mentor/respond:', error);
     res.status(500).json({

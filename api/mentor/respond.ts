@@ -8,6 +8,117 @@ const STAGE_NAMES: Record<number, string> = {
   7: 'Cierre y retroalimentación',
 };
 
+function generateContextualCoachReply(
+  stage: number,
+  leaderName: string,
+  userMsg: string,
+  history: any[]
+): {
+  replyText: string;
+  readyToAdvance: boolean;
+  advancePrompt: string | null;
+  detectedTheme: string;
+  identifiedSkills?: string[];
+  isTherapeuticCase: boolean;
+} {
+  const cleanMsg = (userMsg || '').trim();
+  const lowerMsg = cleanMsg.toLowerCase();
+
+  // Therapeutic detection guardrail
+  const therapeuticTerms = [
+    'depresión', 'depresion', 'ansiedad clínica', 'ataque de pánico',
+    'ideación suicida', 'suicidio', 'autolesión', 'no quiero vivir',
+    'pastillas para dormir', 'crisis emocional severa',
+  ];
+  if (therapeuticTerms.some((t) => lowerMsg.includes(t))) {
+    return {
+      replyText: `Agradezco profundamente la confianza con la que compartes esto. Como mentora en Lidacta, mi labor se centra exclusivamente en el desarrollo de liderazgo y acuerdos laborales entre equipos. Por tu bienestar integral, este tipo de situación amerita el apoyo de un profesional de la salud mental o del área de bienestar de tu empresa. Permanezco a tu lado para cuando desees trabajar cualquier reto sobre tus equipos y liderazgo.`,
+      readyToAdvance: false,
+      advancePrompt: null,
+      detectedTheme: 'Orientación y Límite de Rol',
+      isTherapeuticCase: true,
+    };
+  }
+
+  if (stage === 1) {
+    if (history.length > 2) {
+      return {
+        replyText: `Comprendo el punto que señalas sobre "${cleanMsg.slice(0, 60)}${cleanMsg.length > 60 ? '...' : ''}". Para cerrar esta primera etapa de detección: ¿qué impacto directo tiene no intervenir en este momento y qué resultado concreto buscas obtener al resolver esta situación?`,
+        readyToAdvance: true,
+        advancePrompt: 'Avanzar a Etapa 2: Analizar perspectivas y habilidades',
+        detectedTheme: 'Clarificación de Situación',
+        isTherapeuticCase: false,
+      };
+    }
+    return {
+      replyText: `Poniendo foco en lo que comentas: ¿quiénes son las personas clave involucradas en esta situación y qué postura o reacción están teniendo?`,
+      readyToAdvance: false,
+      advancePrompt: null,
+      detectedTheme: 'Mapeo de Involucrados',
+      isTherapeuticCase: false,
+    };
+  }
+
+  if (stage === 2) {
+    return {
+      replyText: `Al analizar esto con mayor profundidad: si te pones en los zapatos de la otra parte, ¿cómo crees que perciben esta situación? Y desde tu rol de líder, ¿qué habilidad necesitas poner en juego para destrabarla?`,
+      readyToAdvance: true,
+      advancePrompt: 'Avanzar a Etapa 3: Diseñar alternativas',
+      detectedTheme: 'Perspectivas y Habilidades',
+      identifiedSkills: ['Comunicación Asertiva', 'Gestión de Acuerdos'],
+      isTherapeuticCase: false,
+    };
+  }
+
+  if (stage === 3) {
+    return {
+      replyText: `Tomando en cuenta lo que planteas: ¿qué alternativas de solución o caminos de acción viables visualizas tú en primer lugar para abordar esto con tu gente?`,
+      readyToAdvance: true,
+      advancePrompt: 'Avanzar a Etapa 4: Practicar antes de actuar',
+      detectedTheme: 'Diseño de Alternativas',
+      isTherapeuticCase: false,
+    };
+  }
+
+  if (stage === 4) {
+    return {
+      replyText: `Hagamos el ensayo de la conversación. Imagina que soy la otra persona involucrada: ¿cómo abrirías el diálogo para plantear el tema con claridad y empatía? Te leo o escucho para darte retroalimentación.`,
+      readyToAdvance: true,
+      advancePrompt: 'Avanzar a Etapa 5: Actuar (Plan de Acción)',
+      detectedTheme: 'Práctica de Conversación',
+      isTherapeuticCase: false,
+    };
+  }
+
+  if (stage === 5) {
+    return {
+      replyText: `Concretemos tu plan: ¿qué harás exactamente, en qué fecha y hora específica, y con quién?`,
+      readyToAdvance: true,
+      advancePrompt: 'Avanzar a Etapa 6: Aprender y reflexionar',
+      detectedTheme: 'Plan de Acción',
+      isTherapeuticCase: false,
+    };
+  }
+
+  if (stage === 6) {
+    return {
+      replyText: `Al revisar lo ocurrido tras ejecutar la acción: ¿qué funcionó según lo previsto, qué te sorprendió y qué aprendizaje te llevas sobre tu estilo de liderazgo?`,
+      readyToAdvance: true,
+      advancePrompt: 'Avanzar a Etapa 7: Cierre y retroalimentación',
+      detectedTheme: 'Aprendizaje y Reflexión',
+      isTherapeuticCase: false,
+    };
+  }
+
+  return {
+    replyText: `Has recorrido un valioso proceso de liderazgo. Reconoce tus avances y las habilidades que has puesto en práctica para mantener tu autonomía y el desarrollo de tu equipo.`,
+    readyToAdvance: true,
+    advancePrompt: null,
+    detectedTheme: 'Cierre y Consolidación',
+    isTherapeuticCase: false,
+  };
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -63,10 +174,23 @@ export default async function handler(req: any, res: any) {
       process.env.GEMINI_API_KEY ||
       process.env.API_KEY ||
       process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+
     if (!apiKey) {
-      return res.status(500).json({
-        success: false,
-        error: 'Falta la API Key en las variables de entorno de Vercel',
+      console.warn('GEMINI_API_KEY not configured in Vercel. Generating contextual coaching reply.');
+      const contextual = generateContextualCoachReply(
+        currentStageNum,
+        leaderFirstName,
+        resolvedUserMessage,
+        resolvedHistory
+      );
+      return res.status(200).json({
+        success: true,
+        reply: contextual.replyText,
+        text: contextual.replyText,
+        data: {
+          ...contextual,
+          reply: contextual.replyText,
+        },
       });
     }
 
@@ -75,7 +199,7 @@ export default async function handler(req: any, res: any) {
 Reglas estrictas:
 1. Límite Terapéutico: NO eres psicólogo ni das terapia. Si detectas crisis emocional clínica o terapéutica, deriva amablemente a un profesional de la salud mental sin bloquear la sesión y marca "isTherapeuticCase": true.
 2. Autonomía del Líder: NO tomas decisiones por el líder; cuestionas, orientas y sugieres.
-3. Cero Consejos Genéricos: Personaliza cada intervención al contexto del líder.
+3. Cero Consejos Genéricos: Personaliza cada intervención al contexto del líder. NUNCA respondas con saludos de bienvenida genéricos repetitivos (por ejemplo: "Hola [Nombre], entiendo la situación que estás enfrentando..."). Responde de forma directa al contenido del mensaje del líder.
 4. Tono: Profesional, cercano, empático, claro y ejecutivo (1 a 3 párrafos cortos). Formula UNA pregunta a la vez.
 5. Validación Emocional y Seguimiento Específico: Valida la emoción expresada y formula una pregunta de seguimiento específica basada estrictamente en la última intervención del líder. Nunca repitas respuestas anteriores.
 
@@ -102,7 +226,6 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       const clean = text.trim();
       if (!clean) return;
       if (contents.length === 0 && role === 'model') {
-        // Gemini requires contents to start with a 'user' turn
         contents.push({ role: 'user', parts: [{ text: 'Hola Lidacta, necesito apoyo con una situación de liderazgo.' }] });
       }
       const last = contents[contents.length - 1];
@@ -126,7 +249,6 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       pushTurn(role, msgText);
     }
 
-    // Ensure the latest userMessage is included as the final "user" turn
     if (resolvedUserMessage) {
       pushTurn('user', resolvedUserMessage);
     }
@@ -135,10 +257,15 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       pushTurn('user', `Hola Lidacta, estoy en la Etapa ${currentStageNum}.`);
     }
 
-    const modelsToTry = ['gemini-3.8-flash', 'gemini-2.5-flash'];
+    // Try gemini-3.8-flash first as requested by Google, with graceful fallbacks
+    const modelsToTry = [
+      'gemini-3.8-flash',
+      'gemini-1.5-flash',
+      'gemini-2.0-flash',
+      'gemini-2.5-flash',
+    ];
     let data: any = null;
     let ok = false;
-    let lastErrorText = '';
 
     for (const modelName of modelsToTry) {
       const controller = new AbortController();
@@ -168,28 +295,28 @@ Responde SIEMPRE en JSON estricto con esta estructura:
           break;
         }
 
-        lastErrorText = await response.text();
-        console.warn(`Gemini API (${modelName}) status ${response.status}:`, lastErrorText);
+        const errText = await response.text();
+        console.warn(`Gemini API (${modelName}) returned status ${response.status}:`, errText);
       } catch (fetchErr: any) {
         clearTimeout(timeoutId);
-        lastErrorText = fetchErr?.message || JSON.stringify(fetchErr);
-        console.warn(`Fetch/Timeout error with ${modelName}:`, fetchErr);
+        console.warn(`Fetch error with ${modelName}:`, fetchErr?.message || fetchErr);
       }
     }
 
     if (!ok || !data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-      const fallbackReply = `Hola ${leaderFirstName}, entiendo la situación que estás enfrentando. Cuéntame un poco más sobre qué es lo que más te preocupa en este momento o qué resultado buscas lograr con tu equipo.`;
+      const contextual = generateContextualCoachReply(
+        currentStageNum,
+        leaderFirstName,
+        resolvedUserMessage,
+        resolvedHistory
+      );
       return res.status(200).json({
         success: true,
-        reply: fallbackReply,
-        text: fallbackReply,
+        reply: contextual.replyText,
+        text: contextual.replyText,
         data: {
-          replyText: fallbackReply,
-          readyToAdvance: false,
-          advancePrompt: null,
-          identifiedSkills: [],
-          detectedTheme: 'Liderazgo',
-          isTherapeuticCase: false,
+          ...contextual,
+          reply: contextual.replyText,
         },
       });
     }
@@ -214,22 +341,25 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       success: true,
       reply: responseText,
       text: responseText,
-      data: parsed ? { ...parsed, replyText: responseText } : { replyText: responseText },
+      data: parsed
+        ? { ...parsed, reply: responseText, replyText: responseText }
+        : { reply: responseText, replyText: responseText },
     });
   } catch (error: any) {
     console.error('Error en mentor respond:', error);
-    const fallbackReply = `Hola ${leaderFirstName}, entiendo la situación. Cuéntame con qué personas de tu equipo necesitas conversar o qué decisiones estás evaluando tomar.`;
+    const contextual = generateContextualCoachReply(
+      currentStageNum,
+      leaderFirstName,
+      '',
+      []
+    );
     return res.status(200).json({
       success: true,
-      reply: fallbackReply,
-      text: fallbackReply,
+      reply: contextual.replyText,
+      text: contextual.replyText,
       data: {
-        replyText: fallbackReply,
-        readyToAdvance: false,
-        advancePrompt: null,
-        identifiedSkills: [],
-        detectedTheme: 'Liderazgo',
-        isTherapeuticCase: false,
+        ...contextual,
+        reply: contextual.replyText,
       },
     });
   }

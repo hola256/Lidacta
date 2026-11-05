@@ -1166,12 +1166,18 @@ El Equipo de Lidacta`;
       });
 
       const data = await response.json();
-      if (data.success && data.data) {
-        const coachReply = data.data;
+      const resolvedReply =
+        data.reply ||
+        data.text ||
+        data.response ||
+        data.data?.reply ||
+        data.data?.replyText;
+      if (response.ok && resolvedReply) {
+        const coachReply = data.data || {};
         const replyMsg = {
           id: `msg_${Date.now()}_lid`,
           sender: 'lidacta' as const,
-          text: coachReply.replyText,
+          text: resolvedReply,
           timestamp: new Date().toISOString(),
           stage: 1 as StageNumber,
         };
@@ -1349,7 +1355,12 @@ El Equipo de Lidacta`;
       });
 
       const data = await response.json();
-      const resolvedReply = data.reply || data.response || data.text || data.data?.replyText;
+      const resolvedReply =
+        data.reply ||
+        data.text ||
+        data.response ||
+        data.data?.reply ||
+        data.data?.replyText;
       if (response.ok && resolvedReply) {
         const coachReply = data.data || {};
 
@@ -1574,12 +1585,18 @@ El Equipo de Lidacta`;
       });
 
       const data = await response.json();
-      if (data.success && data.data) {
-        const coachReply = data.data;
+      const resolvedReply =
+        data.reply ||
+        data.text ||
+        data.response ||
+        data.data?.reply ||
+        data.data?.replyText;
+      if (response.ok && resolvedReply) {
+        const coachReply = data.data || {};
         const introMsg = {
           id: `msg_${Date.now()}_lid`,
           sender: 'lidacta' as const,
-          text: coachReply.replyText,
+          text: resolvedReply,
           timestamp: new Date().toISOString(),
           stage: nextStage,
         };
