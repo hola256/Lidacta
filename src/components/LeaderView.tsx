@@ -1309,7 +1309,14 @@ export const LeaderView: React.FC = () => {
                   const meta = STAGE_META[st];
                   const stageMessages = activeMentorship.messages
                     .filter((m) => (m.stage || 1) === st)
-                    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                    .sort((a, b) => {
+                      const tA = new Date(a.timestamp || (a as any).createdAt || 0).getTime();
+                      const tB = new Date(b.timestamp || (b as any).createdAt || 0).getTime();
+                      if (Number.isFinite(tA) && Number.isFinite(tB) && tA !== tB) {
+                        return tA - tB;
+                      }
+                      return 0;
+                    });
 
                   return (
                     <div
