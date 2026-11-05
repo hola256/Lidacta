@@ -159,6 +159,9 @@ export const LeaderView: React.FC = () => {
   });
   const [isListeningMic, setIsListeningMic] = useState(false);
   const [speechRecognizer, setSpeechRecognizer] = useState<{ start: () => void; stop: () => void } | null>(null);
+  const [isListeningOnboardingMic, setIsListeningOnboardingMic] = useState(false);
+  const [onboardingSpeechRecognizer, setOnboardingSpeechRecognizer] = useState<{ start: () => void; stop: () => void } | null>(null);
+  const [newChallengePriority, setNewChallengePriority] = useState<'alta' | 'media' | 'baja'>('media');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [mobileHomeTab, setMobileHomeTab] = useState<'prompt' | 'list'>('prompt');
 
@@ -289,6 +292,15 @@ export const LeaderView: React.FC = () => {
         () => setIsListeningMic(false)
       );
       setSpeechRecognizer(rec);
+
+      const onboardingRec = createSpeechRecognizer(
+        (transcript) => {
+          setNewChallengePrompt((prev) => (prev ? `${prev} ${transcript}` : transcript));
+          setIsListeningOnboardingMic(false);
+        },
+        () => setIsListeningOnboardingMic(false)
+      );
+      setOnboardingSpeechRecognizer(onboardingRec);
     }
   }, []);
 
@@ -341,11 +353,28 @@ export const LeaderView: React.FC = () => {
     }
   }, [activeMentorship?.id]);
 
+  const toggleOnboardingMic = () => {
+    if (isListeningOnboardingMic) {
+      onboardingSpeechRecognizer?.stop();
+      setIsListeningOnboardingMic(false);
+    } else {
+      if (onboardingSpeechRecognizer) {
+        onboardingSpeechRecognizer.start();
+      }
+      setIsListeningOnboardingMic(true);
+    }
+  };
+
   const handleStartChallenge = async () => {
     if (!newChallengePrompt.trim()) return;
+    if (isListeningOnboardingMic && onboardingSpeechRecognizer) {
+      onboardingSpeechRecognizer.stop();
+      setIsListeningOnboardingMic(false);
+    }
     setIsStartingNew(true);
-    await startNewMentorship(newChallengePrompt);
+    await startNewMentorship(newChallengePrompt, { priority: newChallengePriority });
     setNewChallengePrompt('');
+    setNewChallengePriority('media');
     setIsStartingNew(false);
   };
 
@@ -992,8 +1021,8 @@ export const LeaderView: React.FC = () => {
             {/* Prompt View (Always visible on desktop, or when mobileHomeTab === 'prompt' on mobile) */}
             <div className={`space-y-6 sm:space-y-8 ${mobileHomeTab === 'list' ? 'hidden md:block' : 'block'}`}>
               {/* Header Hero Banner */}
-              <div className="bg-white border border-[#493447]/15 rounded-2xl overflow-hidden shadow-sm flex flex-col md:flex-row items-stretch">
-                <div className="p-5 sm:p-8 flex-1 space-y-3">
+              <div className="bg-white border border-[#493447]/15 rounded-2xl overflow-hidden shadow-sm">
+                <div className="p-5 sm:p-8 space-y-3">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#BF3A1B]">
                     Bienvenido, {currentUser.name}
                   </span>
@@ -1001,21 +1030,13 @@ export const LeaderView: React.FC = () => {
                     ¿Qué situación de liderazgo enfrentas hoy?
                   </h1>
                   <p className="text-xs sm:text-sm text-[#4A3F55] leading-relaxed">
-                    Lidacta es tu espacio seguro de mentoría ejecutiva para analizar, practicar y resolver retos reales con tu equipo en {currentUser.companyName}.
+                    Lidacta es tu espacio seguro de mentoría para analizar y resolver retos reales con tu equipo en {currentUser.companyName}.
                   </p>
-                </div>
-                <div className="w-full md:w-80 h-44 sm:h-64 md:h-auto shrink-0 relative bg-[#2D1B4E]/5">
-                  <img
-                    src="/src/assets/images/lidacta_hero_mentorship_1792074705291.jpg"
-                    alt="Mentoría de liderazgo Lidacta"
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
                 </div>
               </div>
 
               {/* In Primer Plano: Entrada obligatoria de situación o reto */}
-              <div className="bg-white border-2 border-[#BF3A1B]/30 rounded-2xl p-4 sm:p-8 shadow-md space-y-4">
+              <div className="bg-white border-2 border-[#BF3A1B]/30 rounded-2xl p-4 sm:p-8 shadow-md space-y-5">
                 <div className="flex items-center gap-2.5">
                   <div className="w-9 h-9 rounded-xl bg-[#FFD3BF] text-[#BF3A1B] flex items-center justify-center font-bold shrink-0">
                     <Compass className="w-5 h-5" />
@@ -1025,61 +1046,83 @@ export const LeaderView: React.FC = () => {
                       Plantea tu situación real, reto o problemática
                     </h2>
                     <p className="text-xs text-[#4A3F55]/80">
-                      Escribe con tus propias palabras qué está ocurriendo con tu gente o qué decisión debes tomar.
+                      Cuéntame con detalle en qué situación necesitas apoyo.
                     </p>
                   </div>
                 </div>
 
-                <textarea
-                  value={newChallengePrompt}
-                  onChange={(e) => setNewChallengePrompt(e.target.value)}
-                  placeholder="Ejemplo: Tengo un colaborador clave en mi equipo que entrega con retrasos continuos y cuando le doy retroalimentación se pone a la defensiva..."
-                  rows={4}
-                  className="w-full p-3.5 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed"
-                />
+                <div className="relative">
+                  <textarea
+                    value={newChallengePrompt}
+                    onChange={(e) => setNewChallengePrompt(e.target.value)}
+                    placeholder="Escribe aquí o usa el micrófono para dictar tu situación..."
+                    rows={4}
+                    className="w-full p-3.5 sm:p-4 pr-14 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed"
+                  />
+                  <button
+                    type="button"
+                    onClick={toggleOnboardingMic}
+                    title={isListeningOnboardingMic ? 'Detener dictado por voz' : 'Dictar por voz a Lidacta'}
+                    aria-label={isListeningOnboardingMic ? 'Detener dictado por voz' : 'Dictar por voz a Lidacta'}
+                    className={`absolute right-3 bottom-3 w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer shadow-xs ${
+                      isListeningOnboardingMic
+                        ? 'bg-[#BF3A1B] text-white animate-pulse ring-4 ring-[#BF3A1B]/20'
+                        : 'bg-white hover:bg-[#FFD3BF]/40 text-[#2D1B4E] border border-[#493447]/15'
+                    }`}
+                  >
+                    {isListeningOnboardingMic ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-[#BF3A1B]" />}
+                  </button>
+                </div>
 
-                {/* Quick suggestions */}
-                <div className="space-y-2">
-                  <span className="text-xs font-semibold text-[#4A3F55]">Retos frecuentes en tu contexto:</span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {isListeningOnboardingMic && (
+                  <div className="flex items-center gap-2 text-xs text-[#BF3A1B] font-semibold bg-[#FFF7EF] px-3 py-2 rounded-lg border border-[#BF3A1B]/20">
+                    <span className="w-2 h-2 rounded-full bg-[#BF3A1B] animate-ping" />
+                    <span>Escuchando... habla con naturalidad para describir tu situación.</span>
+                  </div>
+                )}
+
+                {/* Selección directa de Nivel de Urgencia o Prioridad */}
+                <div className="space-y-2.5 pt-1">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#2D1B4E]">
+                    NIVEL DE URGENCIAS O PRIORIDAD
+                  </label>
+                  <div className="grid grid-cols-3 gap-2.5">
                     {[
-                      'Me cuesta trabajo delegar tareas críticas antes de una fecha de entrega',
-                      'Falta de compromiso y desacuerdos en el cambio de turno',
-                      'Debo tener una conversación difícil sobre baja calidad en el trabajo',
-                      'Tensión entre dos integrantes del equipo que afecta el clima laboral',
-                    ].map((example, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setNewChallengePrompt(example)}
-                        className="text-xs text-left p-2.5 bg-[#FFF7EF] hover:bg-[#FFD3BF]/30 text-[#4A3F55] hover:text-[#2D1B4E] rounded-xl border border-[#493447]/10 transition-colors cursor-pointer"
-                      >
-                        {example}
-                      </button>
-                    ))}
+                      { id: 'alta' as const, label: 'Alta', desc: 'Atención inmediata', activeClass: 'bg-[#FFE5E5] border-[#BF3A1B] text-[#BF3A1B]' },
+                      { id: 'media' as const, label: 'Media', desc: 'Seguimiento cercano', activeClass: 'bg-[#FFF3D6] border-[#F7B538] text-[#2D1B4E]' },
+                      { id: 'baja' as const, label: 'Baja', desc: 'Desarrollo continuo', activeClass: 'bg-[#E2F7E1] border-[#246B2A] text-[#246B2A]' },
+                    ].map((p) => {
+                      const isSelected = newChallengePriority === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setNewChallengePriority(p.id)}
+                          className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                            isSelected
+                              ? `${p.activeClass} shadow-xs`
+                              : 'bg-[#FFF7EF]/40 border-[#493447]/15 text-[#4A3F55] hover:border-[#493447]/30'
+                          }`}
+                        >
+                          <div className="font-heading font-bold text-xs sm:text-sm">{p.label}</div>
+                          <div className="text-[10px] opacity-80 hidden sm:block">{p.desc}</div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(true)}
-                    className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-[#493447]/20 text-[#2D1B4E] hover:bg-[#FFF7EF] font-bold text-xs sm:text-sm transition-colors cursor-pointer min-h-[44px]"
-                  >
-                    <Plus className="w-4 h-4 text-[#BF3A1B]" />
-                    <span>+ Formulario de Caso con Prioridad</span>
-                  </button>
-
+                <div className="pt-2 flex justify-end">
                   <button
                     onClick={handleStartChallenge}
                     disabled={!newChallengePrompt.trim() || isStartingNew}
-                    className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-3 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] font-heading font-extrabold text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+                    className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-2 px-6 py-3 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] font-heading font-extrabold text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
                   >
                     {isStartingNew ? (
                       <span>Iniciando mentoría con Lidacta...</span>
                     ) : (
                       <>
-                        <span>Iniciar Acompañamiento</span>
-                        <ArrowRight className="w-4 h-4" />
+                        <span>Iniciar Acompañamiento →</span>
                       </>
                     )}
                   </button>
