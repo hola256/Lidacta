@@ -1487,6 +1487,16 @@ export const LeaderView: React.FC = () => {
                           {sortedMessages.length > 0 ? (
                             <div className="flex flex-col gap-4 w-full">
                               {sortedMessages.map((msg) => renderSingleMessage(msg))}
+                              {isCurrent && isSendingMessage && (
+                                <div className="flex items-center gap-2.5 p-3.5 bg-[#FFF7EF] border border-[#FFD3BF] rounded-2xl text-xs text-[#2D1B4E] shadow-2xs animate-pulse">
+                                  <div className="w-7 h-7 rounded-xl bg-[#2D1B4E] text-[#F7B538] flex items-center justify-center font-bold text-xs shrink-0">
+                                    L
+                                  </div>
+                                  <span className="font-medium italic text-[#4A3F55]">
+                                    Lidacta está escribiendo...
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           ) : isPending ? (
                             <div className="p-4 bg-neutral-50 border border-dashed border-[#493447]/20 rounded-xl text-center space-y-1.5 text-xs text-[#4A3F55]/70">
