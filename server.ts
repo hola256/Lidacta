@@ -117,12 +117,20 @@ En todas sus interacciones, Lidacta debe cumplir tres objetivos:
 - Conciso: Respeta el tiempo del líder (intervenciones breves y al grano, párrafos cortos).
 - Idioma: Lidacta siempre hablará en español al líder.
 
-1.5 Criterio para formular preguntas y Progreso Dinámico
-- Formular únicamente las preguntas necesarias para comprender la situación.
-- Formular UNA sola pregunta a la vez y esperar la respuesta antes de continuar.
+1.5 Criterio para formular preguntas, Escucha Activa y Progreso Dinámico
+- REGLA 1 (ESCUCHA ACTIVA Y FLEXIBILIDAD OBLIGATORIA - PROHIBIDO APURAR): Si el usuario dice que NO quiere avanzar, que no está listo, que va muy rápido, que necesita entender mejor la situación, o que desea profundizar en el problema:
+  * Está TERMINANTEMENTE PROHIBIDO volver a preguntar si está listo para pasar a la Etapa 2.
+  * Está TERMINANTEMENTE PROHIBIDO empujar o sugerir el avance de etapa.
+  * La respuesta debe tener OBLIGATORIAMENTE "readyToAdvance": false y "advancePrompt": null.
+- REGLA 2 (FORMATO DE DESGLOSE DIAGNÓSTICO - DEVOLVER VALOR VISIBLE): Cuando el usuario pida ayuda para entender las variables, desglosar el problema, o manifieste que no quiere avanzar y necesita entender mejor:
+  La mentora DEBE estructurar su respuesta analizando activamente lo que ha escuchado con este formato exacto en viñetas y negritas:
+  • **Conflicto visible:** [Análisis concreto de lo ocurrido con el cliente, colaborador o situación operativa externa observable].
+  • **Tensión subyacente:** [Análisis de la dinámica relacional, presiones o expectativas no resueltas con el jefe, directores o la cultura organizacional].
+  • **Impacto emocional/operativo:** [Análisis del desgaste personal del líder, la sensación de estar atrapado al medio, la sobrecarga o frustración].
+  Finalizará haciendo 1 o 2 preguntas reflexivas específicas sobre esos puntos desglosados para ayudar a esclarecer la causa raíz (sin preguntar sobre pasar de etapa).
+- REGLA 3 (CIERRE DE ETAPA 1 GUIADO): Solo cuando el usuario confirme expresamente que el desglose y panorama tienen sentido para él (por ejemplo: "Tiene todo el sentido", "Exacto, así es", "De acuerdo, avancemos"), la mentora podrá validar el avance y proponer dar el paso a la Etapa 2 con "readyToAdvance": true.
 - PROHIBIDO REPETIR PREGUNTAS O COLETILLAS DE CIERRE: NUNCA repitas la misma pregunta, fórmula o coletilla de cierre en turnos consecutivos (por ejemplo: "¿qué impacto directo tiene no intervenir en este momento...?").
-- MANEJO DE CONFUSIÓN O FRUSTRACIÓN: Si el líder expresa confusión ("No entiendo tu pregunta", "A qué te refieres", "No te sigo", etc.) o muestra frustración/desgaste, DEBES reformular la pregunta con palabras más sencillas, transparentes y cotidianas, o brindar un ejemplo práctico de la vida laboral, en lugar de repetir o insistir en la plantilla de la etapa.
-- PROGRESO Y ADAPTACIÓN: Adapta tus preguntas a lo que el líder ya compartió. Si el líder ya proporcionó parte de la información o muestra cansancio, valida su emoción de forma natural y haz una pregunta diferente que ayude a profundizar o habilita el avance ("readyToAdvance": true).
+- Formular UNA sola pregunta o grupo reflexivo a la vez y esperar la respuesta antes de continuar.
 - Evitar repetir preguntas o solicitar información que el líder ya proporcionó.
 - Nunca inventar información.
 
@@ -487,6 +495,28 @@ function detectTherapeuticNature(text: string): { isTherapeutic: boolean; reason
   return { isTherapeutic: false, reason: '' };
 }
 
+function extractDiagnosticVariablesServer(history: any[], currentMsg: string) {
+  const allTexts = [...(history || []).map((m: any) => m.text || m.content || ''), currentMsg].join(' ');
+  const lower = allTexts.toLowerCase();
+
+  let visibleConflict = 'El roce operativo con el cliente y los compromisos de entrega o servicio afectados por la situación.';
+  if (lower.includes('cliente') || lower.includes('queja') || lower.includes('reclamo') || lower.includes('entrega') || lower.includes('retraso') || lower.includes('calidad') || lower.includes('pedido') || lower.includes('proyecto')) {
+    visibleConflict = 'El incidente directo con el cliente y la falla en los tiempos o calidad de los entregables operativos.';
+  }
+
+  let underlyingTension = 'La exigencia vertical de la jefatura o directores, donde sientes la presión de responder sin contar con suficiente respaldo o alineación.';
+  if (lower.includes('jefe') || lower.includes('director') || lower.includes('gerente') || lower.includes('presion') || lower.includes('presión') || lower.includes('exigencia') || lower.includes('arriba') || lower.includes('apoyo')) {
+    underlyingTension = 'La dinámica de presión con tu jefatura y el temor a que la falta de resolución afecte la confianza en tu liderazgo.';
+  }
+
+  let emotionalImpact = 'La sobrecarga personal y la sensación de quedar atrapado en el medio, cargando el estrés para evitar que la operación colapse.';
+  if (lower.includes('estres') || lower.includes('estrés') || lower.includes('frustra') || lower.includes('cansad') || lower.includes('abrumad') || lower.includes('medio') || lower.includes('desgaste')) {
+    emotionalImpact = 'El desgaste personal y la frustración de asumir toda la responsabilidad entre las demandas del cliente y la exigencia de tu jefe.';
+  }
+
+  return { visibleConflict, underlyingTension, emotionalImpact };
+}
+
 // Deterministic Coaching Engine (Ensures 100% uptime, adhering to all PDF rules)
 function generateDeterministicCoaching({
   stage,
@@ -524,6 +554,46 @@ function generateDeterministicCoaching({
   const cleanMsg = (userMessage || '').trim();
   const lowerMsg = cleanMsg.toLowerCase();
 
+  // Regla 1: Escucha activa y flexibilidad obligatoria (Petición de NO avanzar / entender mejor)
+  const wantsToPauseOrNotAdvance = [
+    'no quiero avanzar', 'no avancemos', 'no pasar a la etapa 2', 'no quiero pasar a la etapa 2',
+    'espera', 'esperate', 'espérate', 'aun no', 'aún no', 'todavia no', 'todavía no',
+    'no estoy listo', 'no tan rapido', 'no tan rápido', 'despacio', 'vamos muy rapido', 'vamos muy rápido',
+    'necesito entender', 'entender mejor', 'profundizar', 'desglosar', 'desglosa',
+    'ayudame a entender', 'ayúdame a entender', 'variables', 'muchas cosas mezcladas',
+    'no entiendo las variables', 'analizar mejor', 'detengamonos', 'detengámonos',
+    'quiero profundizar', 'desglosame', 'desglósame', 'no pasar', 'detenernos',
+    'ir despacio', 'frena', 'frenemos', 'parar', 'no avanzar'
+  ].some((t) => lowerMsg.includes(t));
+
+  // Regla 2: Formato de Desglose Diagnóstico cuando el usuario pide ayuda para desglosar o entender
+  if (wantsToPauseOrNotAdvance && stage === 1) {
+    const { visibleConflict, underlyingTension, emotionalImpact } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg);
+    return {
+      replyText: `Te escucho con total atención, ${leaderName}. Frenamos el paso: no vamos a avanzar a la Etapa 2 hasta que tengamos total claridad sobre lo que estás viviendo.\n\nPara devolverte valor visible y ayudarte a ordenar las variables que hoy se sienten mezcladas, desgloso lo que he escuchado en tu relato:\n\n• **Conflicto visible:** ${visibleConflict}\n• **Tensión subyacente:** ${underlyingTension}\n• **Impacto emocional/operativo:** ${emotionalImpact}\n\nMirando este mapa con calma:\n1. De estos tres frentes, ¿cuál sientes que es el que genera mayor fricción o te cuesta más trabajo manejar en este momento?\n2. ¿Sientes que este desglose captura con precisión lo que estás viviendo, o hay alguna variable clave que se nos esté escapando?`,
+      readyToAdvance: false,
+      detectedTheme: 'Desglose Diagnóstico',
+    };
+  }
+
+  // Regla 3: Cierre de Etapa 1 guiado (Solo cuando el usuario confirme expresamente que el desglose tiene sentido)
+  const userConfirmsBreakdownOrReady = [
+    'tiene sentido', 'tiene todo el sentido', 'totalmente', 'exacto',
+    'asi es', 'así es', 'de acuerdo', 'estoy listo', 'ahora si', 'ahora sí',
+    'avancemos', 'pasemos a la etapa 2', 'listo para avanzar', 'me queda claro',
+    'tiene mucha razon', 'tiene mucha razón', 'me hace sentido', 'hace sentido',
+    'me parece bien avanzar', 'podemos pasar a la etapa 2', 'pasemos a la siguiente'
+  ].some((t) => lowerMsg.includes(t));
+
+  if (userConfirmsBreakdownOrReady && stage === 1) {
+    return {
+      replyText: `Me alegra que este mapa te dé claridad y ordene el panorama, ${leaderName}. Ahora que las variables clave están comprendidas y hacen sentido para ti, ¿estás de acuerdo en que demos el paso a la Etapa 2 para analizar las perspectivas y habilidades requeridas?`,
+      readyToAdvance: true,
+      advancePrompt: 'Avanzar a Etapa 2: Analizar perspectivas y habilidades',
+      detectedTheme: 'Cierre de Etapa 1 Guiado',
+    };
+  }
+
   // Detección de confusión o solicitud de aclaración del líder
   const isConfusion = [
     'no entiendo', 'no comprendo', 'a que te refieres', 'a qué te refieres',
@@ -536,10 +606,11 @@ function generateDeterministicCoaching({
 
   if (isConfusion) {
     if (stage === 1) {
+      const { visibleConflict, underlyingTension, emotionalImpact } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg);
       return {
-        replyText: `Te lo planteo de forma muy simple y cotidiana, ${leaderName}: a veces postergamos una charla o decisión difícil porque tenemos muchas cosas urgentes en el día a día. Mi punto es muy concreto: si dejas esta situación tal como está una o dos semanas más, ¿crees que se resuelve sola o empeorará la dinámica con tu equipo? O si lo ves más claro, cuéntame simplemente qué resultado te gustaría alcanzar y partimos de ahí.`,
+        replyText: `Te lo planteo de forma muy simple y cotidiana, ${leaderName}: a veces postergamos una charla o decisión difícil porque tenemos muchas cosas urgentes en el día a día. Para verlo claro:\n\n• **Conflicto visible:** ${visibleConflict}\n• **Tensión subyacente:** ${underlyingTension}\n• **Impacto emocional/operativo:** ${emotionalImpact}\n\n¿Cuál de estos tres puntos crees que es la verdadera causa raíz de lo que está pasando?`,
         readyToAdvance: false,
-        detectedTheme: detectTopicFromText(userMessage),
+        detectedTheme: 'Clarificación de Situación',
       };
     }
   }
@@ -572,9 +643,8 @@ function generateDeterministicCoaching({
       };
     } else {
       return {
-        replyText: `Comprendo el cuadro con mucha mayor claridad, ${leaderName}. Es completamente natural que al buscar resultados surjan estas tensiones operativas. Lo valioso es que estás tomando la iniciativa de analizarlo antes de reaccionar.\n\nTenemos los elementos esenciales de lo que está ocurriendo. ¿Listo para que pasemos a la Etapa 2 y analicemos el problema desde otros ángulos y descubramos las habilidades clave en juego?`,
-        readyToAdvance: true,
-        advancePrompt: 'Avanzar a Etapa 2: Analizar y ver perspectivas',
+        replyText: `Comprendo el cuadro con mucha mayor claridad, ${leaderName}. Es completamente natural que al buscar resultados surjan estas tensiones operativas.\n\nMirando el escenario que planteas: ¿cuál es el obstáculo principal que sientes que impide destrabar esta situación de raíz con tu equipo?`,
+        readyToAdvance: false,
         detectedTheme: detectTopicFromText(userMessage),
       };
     }

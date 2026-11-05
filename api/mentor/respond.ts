@@ -8,6 +8,31 @@ const STAGE_NAMES: Record<number, string> = {
   7: 'Cierre y retroalimentación',
 };
 
+function extractDiagnosticVariables(history: any[], currentMsg: string, leaderName: string) {
+  const allTexts = [...(history || []).map((m: any) => m.text || m.content || ''), currentMsg].join(' ');
+  const lower = allTexts.toLowerCase();
+
+  // 1. Conflicto visible (Cliente / Hecho observable)
+  let visibleConflict = 'El roce operativo con el cliente y los compromisos de entrega o servicio afectados por la situación.';
+  if (lower.includes('cliente') || lower.includes('queja') || lower.includes('reclamo') || lower.includes('entrega') || lower.includes('retraso') || lower.includes('calidad') || lower.includes('pedido') || lower.includes('proyecto')) {
+    visibleConflict = 'El incidente directo con el cliente y la falla en los tiempos o calidad de los entregables operativos.';
+  }
+
+  // 2. Tensión subyacente (Jefe / Presión / Expectativas)
+  let underlyingTension = 'La exigencia vertical de la jefatura o directores, donde sientes la presión de responder sin contar con suficiente respaldo o alineación.';
+  if (lower.includes('jefe') || lower.includes('director') || lower.includes('gerente') || lower.includes('presion') || lower.includes('presión') || lower.includes('exigencia') || lower.includes('arriba') || lower.includes('apoyo')) {
+    underlyingTension = 'La dinámica de presión con tu jefatura y el temor a que la falta de resolución afecte la confianza en tu liderazgo.';
+  }
+
+  // 3. Impacto emocional/operativo (Desgaste del líder)
+  let emotionalImpact = 'La sobrecarga personal y la sensación de quedar atrapado en el medio, cargando el estrés para evitar que la operación colapse.';
+  if (lower.includes('estres') || lower.includes('estrés') || lower.includes('frustra') || lower.includes('cansad') || lower.includes('abrumad') || lower.includes('medio') || lower.includes('desgaste')) {
+    emotionalImpact = 'El desgaste personal y la frustración de asumir toda la responsabilidad entre las demandas del cliente y la exigencia de tu jefe.';
+  }
+
+  return { visibleConflict, underlyingTension, emotionalImpact };
+}
+
 function generateContextualCoachReply(
   stage: number,
   leaderName: string,
@@ -40,7 +65,50 @@ function generateContextualCoachReply(
     };
   }
 
-  // 1. Detección de confusión o solicitud de aclaración del usuario
+  // Regla 1: Escucha activa y flexibilidad obligatoria (Petición de NO avanzar / entender mejor)
+  const wantsToPauseOrNotAdvance = [
+    'no quiero avanzar', 'no avancemos', 'no pasar a la etapa 2', 'no quiero pasar a la etapa 2',
+    'espera', 'esperate', 'espérate', 'aun no', 'aún no', 'todavia no', 'todavía no',
+    'no estoy listo', 'no tan rapido', 'no tan rápido', 'despacio', 'vamos muy rapido', 'vamos muy rápido',
+    'necesito entender', 'entender mejor', 'profundizar', 'desglosar', 'desglosa',
+    'ayudame a entender', 'ayúdame a entender', 'variables', 'muchas cosas mezcladas',
+    'no entiendo las variables', 'analizar mejor', 'detengamonos', 'detengámonos',
+    'quiero profundizar', 'desglosame', 'desglósame', 'no pasar', 'detenernos',
+    'ir despacio', 'frena', 'frenemos', 'parar', 'no avanzar'
+  ].some((t) => lowerMsg.includes(t));
+
+  // Regla 2: Formato de Desglose Diagnóstico cuando el usuario pide ayuda para desglosar o entender
+  if (wantsToPauseOrNotAdvance && stage === 1) {
+    const { visibleConflict, underlyingTension, emotionalImpact } = extractDiagnosticVariables(history, cleanMsg, leaderName);
+    return {
+      replyText: `Te escucho con total atención, ${leaderName}. Frenamos el paso: no vamos a avanzar a la Etapa 2 hasta que tengamos total claridad sobre lo que estás viviendo.\n\nPara devolverte valor visible y ayudarte a ordenar las variables que hoy se sienten mezcladas, desgloso lo que he escuchado en tu relato:\n\n• **Conflicto visible:** ${visibleConflict}\n• **Tensión subyacente:** ${underlyingTension}\n• **Impacto emocional/operativo:** ${emotionalImpact}\n\nMirando este mapa con calma:\n1. De estos tres frentes, ¿cuál sientes que es el que genera mayor fricción o te cuesta más trabajo manejar en este momento?\n2. ¿Sientes que este desglose captura con precisión lo que estás viviendo, o hay alguna variable clave que se nos esté escapando?`,
+      readyToAdvance: false,
+      advancePrompt: null,
+      detectedTheme: 'Desglose Diagnóstico',
+      isTherapeuticCase: false,
+    };
+  }
+
+  // Regla 3: Cierre de Etapa 1 guiado (Solo cuando el usuario confirme expresamente que el desglose tiene sentido)
+  const userConfirmsBreakdownOrReady = [
+    'tiene sentido', 'tiene todo el sentido', 'totalmente', 'exacto',
+    'asi es', 'así es', 'de acuerdo', 'estoy listo', 'ahora si', 'ahora sí',
+    'avancemos', 'pasemos a la etapa 2', 'listo para avanzar', 'me queda claro',
+    'tiene mucha razon', 'tiene mucha razón', 'me hace sentido', 'hace sentido',
+    'me parece bien avanzar', 'podemos pasar a la etapa 2', 'pasemos a la siguiente'
+  ].some((t) => lowerMsg.includes(t));
+
+  if (userConfirmsBreakdownOrReady && stage === 1) {
+    return {
+      replyText: `Me alegra que este mapa te dé claridad y ordene el panorama, ${leaderName}. Ahora que las variables clave están comprendidas y hacen sentido para ti, ¿estás de acuerdo en que demos el paso a la Etapa 2 para analizar las perspectivas y habilidades requeridas?`,
+      readyToAdvance: true,
+      advancePrompt: 'Avanzar a Etapa 2: Analizar perspectivas y habilidades',
+      detectedTheme: 'Cierre de Etapa 1 Guiado',
+      isTherapeuticCase: false,
+    };
+  }
+
+  // Detección de confusión o solicitud de aclaración
   const isConfusion = [
     'no entiendo', 'no comprendo', 'a que te refieres', 'a qué te refieres',
     'como que', 'cómo que', 'como asi', 'cómo así', 'no se que responder',
@@ -52,8 +120,9 @@ function generateContextualCoachReply(
 
   if (isConfusion) {
     if (stage === 1) {
+      const { visibleConflict, underlyingTension, emotionalImpact } = extractDiagnosticVariables(history, cleanMsg, leaderName);
       return {
-        replyText: `Te lo planteo de forma muy simple y cotidiana, ${leaderName}: a veces postergamos una charla o decisión difícil porque tenemos muchas cosas urgentes en el día a día. Mi punto es muy concreto: si dejas esta situación tal como está una o dos semanas más, ¿crees que se resuelve sola o empeorará la dinámica con tu equipo? O si lo ves más claro, cuéntame simplemente qué resultado te gustaría alcanzar y partimos de ahí.`,
+        replyText: `Te lo planteo de forma muy simple y cotidiana, ${leaderName}: a veces postergamos una charla o decisión difícil porque tenemos muchas cosas urgentes en el día a día. Para verlo claro:\n\n• **Conflicto visible:** ${visibleConflict}\n• **Tensión subyacente:** ${underlyingTension}\n• **Impacto emocional/operativo:** ${emotionalImpact}\n\n¿Cuál de estos tres puntos crees que es la verdadera causa raíz de lo que está pasando?`,
         readyToAdvance: false,
         advancePrompt: null,
         detectedTheme: 'Clarificación de Situación',
@@ -69,18 +138,9 @@ function generateContextualCoachReply(
         isTherapeuticCase: false,
       };
     }
-    if (stage === 3) {
-      return {
-        replyText: `Para ponerlo fácil, ${leaderName}: no pienses en una estrategia perfecta. Si tuvieras que dar un primer paso este viernes con tu equipo, ¿qué camino te parecería más viable para empezar a resolverlo?`,
-        readyToAdvance: false,
-        advancePrompt: null,
-        detectedTheme: 'Diseño de Alternativas',
-        isTherapeuticCase: false,
-      };
-    }
   }
 
-  // 2. Detección de fatiga, repetición o desgaste del usuario
+  // Detección de fatiga, repetición o desgaste
   const isFatigueOrAlreadyGiven = [
     'ya te dije', 'ya te respondi', 'ya te respondí', 'ya lo dije',
     'ya te comente', 'ya te comenté', 'estoy cansado', 'me cansa',
@@ -105,20 +165,9 @@ function generateContextualCoachReply(
     .map((m: any) => (m.text || m.content || '').toLowerCase());
 
   const askedInvolved = prevLidactaTexts.some((t: string) => t.includes('involucrado') || t.includes('personas clave'));
-  const askedImpact = prevLidactaTexts.some((t: string) => t.includes('impacto') || t.includes('no intervenir') || t.includes('fricción'));
   const askedOutcome = prevLidactaTexts.some((t: string) => t.includes('resultado') || t.includes('lograr') || t.includes('meta'));
 
   if (stage === 1) {
-    if (history.length >= 4 || (askedInvolved && (askedImpact || askedOutcome))) {
-      return {
-        replyText: `Comprendo el panorama con mucha claridad, ${leaderName}. Con los hechos identificados y el impacto mapeado, tenemos lo indispensable para trabajar el fondo del reto. ¿Listo para que pasemos a la Etapa 2 y analicemos cómo lo vive la otra parte y qué habilidades necesitas poner en juego?`,
-        readyToAdvance: true,
-        advancePrompt: 'Avanzar a Etapa 2: Analizar perspectivas y habilidades',
-        detectedTheme: 'Clarificación de Situación',
-        isTherapeuticCase: false,
-      };
-    }
-
     if (!askedInvolved) {
       return {
         replyText: `Tomando en cuenta lo que me comentas: ¿quiénes son las personas directamente involucradas en esta situación y qué rol o postura están teniendo?`,
@@ -132,18 +181,18 @@ function generateContextualCoachReply(
     if (!askedOutcome) {
       return {
         replyText: `Entiendo lo que planteas sobre "${cleanMsg.slice(0, 50)}${cleanMsg.length > 50 ? '...' : ''}". Para enfocar el acompañamiento: ¿qué resultado concreto o cambio de conducta esperas ver una vez que abordes esta situación con tu equipo?`,
-        readyToAdvance: true,
-        advancePrompt: 'Avanzar a Etapa 2: Analizar perspectivas y habilidades',
+        readyToAdvance: false,
+        advancePrompt: null,
         detectedTheme: 'Definición de Meta',
         isTherapeuticCase: false,
       };
     }
 
     return {
-      replyText: `Está muy claro el escenario, ${leaderName}. ¿Hay algún obstáculo o limitante adicional que veas antes de pasar a explorar las distintas perspectivas del equipo?`,
-      readyToAdvance: true,
-      advancePrompt: 'Avanzar a Etapa 2: Analizar perspectivas y habilidades',
-      detectedTheme: 'Revisión de Obstáculos',
+      replyText: `Está muy claro el escenario, ${leaderName}. Mirando todo lo que me has compartido sobre el conflicto con el cliente y las presiones que tienes: ¿qué sientes que es lo que más te frena para resolverlo de fondo?`,
+      readyToAdvance: false,
+      advancePrompt: null,
+      detectedTheme: 'Profundización de Causa Raíz',
       isTherapeuticCase: false,
     };
   }
@@ -283,20 +332,37 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const systemPrompt = `Eres LIDACTA, mentora sénior de liderazgo. Tu misión es acompañar a los líderes en su entorno laboral cotidiano mediante una conversación guiada, estructurada y orientada a la acción.
+    const systemPrompt = `Eres LIDACTA, mentora sénior y facilitadora de desarrollo de liderazgo interactivo. Tu misión es acompañar a los líderes en su entorno laboral cotidiano mediante una conversación guiada, estructurada, empática y orientada a la acción.
 
-Reglas estrictas de interacción:
-1. Límite Terapéutico: NO eres psicólogo ni das terapia. Si detectas crisis emocional clínica o terapéutica, deriva amablemente a un profesional de la salud mental sin bloquear la sesión y marca "isTherapeuticCase": true.
-2. Autonomía del Líder: NO tomas decisiones por el líder; cuestionas, orientas y sugieres.
-3. Cero Consejos Genéricos ni Saludos Repetitivos: Personaliza cada intervención al contexto del líder. NUNCA respondas con saludos de bienvenida genéricos repetitivos (por ejemplo: "Hola [Nombre], entiendo la situación que estás enfrentando..."). Responde de forma directa al contenido del mensaje del líder.
-4. Tono: Profesional, cercano, empático, claro y ejecutivo (1 a 3 párrafos cortos). Formula UNA sola pregunta a la vez.
-5. PROHIBIDO REPETIR PREGUNTAS O COLETILLAS DE CIERRE:
-   - Está terminantemente PROHIBIDO repetir la misma pregunta, fórmula o coletilla de cierre en turnos consecutivos (por ejemplo: "¿qué impacto directo tiene no intervenir en este momento...?").
-   - Si una pregunta ya fue formulada o el líder ya aportó información al respecto, cambia de ángulo con una pregunta diferente o habilita el avance.
-6. MANEJO DE CONFUSIÓN Y FRUSTRACIÓN:
-   - Si el líder dice "No entiendo tu pregunta", "A qué te refieres", "No te sigo", o demuestra cualquier confusión, duda o frustración, DEBES reformular la pregunta con palabras más sencillas, transparentes y cotidianas, o brindar un ejemplo práctico de la vida laboral, en lugar de volver a copiar o insistir en la plantilla de la etapa.
-7. PROGRESO DINÁMICO DE LA CONVERSACIÓN:
-   - Adapta tus intervenciones según lo que el usuario ya compartió. Si el usuario ya dio parte de la información o muestra desgaste ("ya te dije", "estoy saturado"), valida su emoción de forma natural y haz una pregunta diferente que ayude a profundizar sin sonar repetitivo, o propone pasar a la siguiente etapa ("readyToAdvance": true).
+======================================================================
+REGLAS ESTRICTAS DE INTERACCIÓN (ESCÚCHAME CON ATENCIÓN)
+======================================================================
+
+1. ESCUCHA ACTIVA Y FLEXIBILIDAD OBLIGATORIA (PROHIBIDO APURAR):
+   - Si el usuario dice que NO quiere avanzar, que no está listo, que va muy rápido, que necesita entender mejor la situación, o que desea profundizar en el problema:
+     * Está TERMINANTEMENTE PROHIBIDO volver a preguntar si está listo para pasar a la Etapa 2.
+     * Está TERMINANTEMENTE PROHIBIDO sugerir o forzar el avance de etapa.
+     * Debes responder OBLIGATORIAMENTE con "readyToAdvance": false y "advancePrompt": null.
+
+2. FORMATO DE DESGLOSE DIAGNÓSTICO (DEVOLVER VALOR VISIBLE):
+   - Cuando el usuario pida ayuda para entender las variables, desglosar el problema, o manifieste que no quiere avanzar y necesita entender mejor:
+     La mentora DEBE estructurar su respuesta analizando y sintetizando activamente todo lo que ha escuchado en la conversación, devolviendo valor visible con esta estructura exacta en viñetas y negritas:
+     • **Conflicto visible:** [Análisis concreto de lo que ocurrió a nivel operativo, con el cliente o en el hecho detonante observable].
+     • **Tensión subyacente:** [Análisis de la dinámica relacional, presiones verticales o expectativas no resueltas con el jefe, directores o la cultura organizacional].
+     • **Impacto emocional/operativo:** [Análisis del desgaste personal del líder, la sensación de estar atrapado al medio, la sobrecarga o frustración].
+   - Finalizarás haciendo 1 o 2 preguntas reflexivas específicas sobre esos puntos desglosados para ayudar al líder a esclarecer la causa raíz (sin preguntar sobre pasar de etapa).
+
+3. CIERRE DE ETAPA 1 GUIADO:
+   - Solo cuando el usuario confirme expresamente que el desglose y panorama tienen sentido para él (por ejemplo: "Tiene todo el sentido", "Exacto, así es", "De acuerdo, avancemos"), la mentora podrá validar el avance y proponer dar el paso a la Etapa 2 con "readyToAdvance": true y "advancePrompt": "Avanzar a Etapa 2: Analizar perspectivas y habilidades".
+   - Mientras no exista confirmación expresa del usuario, la mentora permanece profundizando en la Etapa 1 con "readyToAdvance": false.
+
+4. Límite Terapéutico: NO eres psicólogo ni das terapia. Si detectas crisis emocional clínica o terapéutica, deriva amablemente a un profesional de la salud mental sin bloquear la sesión y marca "isTherapeuticCase": true.
+5. Autonomía del Líder: NO tomas decisiones por el líder; cuestionas, orientas y sugieres.
+6. Cero Consejos Genéricos ni Saludos Repetitivos: Personaliza cada intervención al contexto del líder. NUNCA respondas con saludos de bienvenida genéricos repetitivos (por ejemplo: "Hola [Nombre], entiendo la situación que estás enfrentando..."). Responde de forma directa al contenido del mensaje del líder.
+7. Tono: Profesional, cercano, empático, claro y ejecutivo (1 a 3 párrafos cortos). Formula UNA sola pregunta o grupo reflexivo a la vez.
+8. PROHIBIDO REPETIR PREGUNTAS O COLETILLAS DE CIERRE:
+   - Está terminantemente PROHIBIDO repetir la misma pregunta o coletilla de cierre en turnos consecutivos (por ejemplo: "¿qué impacto directo tiene no intervenir en este momento...?").
+   - Si una pregunta ya fue realizada o el líder ya aportó información al respecto, cambia de ángulo con una pregunta diferente o profundiza.
 
 Contexto de la sesión:
 - Empresa: ${companyContext?.name || 'Empresa'}
