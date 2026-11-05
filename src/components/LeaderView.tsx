@@ -162,6 +162,7 @@ export const LeaderView: React.FC = () => {
   const [isListeningOnboardingMic, setIsListeningOnboardingMic] = useState(false);
   const [onboardingSpeechRecognizer, setOnboardingSpeechRecognizer] = useState<{ start: () => void; stop: () => void } | null>(null);
   const onboardingBaseTextRef = useRef<string>('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
   const [newChallengePriority, setNewChallengePriority] = useState<'alta' | 'media' | 'baja'>('media');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [mobileHomeTab, setMobileHomeTab] = useState<'prompt' | 'list'>('prompt');
@@ -366,6 +367,10 @@ export const LeaderView: React.FC = () => {
       activeScrollContainerRef.current.scrollTop = 0;
     }
   }, [activeMentorship?.id]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activeMentorship?.messages?.length]);
 
   const toggleOnboardingMic = () => {
     if (isListeningOnboardingMic) {
@@ -1493,10 +1498,11 @@ export const LeaderView: React.FC = () => {
                                     L
                                   </div>
                                   <span className="font-medium italic text-[#4A3F55]">
-                                    Lidacta está escribiendo...
+                                    Lidacta está analizando tu respuesta...
                                   </span>
                                 </div>
                               )}
+                              <div ref={chatEndRef} />
                             </div>
                           ) : isPending ? (
                             <div className="p-4 bg-neutral-50 border border-dashed border-[#493447]/20 rounded-xl text-center space-y-1.5 text-xs text-[#4A3F55]/70">
