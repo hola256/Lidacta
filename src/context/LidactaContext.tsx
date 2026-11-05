@@ -1440,24 +1440,6 @@ El Equipo de Lidacta`;
       }
     } catch (err) {
       console.error('Error sending message:', err);
-      const fallbackLidactaMsg = {
-        id: `msg_${Date.now()}_lid`,
-        sender: 'lidacta' as const,
-        text: `Gracias por compartirlo, ${currentUser.name.split(' ')[0]}. Considerando lo que mencionas en esta etapa, ¿qué aspecto específico consideras más importante atender primero para avanzar con claridad?`,
-        timestamp: new Date().toISOString(),
-        stage: currentStage,
-      };
-      setMentorships((prev) =>
-        prev.map((m) =>
-          m.id === activeMentorship.id
-            ? {
-                ...m,
-                messages: [...m.messages, fallbackLidactaMsg],
-                lastActiveAt: new Date().toISOString(),
-              }
-            : m
-        )
-      );
     } finally {
       setIsSendingMessage(false);
     }

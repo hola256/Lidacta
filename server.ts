@@ -372,7 +372,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
             isTherapeuticCase: false,
           };
         }
-        return res.json({ success: true, data: parsed });
+        return res.json({ success: true, text: parsed.replyText, data: parsed });
       } catch (geminiError) {
         console.warn('Gemini API call warning, falling back to deterministic coach engine:', geminiError);
         // Fallback gracefully below
