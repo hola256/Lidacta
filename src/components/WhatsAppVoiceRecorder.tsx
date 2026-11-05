@@ -137,7 +137,11 @@ export const WhatsAppVoiceRecorder: React.FC<WhatsAppVoiceRecorderProps> = ({
     }
   };
 
-  const cancelRecording = () => {
+  const cancelRecording = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     cleanupRecording();
     setLiveTranscript('');
     accumulatedTranscriptRef.current = '';
@@ -152,13 +156,21 @@ export const WhatsAppVoiceRecorder: React.FC<WhatsAppVoiceRecorderProps> = ({
     return getRandomVoiceSample(stageNumber);
   };
 
-  const stopAndTranscribe = () => {
+  const stopAndTranscribe = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     const textToInsert = getEffectiveTranscript();
     cleanupRecording();
     onTranscript(textToInsert);
   };
 
-  const stopAndSendDirect = () => {
+  const stopAndSendDirect = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     const textToSend = getEffectiveTranscript();
     cleanupRecording();
     if (onSendDirect) {
@@ -319,37 +331,38 @@ export const WhatsAppVoiceRecorder: React.FC<WhatsAppVoiceRecorderProps> = ({
           </p>
         </div>
 
-        {/* Controls: Discard, Stop & Transcribe, Send directly */}
+        {/* Controls: Quick Discard icon, Secondary "Pasar a texto para revisar", Primary "Detener y Enviar Voz →" */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1 w-full max-w-full box-border">
-          <button
-            type="button"
-            onClick={cancelRecording}
-            className="w-full sm:w-auto min-h-[40px] px-3.5 py-2 rounded-xl border border-red-200 text-red-700 bg-red-50 hover:bg-red-100 text-xs font-semibold transition-colors cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 box-border"
-          >
-            <Trash2 className="w-4 h-4 text-red-600" />
-            <span>Descartar grabación</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={cancelRecording}
+              title="Descartar"
+              aria-label="Descartar"
+              className="min-h-[38px] min-w-[38px] p-2 rounded-xl border border-[#493447]/15 text-[#4A3F55] hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors cursor-pointer flex items-center justify-center shrink-0 active:scale-95"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={stopAndTranscribe}
-              className="w-full sm:w-auto min-h-[40px] px-3.5 py-2 bg-white border border-[#493447]/20 hover:border-[#BF3A1B] text-[#2D1B4E] text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-xs active:scale-95 box-border"
+              className="flex-1 sm:flex-initial min-h-[40px] px-3.5 py-2 bg-white border border-[#493447]/20 hover:border-[#2D1B4E]/40 text-[#4A3F55] hover:text-[#2D1B4E] text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 box-border"
             >
-              <Check className="w-4 h-4 text-[#246B2A]" />
-              <span>Transcribir al texto</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={stopAndSendDirect}
-              disabled={isSending}
-              className="w-full sm:w-auto min-h-[40px] px-4 py-2 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] text-xs font-heading font-extrabold rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50 box-border"
-            >
-              <Send className="w-4 h-4 text-[#2D1B4E]" />
-              <span>Enviar voz ahora</span>
+              <Check className="w-3.5 h-3.5 text-[#4A3F55]" />
+              <span>Pasar a texto para revisar</span>
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={stopAndSendDirect}
+            disabled={isSending}
+            className="w-full sm:w-auto min-h-[42px] px-5 py-2.5 bg-[#F7B538] hover:bg-[#F5A623] text-[#2D1B4E] text-xs font-heading font-extrabold rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50 box-border"
+          >
+            <Send className="w-3.5 h-3.5 text-[#2D1B4E]" />
+            <span>Detener y Enviar Voz →</span>
+          </button>
         </div>
       </div>
     );

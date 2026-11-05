@@ -417,9 +417,6 @@ export const LeaderView: React.FC = () => {
       setIsListeningMic(false);
     }
     await sendMessageInActiveSession(textToSend, st === 4);
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 150);
   };
 
   const handleSubmitVoiceDirect = async (st: StageNumber, text: string) => {
@@ -427,9 +424,6 @@ export const LeaderView: React.FC = () => {
     setStageInputText('');
     setInputText('');
     await sendMessageInActiveSession(text.trim(), st === 4);
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 150);
   };
 
   const toggleVoicePlayback = (text: string, messageId?: string) => {
