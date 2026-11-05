@@ -146,11 +146,14 @@ Responde SIEMPRE en JSON estricto con esta estructura:
     let ok = false;
 
     for (const modelName of modelsToTry) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
           body: JSON.stringify({
             systemInstruction: {
               parts: [{ text: systemPrompt }],
@@ -162,6 +165,7 @@ Responde SIEMPRE en JSON estricto con esta estructura:
             },
           }),
         });
+        clearTimeout(timeoutId);
 
         data = await response.json();
         if (response.ok) {
@@ -170,9 +174,9 @@ Responde SIEMPRE en JSON estricto con esta estructura:
         }
 
         console.warn(`Gemini API (${modelName}) status ${response.status}:`, JSON.stringify(data));
-        // Retry immediately on 503 (High Demand), 429 (Quota), or any other error
       } catch (fetchErr) {
-        console.warn(`Fetch error with ${modelName}:`, fetchErr);
+        clearTimeout(timeoutId);
+        console.warn(`Fetch/Timeout error with ${modelName}:`, fetchErr);
       }
     }
 
