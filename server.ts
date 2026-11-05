@@ -23,10 +23,11 @@ const resendApiKey = process.env.RESEND_API_KEY;
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
 // Initialize Google GenAI client
+const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 let ai: GoogleGenAI | null = null;
-if (process.env.GEMINI_API_KEY) {
+if (geminiApiKey) {
   ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
+    apiKey: geminiApiKey,
     httpOptions: {
       headers: {
         'User-Agent': 'aistudio-build',
