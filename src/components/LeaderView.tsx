@@ -1313,7 +1313,9 @@ export const LeaderView: React.FC = () => {
                   const isPending = isCaseCompleted ? false : activeMentorship.currentStage < st;
                   const isOpen = !!openStages[st];
                   const meta = STAGE_META[st];
-                  const stageMessages = activeMentorship.messages.filter((m) => (m.stage || 1) === st);
+                  const stageMessages = activeMentorship.messages
+                    .filter((m) => (m.stage || 1) === st)
+                    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
                   return (
                     <div
@@ -1474,8 +1476,8 @@ export const LeaderView: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Pregunta detonadora de Lidacta (Apertura de conversación) */}
-                          {!isPending && (
+                          {/* Pregunta detonadora de Lidacta (Apertura de conversación para Etapas 2-7) */}
+                          {!isPending && st > 1 && (
                             <div className="bg-[#FFF7EF] border border-[#FFD3BF] rounded-2xl p-4 sm:p-5 shadow-xs space-y-2.5">
                               <div className="flex items-center justify-between border-b border-[#FFD3BF]/60 pb-2">
                                 <div className="flex items-center gap-2.5">
