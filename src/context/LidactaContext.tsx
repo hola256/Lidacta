@@ -1437,9 +1437,38 @@ El Equipo de Lidacta`;
             userMessageSnippet: text,
           }).catch((err) => console.error('Error triggering therapeutic alert:', err));
         }
+      } else {
+        const errMsg = {
+          id: `msg_${Date.now()}_err`,
+          sender: 'lidacta' as const,
+          text: 'Lidacta no pudo responder en este momento. Por favor reintenta.',
+          timestamp: new Date().toISOString(),
+          stage: currentStage,
+        };
+        setMentorships((prev) =>
+          prev.map((m) =>
+            m.id === activeMentorship.id
+              ? { ...m, messages: [...m.messages, errMsg], lastActiveAt: new Date().toISOString() }
+              : m
+          )
+        );
       }
     } catch (err) {
       console.error('Error sending message:', err);
+      const errMsg = {
+        id: `msg_${Date.now()}_err`,
+        sender: 'lidacta' as const,
+        text: 'Lidacta no pudo responder en este momento. Por favor reintenta.',
+        timestamp: new Date().toISOString(),
+        stage: currentStage,
+      };
+      setMentorships((prev) =>
+        prev.map((m) =>
+          m.id === activeMentorship.id
+            ? { ...m, messages: [...m.messages, errMsg], lastActiveAt: new Date().toISOString() }
+            : m
+        )
+      );
     } finally {
       setIsSendingMessage(false);
     }

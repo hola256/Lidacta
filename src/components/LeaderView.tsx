@@ -1498,7 +1498,7 @@ export const LeaderView: React.FC = () => {
                                     L
                                   </div>
                                   <span className="font-medium italic text-[#4A3F55]">
-                                    Lidacta está analizando tu respuesta...
+                                    Lidacta está pensando su respuesta...
                                   </span>
                                 </div>
                               )}
