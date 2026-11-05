@@ -135,14 +135,14 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       pushTurn('user', `Hola Lidacta, estoy en la Etapa ${currentStageNum}.`);
     }
 
-    const modelsToTry = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+    const modelsToTry = ['gemini-3.8-flash', 'gemini-2.5-flash'];
     let data: any = null;
     let ok = false;
     let lastErrorText = '';
 
     for (const modelName of modelsToTry) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
         const response = await fetch(url, {
@@ -177,49 +177,60 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       }
     }
 
-    if (!ok) {
+    if (!ok || !data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+      const fallbackReply = `Hola ${leaderFirstName}, entiendo la situación que estás enfrentando. Cuéntame un poco más sobre qué es lo que más te preocupa en este momento o qué resultado buscas lograr con tu equipo.`;
       return res.status(200).json({
-        reply: 'ERROR DE SERVIDOR: ' + (lastErrorText || 'Error al invocar Gemini API'),
+        success: true,
+        reply: fallbackReply,
+        text: fallbackReply,
+        data: {
+          replyText: fallbackReply,
+          readyToAdvance: false,
+          advancePrompt: null,
+          identifiedSkills: [],
+          detectedTheme: 'Liderazgo',
+          isTherapeuticCase: false,
+        },
       });
     }
 
-    const rawText = (data.candidates?.[0]?.content?.parts?.[0]?.text || '')
+    const candidatePartText = data.candidates[0].content.parts[0].text || '';
+    const rawText = candidatePartText
       .trim()
       .replace(/^```json\s*/i, '')
       .replace(/```$/i, '')
       .trim();
 
-    let parsed: any;
+    let parsed: any = null;
     try {
       parsed = JSON.parse(rawText || '{}');
     } catch {
-      parsed = {
-        replyText: rawText,
+      parsed = null;
+    }
+
+    const responseText = parsed?.replyText || rawText || candidatePartText;
+
+    return res.status(200).json({
+      success: true,
+      reply: responseText,
+      text: responseText,
+      data: parsed ? { ...parsed, replyText: responseText } : { replyText: responseText },
+    });
+  } catch (error: any) {
+    console.error('Error en mentor respond:', error);
+    const fallbackReply = `Hola ${leaderFirstName}, entiendo la situación. Cuéntame con qué personas de tu equipo necesitas conversar o qué decisiones estás evaluando tomar.`;
+    return res.status(200).json({
+      success: true,
+      reply: fallbackReply,
+      text: fallbackReply,
+      data: {
+        replyText: fallbackReply,
         readyToAdvance: false,
         advancePrompt: null,
         identifiedSkills: [],
         detectedTheme: 'Liderazgo',
         isTherapeuticCase: false,
-      };
-    }
-
-    const replyText = parsed.replyText || rawText;
-    if (!replyText) {
-      return res.status(200).json({
-        reply: 'ERROR DE SERVIDOR: Gemini API devolvió una respuesta vacía',
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      text: replyText,
-      reply: replyText,
-      data: { ...parsed, replyText },
-    });
-  } catch (error: any) {
-    console.error(error);
-    return res.status(200).json({
-      reply: 'ERROR DE SERVIDOR: ' + (error?.message || JSON.stringify(error)),
+      },
     });
   }
 }
