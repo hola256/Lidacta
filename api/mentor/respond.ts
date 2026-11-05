@@ -59,21 +59,14 @@ export default async function handler(req: any, res: any) {
       ? history
       : [];
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const apiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.API_KEY ||
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     if (!apiKey) {
-      const fallbackReply = `Hola ${leaderFirstName}. Gracias por compartir tu situación en esta Etapa ${currentStageNum}. ¿Qué aspecto específico te gustaría abordar primero para avanzar con claridad?`;
-      return res.status(200).json({
-        success: true,
-        text: fallbackReply,
-        reply: fallbackReply,
-        data: {
-          replyText: fallbackReply,
-          readyToAdvance: false,
-          advancePrompt: null,
-          identifiedSkills: [],
-          detectedTheme: 'Liderazgo',
-          isTherapeuticCase: false,
-        },
+      return res.status(500).json({
+        success: false,
+        error: 'Falta la API Key en las variables de entorno de Vercel',
       });
     }
 
@@ -222,11 +215,10 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       reply: replyText,
       data: { ...parsed, replyText },
     });
-  } catch (err: any) {
-    console.error('Internal Error in /api/mentor/respond:', err);
+  } catch (error: any) {
+    console.error(error);
     return res.status(500).json({
-      success: false,
-      error: err?.message || 'Error interno en /api/mentor/respond',
+      error: error?.message || 'Internal Server Error',
     });
   }
 }
