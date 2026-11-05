@@ -135,9 +135,10 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       pushTurn('user', `Hola Lidacta, estoy en la Etapa ${currentStageNum}.`);
     }
 
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    const modelsToTry = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
     let data: any = null;
     let ok = false;
+    let lastErrorText = '';
 
     for (const modelName of modelsToTry) {
       const controller = new AbortController();
@@ -161,23 +162,24 @@ Responde SIEMPRE en JSON estricto con esta estructura:
         });
         clearTimeout(timeoutId);
 
-        data = await response.json();
         if (response.ok) {
+          data = await response.json();
           ok = true;
           break;
         }
 
-        console.warn(`Gemini API (${modelName}) status ${response.status}:`, JSON.stringify(data));
-      } catch (fetchErr) {
+        lastErrorText = await response.text();
+        console.warn(`Gemini API (${modelName}) status ${response.status}:`, lastErrorText);
+      } catch (fetchErr: any) {
         clearTimeout(timeoutId);
+        lastErrorText = fetchErr?.message || JSON.stringify(fetchErr);
         console.warn(`Fetch/Timeout error with ${modelName}:`, fetchErr);
       }
     }
 
     if (!ok) {
-      return res.status(500).json({
-        success: false,
-        error: data?.error?.message || 'Error al invocar Gemini API',
+      return res.status(200).json({
+        reply: 'ERROR DE SERVIDOR: ' + (lastErrorText || 'Error al invocar Gemini API'),
       });
     }
 
@@ -203,9 +205,8 @@ Responde SIEMPRE en JSON estricto con esta estructura:
 
     const replyText = parsed.replyText || rawText;
     if (!replyText) {
-      return res.status(500).json({
-        success: false,
-        error: 'Gemini API devolvió una respuesta vacía',
+      return res.status(200).json({
+        reply: 'ERROR DE SERVIDOR: Gemini API devolvió una respuesta vacía',
       });
     }
 
@@ -217,8 +218,8 @@ Responde SIEMPRE en JSON estricto con esta estructura:
     });
   } catch (error: any) {
     console.error(error);
-    return res.status(500).json({
-      error: error?.message || 'Internal Server Error',
+    return res.status(200).json({
+      reply: 'ERROR DE SERVIDOR: ' + (error?.message || JSON.stringify(error)),
     });
   }
 }
