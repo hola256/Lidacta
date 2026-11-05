@@ -1534,7 +1534,7 @@ export const LeaderView: React.FC = () => {
 
                           {/* Messages Timeline for this Stage */}
                           {stageMessages.length > 0 ? (
-                            <div className="space-y-3">
+                            <div className="flex flex-col space-y-3">
                               {stageMessages.map(renderSingleMessage)}
                             </div>
                           ) : isPending ? (
