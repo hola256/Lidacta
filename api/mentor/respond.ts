@@ -101,37 +101,44 @@ Responde SIEMPRE en JSON estricto con esta estructura:
   "therapeuticReason": null
 }`;
 
-    // Build Gemini contents array with explicit role: "user" | "model"
+    // Build Gemini contents array with explicit role: "user" | "model" and strict alternation
     const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+
+    const pushTurn = (role: 'user' | 'model', text: string) => {
+      const clean = text.trim();
+      if (!clean) return;
+      if (contents.length === 0 && role === 'model') {
+        // Gemini requires contents to start with a 'user' turn
+        contents.push({ role: 'user', parts: [{ text: 'Hola Lidacta, necesito apoyo con una situación de liderazgo.' }] });
+      }
+      const last = contents[contents.length - 1];
+      if (last && last.role === role) {
+        if (!last.parts[0].text.includes(clean)) {
+          last.parts[0].text = `${last.parts[0].text}\n\n${clean}`;
+        }
+      } else {
+        contents.push({
+          role,
+          parts: [{ text: clean }],
+        });
+      }
+    };
 
     for (const msg of resolvedHistory) {
       const msgText = (msg.text || msg.content || '').trim();
       if (!msgText) continue;
       const role: 'user' | 'model' =
         msg.sender === 'leader' || msg.role === 'user' ? 'user' : 'model';
-      contents.push({
-        role,
-        parts: [{ text: msgText }],
-      });
+      pushTurn(role, msgText);
     }
 
     // Ensure the latest userMessage is included as the final "user" turn
-    const lastContent = contents[contents.length - 1];
-    if (
-      resolvedUserMessage &&
-      (!lastContent || lastContent.role !== 'user' || lastContent.parts[0]?.text !== resolvedUserMessage)
-    ) {
-      contents.push({
-        role: 'user',
-        parts: [{ text: resolvedUserMessage }],
-      });
+    if (resolvedUserMessage) {
+      pushTurn('user', resolvedUserMessage);
     }
 
     if (contents.length === 0) {
-      contents.push({
-        role: 'user',
-        parts: [{ text: `Hola Lidacta, estoy en la Etapa ${currentStageNum}.` }],
-      });
+      pushTurn('user', `Hola Lidacta, estoy en la Etapa ${currentStageNum}.`);
     }
 
     const modelsToTry = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.5-flash'];
