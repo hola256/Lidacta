@@ -1471,61 +1471,6 @@ export const LeaderView: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Pregunta detonadora de Lidacta (Apertura de conversación para Etapas 2-7) */}
-                          {!isPending && st > 1 && (
-                            <div className="bg-[#FFF7EF] border border-[#FFD3BF] rounded-2xl p-4 sm:p-5 shadow-xs space-y-2.5">
-                              <div className="flex items-center justify-between border-b border-[#FFD3BF]/60 pb-2">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="w-8 h-8 rounded-xl bg-[#2D1B4E] text-[#F7B538] flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
-                                    L
-                                  </div>
-                                  <div>
-                                    <span className="font-heading font-bold text-xs text-[#2D1B4E]">
-                                      Lidacta · Apertura de conversación
-                                    </span>
-                                    <span className="block text-[10px] text-[#BF3A1B] font-semibold">
-                                      Pregunta detonadora · {meta.name} ({meta.shortTitle})
-                                    </span>
-                                  </div>
-                                </div>
-                                {audioState.id === `trigger-${st}` && audioState.status === 'loading' ? (
-                                  <div className="flex items-center gap-1.5 text-xs text-[#BF3A1B] font-medium px-2.5 py-1 bg-[#FFD3BF]/30 rounded-lg animate-pulse">
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#BF3A1B]" />
-                                    <span className="text-[11px] font-semibold">Cargando audio...</span>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      toggleVoicePlayback(
-                                        getStageTriggerQuestion(st, activeMentorship),
-                                        `trigger-${st}`
-                                      )
-                                    }
-                                    title="Escuchar pregunta detonadora con la voz clonada de Lidacta Mentora"
-                                    className="text-[#BF3A1B] hover:text-[#2D1B4E] text-xs flex items-center gap-1 cursor-pointer px-2.5 py-1 rounded-lg hover:bg-[#FFD3BF]/30 transition-colors"
-                                  >
-                                    {audioState.id === `trigger-${st}` && audioState.status === 'playing' ? (
-                                      <>
-                                        <VolumeX className="w-3.5 h-3.5 text-[#BF3A1B] animate-pulse" />
-                                        <span className="hidden sm:inline font-bold">Pausar</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Volume2 className="w-3.5 h-3.5" />
-                                        <span className="hidden sm:inline">Escuchar</span>
-                                      </>
-                                    )}
-                                  </button>
-                                )}
-                              </div>
-
-                              <p className="text-xs sm:text-sm text-[#2D1B4E] font-medium leading-relaxed whitespace-pre-line">
-                                {getStageTriggerQuestion(st, activeMentorship)}
-                              </p>
-                            </div>
-                          )}
-
                           {/* Messages Timeline for this Stage */}
                           {sortedMessages.length > 0 ? (
                             <div className="flex flex-col gap-4 w-full">
@@ -1538,61 +1483,6 @@ export const LeaderView: React.FC = () => {
                               <p className="text-[11px]">Se activará automáticamente conforme avances en las etapas previas del acompañamiento.</p>
                             </div>
                           ) : null}
-
-                          {/* Respuesta inicial / Pregunta detonadora de Lidacta en Etapa 1 (después del mensaje del líder) */}
-                          {!isPending && st === 1 && !sortedMessages.some((m) => m.sender === 'lidacta') && (
-                            <div className="bg-[#FFF7EF] border border-[#FFD3BF] rounded-2xl p-4 sm:p-5 shadow-xs space-y-2.5">
-                              <div className="flex items-center justify-between border-b border-[#FFD3BF]/60 pb-2">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="w-8 h-8 rounded-xl bg-[#2D1B4E] text-[#F7B538] flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
-                                    L
-                                  </div>
-                                  <div>
-                                    <span className="font-heading font-bold text-xs text-[#2D1B4E]">
-                                      Lidacta · Apertura de conversación
-                                    </span>
-                                    <span className="block text-[10px] text-[#BF3A1B] font-semibold">
-                                      Pregunta detonadora · {meta.name} ({meta.shortTitle})
-                                    </span>
-                                  </div>
-                                </div>
-                                {audioState.id === `trigger-${st}` && audioState.status === 'loading' ? (
-                                  <div className="flex items-center gap-1.5 text-xs text-[#BF3A1B] font-medium px-2.5 py-1 bg-[#FFD3BF]/30 rounded-lg animate-pulse">
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#BF3A1B]" />
-                                    <span className="text-[11px] font-semibold">Cargando audio...</span>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      toggleVoicePlayback(
-                                        getStageTriggerQuestion(st, activeMentorship),
-                                        `trigger-${st}`
-                                      )
-                                    }
-                                    title="Escuchar pregunta detonadora con la voz clonada de Lidacta Mentora"
-                                    className="text-[#BF3A1B] hover:text-[#2D1B4E] text-xs flex items-center gap-1 cursor-pointer px-2.5 py-1 rounded-lg hover:bg-[#FFD3BF]/30 transition-colors"
-                                  >
-                                    {audioState.id === `trigger-${st}` && audioState.status === 'playing' ? (
-                                      <>
-                                        <VolumeX className="w-3.5 h-3.5 text-[#BF3A1B] animate-pulse" />
-                                        <span className="hidden sm:inline font-bold">Pausar</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Volume2 className="w-3.5 h-3.5" />
-                                        <span className="hidden sm:inline">Escuchar</span>
-                                      </>
-                                    )}
-                                  </button>
-                                )}
-                              </div>
-
-                              <p className="text-xs sm:text-sm text-[#2D1B4E] font-medium leading-relaxed whitespace-pre-line">
-                                {getStageTriggerQuestion(st, activeMentorship)}
-                              </p>
-                            </div>
-                          )}
 
                           {/* Interactive Conversational Input Form for Stage (Etapa 1 to 7) */}
                           {isCurrent && (
