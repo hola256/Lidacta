@@ -181,19 +181,9 @@ Responde SIEMPRE en JSON estricto con esta estructura:
     }
 
     if (!ok) {
-      const fallbackReply = `Entiendo lo que planteas, ${leaderFirstName}. Para seguir avanzando en esta Etapa ${currentStageNum}, ¿qué es lo que más te preocupa o qué resultado concreto te gustaría lograr en esta situación?`;
-      return res.status(200).json({
-        success: true,
-        text: fallbackReply,
-        reply: fallbackReply,
-        data: {
-          replyText: fallbackReply,
-          readyToAdvance: false,
-          advancePrompt: null,
-          identifiedSkills: [],
-          detectedTheme: 'Liderazgo',
-          isTherapeuticCase: false,
-        },
+      return res.status(500).json({
+        success: false,
+        error: data?.error?.message || 'Error al invocar Gemini API',
       });
     }
 
@@ -208,7 +198,7 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       parsed = JSON.parse(rawText || '{}');
     } catch {
       parsed = {
-        replyText: rawText || `Gracias por compartirlo, ${leaderFirstName}. ¿Qué te gustaría explorar a continuación?`,
+        replyText: rawText,
         readyToAdvance: false,
         advancePrompt: null,
         identifiedSkills: [],
@@ -217,9 +207,13 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       };
     }
 
-    const replyText =
-      parsed.replyText ||
-      `Gracias por compartirlo, ${leaderFirstName}. ¿Qué aspecto consideras clave atender primero?`;
+    const replyText = parsed.replyText || rawText;
+    if (!replyText) {
+      return res.status(500).json({
+        success: false,
+        error: 'Gemini API devolvió una respuesta vacía',
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -229,19 +223,9 @@ Responde SIEMPRE en JSON estricto con esta estructura:
     });
   } catch (err: any) {
     console.error('Internal Error in /api/mentor/respond:', err);
-    const fallbackReply = `Gracias por compartirlo, ${leaderFirstName}. ¿Qué aspecto específico de esta situación te gustaría analizar primero?`;
-    return res.status(200).json({
-      success: true,
-      text: fallbackReply,
-      reply: fallbackReply,
-      data: {
-        replyText: fallbackReply,
-        readyToAdvance: false,
-        advancePrompt: null,
-        identifiedSkills: [],
-        detectedTheme: 'Liderazgo',
-        isTherapeuticCase: false,
-      },
+    return res.status(500).json({
+      success: false,
+      error: err?.message || 'Error interno en /api/mentor/respond',
     });
   }
 }
