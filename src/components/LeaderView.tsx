@@ -1088,9 +1088,9 @@ export const LeaderView: React.FC = () => {
                   </label>
                   <div className="grid grid-cols-3 gap-2.5">
                     {[
-                      { id: 'alta' as const, label: 'Alta', desc: 'Atención inmediata', activeClass: 'bg-[#FFE5E5] border-[#BF3A1B] text-[#BF3A1B]' },
-                      { id: 'media' as const, label: 'Media', desc: 'Seguimiento cercano', activeClass: 'bg-[#FFF3D6] border-[#F7B538] text-[#2D1B4E]' },
-                      { id: 'baja' as const, label: 'Baja', desc: 'Desarrollo continuo', activeClass: 'bg-[#E2F7E1] border-[#246B2A] text-[#246B2A]' },
+                      { id: 'alta' as const, icon: '⚠️', label: 'Alta', desc: 'Crítico. Resolver ahora mismo.', activeClass: 'bg-[#FFE5E5] border-[#BF3A1B] text-[#BF3A1B]' },
+                      { id: 'media' as const, icon: '🕒', label: 'Media', desc: 'Resolver durante el día.', activeClass: 'bg-[#FFF3D6] border-[#F7B538] text-[#2D1B4E]' },
+                      { id: 'baja' as const, icon: '✅', label: 'Baja', desc: 'Mejora continua', activeClass: 'bg-[#E2F7E1] border-[#246B2A] text-[#246B2A]' },
                     ].map((p) => {
                       const isSelected = newChallengePriority === p.id;
                       return (
@@ -1104,8 +1104,11 @@ export const LeaderView: React.FC = () => {
                               : 'bg-[#FFF7EF]/40 border-[#493447]/15 text-[#4A3F55] hover:border-[#493447]/30'
                           }`}
                         >
-                          <div className="font-heading font-bold text-xs sm:text-sm">{p.label}</div>
-                          <div className="text-[10px] opacity-80 hidden sm:block">{p.desc}</div>
+                          <div className="flex items-center gap-1.5 font-heading font-bold text-xs sm:text-sm">
+                            <span>{p.icon}</span>
+                            <span>{p.label}</span>
+                          </div>
+                          <div className="text-[10px] sm:text-[11px] opacity-85 mt-0.5 leading-snug">{p.desc}</div>
                         </button>
                       );
                     })}
