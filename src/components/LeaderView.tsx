@@ -1533,6 +1533,12 @@ export const LeaderView: React.FC = () => {
                                   setStageInputText(e.target.value);
                                   setInputText(e.target.value);
                                 }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSubmitStageMessage(st);
+                                  }
+                                }}
                                 placeholder={
                                   st === 7
                                     ? 'Escribe tus reflexiones finales o dudas sobre el reporte para Lidacta...'
