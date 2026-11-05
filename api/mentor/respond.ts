@@ -99,27 +99,35 @@ Responde SIEMPRE en JSON estricto con esta estructura:
   "therapeuticReason": null
 }`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
+    let data: any = null;
+    let ok = false;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: promptText }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.7,
-        },
-      }),
-    });
+    for (const modelName of modelsToTry) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptText }] }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.7,
+          },
+        }),
+      });
+      data = await response.json();
+      if (response.ok) {
+        ok = true;
+        break;
+      }
+      console.error(`Error desde Google API (${modelName}):`, JSON.stringify(data));
+    }
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('Error desde Google API:', data);
+    if (!ok) {
       return res.status(500).json({
         success: false,
-        error: data.error?.message || 'Error en Gemini API',
+        error: data?.error?.message || 'Error al invocar Gemini',
       });
     }
 
