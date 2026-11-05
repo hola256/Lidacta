@@ -47,11 +47,12 @@ export default async function handler(req: any, res: any) {
       history,
       userMessage,
       currentMessage,
+      message,
     } = body || {};
 
     currentStageNum = Number(stage || activeStage) || 1;
     leaderFirstName = (leaderProfile?.name || 'Líder').split(' ')[0];
-    const resolvedUserMessage = (userMessage || currentMessage || '').trim();
+    const resolvedUserMessage = (userMessage || currentMessage || message || '').trim();
     const resolvedHistory = Array.isArray(conversationHistory)
       ? conversationHistory
       : Array.isArray(history)

@@ -1334,12 +1334,13 @@ El Equipo de Lidacta`;
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          message: text,
+          history: updatedMessages,
           stage: currentStage,
           activeStage: currentStage,
           leaderProfile: currentUser,
           companyContext: company,
           conversationHistory: updatedMessages,
-          history: updatedMessages,
           userMessage: text,
           currentMessage: text,
           sessionData: activeMentorship,
@@ -1348,13 +1349,14 @@ El Equipo de Lidacta`;
       });
 
       const data = await response.json();
-      if (data.success && data.data) {
-        const coachReply = data.data;
+      const resolvedReply = data.reply || data.response || data.text || data.data?.replyText;
+      if (response.ok && resolvedReply) {
+        const coachReply = data.data || {};
 
         const lidactaMsg = {
           id: `msg_${Date.now()}_lid`,
           sender: 'lidacta' as const,
-          text: coachReply.replyText,
+          text: resolvedReply,
           timestamp: new Date().toISOString(),
           stage: currentStage,
         };
@@ -1453,8 +1455,8 @@ El Equipo de Lidacta`;
           )
         );
       }
-    } catch (err) {
-      console.error('Error sending message:', err);
+    } catch (error) {
+      console.error('Error detallado del chat:', error);
       const errMsg = {
         id: `msg_${Date.now()}_err`,
         sender: 'lidacta' as const,
