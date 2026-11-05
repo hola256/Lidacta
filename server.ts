@@ -117,11 +117,13 @@ En todas sus interacciones, Lidacta debe cumplir tres objetivos:
 - Conciso: Respeta el tiempo del líder (intervenciones breves y al grano, párrafos cortos).
 - Idioma: Lidacta siempre hablará en español al líder.
 
-1.5 Criterio para formular preguntas
+1.5 Criterio para formular preguntas y Progreso Dinámico
 - Formular únicamente las preguntas necesarias para comprender la situación.
-- Formular UNA pregunta a la vez y esperar la respuesta antes de continuar.
+- Formular UNA sola pregunta a la vez y esperar la respuesta antes de continuar.
+- PROHIBIDO REPETIR PREGUNTAS O COLETILLAS DE CIERRE: NUNCA repitas la misma pregunta, fórmula o coletilla de cierre en turnos consecutivos (por ejemplo: "¿qué impacto directo tiene no intervenir en este momento...?").
+- MANEJO DE CONFUSIÓN O FRUSTRACIÓN: Si el líder expresa confusión ("No entiendo tu pregunta", "A qué te refieres", "No te sigo", etc.) o muestra frustración/desgaste, DEBES reformular la pregunta con palabras más sencillas, transparentes y cotidianas, o brindar un ejemplo práctico de la vida laboral, en lugar de repetir o insistir en la plantilla de la etapa.
+- PROGRESO Y ADAPTACIÓN: Adapta tus preguntas a lo que el líder ya compartió. Si el líder ya proporcionó parte de la información o muestra cansancio, valida su emoción de forma natural y haz una pregunta diferente que ayude a profundizar o habilita el avance ("readyToAdvance": true).
 - Evitar repetir preguntas o solicitar información que el líder ya proporcionó.
-- No avanzar automáticamente por alcanzar un número de preguntas; avanzar cuando se cumpla el objetivo de la etapa.
 - Nunca inventar información.
 
 ======================================================================
@@ -339,7 +341,11 @@ ${historyText || '(Inicio de la mentoría)'}
 ${isPracticeMode ? '[El líder está en modo práctica / roleplay de la Etapa 4]' : ''}
 Datos previos guardados: ${JSON.stringify(sessionData || {})}
 
-IMPORTANTE: Responde de forma empática, humana y reflexiva, validando la emoción expresada y formulando una pregunta de seguimiento específica basada estrictamente en la última intervención del líder. Nunca repitas respuestas anteriores.
+IMPORTANTE: Responde de forma empática, humana y reflexiva, validando la emoción expresada y formulando una pregunta de seguimiento específica basada estrictamente en la última intervención del líder.
+REGLA CRÍTICA ANTI-CICLADO:
+- Está terminantemente PROHIBIDO repetir la misma pregunta o coletilla de cierre en turnos consecutivos (por ejemplo: "¿qué impacto directo tiene no intervenir en este momento...?").
+- Si el líder expresa confusión ("No entiendo tu pregunta", "A qué te refieres", "No te sigo"), reformula la pregunta con palabras cotidianas y más sencillas, o brinda un ejemplo práctico laboral en lugar de repetir la plantilla.
+- Si el líder ya aportó información o muestra desgaste, valida su sentir de forma natural y haz una pregunta diferente o habilita el avance ("readyToAdvance": true).
 
 Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSON estricto.`;
 
@@ -512,6 +518,47 @@ function generateDeterministicCoaching({
       detectedTheme: 'Orientación y Límite de Rol (Bienestar Integral)',
       isTherapeuticCase: true,
       therapeuticReason: therapeuticCheck.reason,
+    };
+  }
+
+  const cleanMsg = (userMessage || '').trim();
+  const lowerMsg = cleanMsg.toLowerCase();
+
+  // Detección de confusión o solicitud de aclaración del líder
+  const isConfusion = [
+    'no entiendo', 'no comprendo', 'a que te refieres', 'a qué te refieres',
+    'como que', 'cómo que', 'como asi', 'cómo así', 'no se que responder',
+    'no sé qué responder', 'no se a que te refieres', 'no sé a qué te refieres',
+    'explicate', 'explícate', 'a que te refieres con', 'a qué te refieres con',
+    'no me queda claro', 'que significa', 'qué significa', 'a que te refieres exactamente',
+    'no entendi', 'no entendí', 'no te sigo', 'no te comprendo', 'de que hablas', 'de qué hablas'
+  ].some((t) => lowerMsg.includes(t));
+
+  if (isConfusion) {
+    if (stage === 1) {
+      return {
+        replyText: `Te lo planteo de forma muy simple y cotidiana, ${leaderName}: a veces postergamos una charla o decisión difícil porque tenemos muchas cosas urgentes en el día a día. Mi punto es muy concreto: si dejas esta situación tal como está una o dos semanas más, ¿crees que se resuelve sola o empeorará la dinámica con tu equipo? O si lo ves más claro, cuéntame simplemente qué resultado te gustaría alcanzar y partimos de ahí.`,
+        readyToAdvance: false,
+        detectedTheme: detectTopicFromText(userMessage),
+      };
+    }
+  }
+
+  // Detección de fatiga o repetición expresada por el líder
+  const isFatigue = [
+    'ya te dije', 'ya te respondi', 'ya te respondí', 'ya lo dije',
+    'ya te comente', 'ya te comenté', 'estoy cansado', 'me cansa',
+    'me frustra', 'otra vez', 'de nuevo la misma pregunta',
+    'ya respondi', 'ya respondí', 'ya te explique', 'ya te expliqué',
+    'repetitivo', 'lo mismo', 'otra vez lo mismo'
+  ].some((t) => lowerMsg.includes(t));
+
+  if (isFatigue) {
+    return {
+      replyText: `Tienes toda la razón, ${leaderName}, y aprecio tu paciencia. Comprendo perfectamente el desgaste de sentir que repetimos el punto cuando lo que buscas es avanzar. Tenemos la información clave bien delimitada. ¿Te parece bien que avancemos a la siguiente etapa para concentrarnos en las soluciones?`,
+      readyToAdvance: true,
+      advancePrompt: `Avanzar a Etapa ${stage + 1}: ${STAGE_NAMES[stage + 1] || 'Siguiente Etapa'}`,
+      detectedTheme: 'Validación y Avance',
     };
   }
 

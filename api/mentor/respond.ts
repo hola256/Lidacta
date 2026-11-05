@@ -40,21 +40,110 @@ function generateContextualCoachReply(
     };
   }
 
-  if (stage === 1) {
-    if (history.length > 2) {
+  // 1. Detección de confusión o solicitud de aclaración del usuario
+  const isConfusion = [
+    'no entiendo', 'no comprendo', 'a que te refieres', 'a qué te refieres',
+    'como que', 'cómo que', 'como asi', 'cómo así', 'no se que responder',
+    'no sé qué responder', 'no se a que te refieres', 'no sé a qué te refieres',
+    'explicate', 'explícate', 'a que te refieres con', 'a qué te refieres con',
+    'no me queda claro', 'que significa', 'qué significa', 'a que te refieres exactamente',
+    'no entendi', 'no entendí', 'no te sigo', 'no te comprendo', 'de que hablas', 'de qué hablas'
+  ].some((t) => lowerMsg.includes(t));
+
+  if (isConfusion) {
+    if (stage === 1) {
       return {
-        replyText: `Comprendo el punto que señalas sobre "${cleanMsg.slice(0, 60)}${cleanMsg.length > 60 ? '...' : ''}". Para cerrar esta primera etapa de detección: ¿qué impacto directo tiene no intervenir en este momento y qué resultado concreto buscas obtener al resolver esta situación?`,
+        replyText: `Te lo planteo de forma muy simple y cotidiana, ${leaderName}: a veces postergamos una charla o decisión difícil porque tenemos muchas cosas urgentes en el día a día. Mi punto es muy concreto: si dejas esta situación tal como está una o dos semanas más, ¿crees que se resuelve sola o empeorará la dinámica con tu equipo? O si lo ves más claro, cuéntame simplemente qué resultado te gustaría alcanzar y partimos de ahí.`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        detectedTheme: 'Clarificación de Situación',
+        isTherapeuticCase: false,
+      };
+    }
+    if (stage === 2) {
+      return {
+        replyText: `Aterricémoslo con un ejemplo sencillo, ${leaderName}: si le preguntáramos a la otra persona involucrada qué opina de este problema, ¿qué crees que nos diría? Mirarlo desde sus ojos nos permite identificar qué habilidad de comunicación o firmeza necesitas activar tú.`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        detectedTheme: 'Perspectivas y Habilidades',
+        isTherapeuticCase: false,
+      };
+    }
+    if (stage === 3) {
+      return {
+        replyText: `Para ponerlo fácil, ${leaderName}: no pienses en una estrategia perfecta. Si tuvieras que dar un primer paso este viernes con tu equipo, ¿qué camino te parecería más viable para empezar a resolverlo?`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        detectedTheme: 'Diseño de Alternativas',
+        isTherapeuticCase: false,
+      };
+    }
+  }
+
+  // 2. Detección de fatiga, repetición o desgaste del usuario
+  const isFatigueOrAlreadyGiven = [
+    'ya te dije', 'ya te respondi', 'ya te respondí', 'ya lo dije',
+    'ya te comente', 'ya te comenté', 'estoy cansado', 'me cansa',
+    'me frustra', 'otra vez', 'de nuevo la misma pregunta',
+    'ya respondi', 'ya respondí', 'ya te explique', 'ya te expliqué',
+    'repetitivo', 'lo mismo', 'otra vez lo mismo'
+  ].some((t) => lowerMsg.includes(t));
+
+  if (isFatigueOrAlreadyGiven) {
+    return {
+      replyText: `Tienes toda la razón, ${leaderName}, y aprecio tu paciencia. Comprendo perfectamente el desgaste de sentir que repetimos el punto cuando lo que buscas es avanzar. Tenemos la información clave bien delimitada. ¿Te parece bien que avancemos a la siguiente etapa para concentrarnos en las soluciones?`,
+      readyToAdvance: true,
+      advancePrompt: `Avanzar a Etapa ${stage + 1}: ${STAGE_NAMES[stage + 1] || 'Siguiente Etapa'}`,
+      detectedTheme: 'Validación y Avance',
+      isTherapeuticCase: false,
+    };
+  }
+
+  // Extraer preguntas previas de Lidacta para evitar repetir
+  const prevLidactaTexts = (history || [])
+    .filter((m: any) => m.sender === 'lidacta' || m.role === 'model')
+    .map((m: any) => (m.text || m.content || '').toLowerCase());
+
+  const askedInvolved = prevLidactaTexts.some((t: string) => t.includes('involucrado') || t.includes('personas clave'));
+  const askedImpact = prevLidactaTexts.some((t: string) => t.includes('impacto') || t.includes('no intervenir') || t.includes('fricción'));
+  const askedOutcome = prevLidactaTexts.some((t: string) => t.includes('resultado') || t.includes('lograr') || t.includes('meta'));
+
+  if (stage === 1) {
+    if (history.length >= 4 || (askedInvolved && (askedImpact || askedOutcome))) {
+      return {
+        replyText: `Comprendo el panorama con mucha claridad, ${leaderName}. Con los hechos identificados y el impacto mapeado, tenemos lo indispensable para trabajar el fondo del reto. ¿Listo para que pasemos a la Etapa 2 y analicemos cómo lo vive la otra parte y qué habilidades necesitas poner en juego?`,
         readyToAdvance: true,
         advancePrompt: 'Avanzar a Etapa 2: Analizar perspectivas y habilidades',
         detectedTheme: 'Clarificación de Situación',
         isTherapeuticCase: false,
       };
     }
+
+    if (!askedInvolved) {
+      return {
+        replyText: `Tomando en cuenta lo que me comentas: ¿quiénes son las personas directamente involucradas en esta situación y qué rol o postura están teniendo?`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        detectedTheme: 'Mapeo de Involucrados',
+        isTherapeuticCase: false,
+      };
+    }
+
+    if (!askedOutcome) {
+      return {
+        replyText: `Entiendo lo que planteas sobre "${cleanMsg.slice(0, 50)}${cleanMsg.length > 50 ? '...' : ''}". Para enfocar el acompañamiento: ¿qué resultado concreto o cambio de conducta esperas ver una vez que abordes esta situación con tu equipo?`,
+        readyToAdvance: true,
+        advancePrompt: 'Avanzar a Etapa 2: Analizar perspectivas y habilidades',
+        detectedTheme: 'Definición de Meta',
+        isTherapeuticCase: false,
+      };
+    }
+
     return {
-      replyText: `Poniendo foco en lo que comentas: ¿quiénes son las personas clave involucradas en esta situación y qué postura o reacción están teniendo?`,
-      readyToAdvance: false,
-      advancePrompt: null,
-      detectedTheme: 'Mapeo de Involucrados',
+      replyText: `Está muy claro el escenario, ${leaderName}. ¿Hay algún obstáculo o limitante adicional que veas antes de pasar a explorar las distintas perspectivas del equipo?`,
+      readyToAdvance: true,
+      advancePrompt: 'Avanzar a Etapa 2: Analizar perspectivas y habilidades',
+      detectedTheme: 'Revisión de Obstáculos',
       isTherapeuticCase: false,
     };
   }
@@ -196,12 +285,18 @@ export default async function handler(req: any, res: any) {
 
     const systemPrompt = `Eres LIDACTA, mentora sénior de liderazgo. Tu misión es acompañar a los líderes en su entorno laboral cotidiano mediante una conversación guiada, estructurada y orientada a la acción.
 
-Reglas estrictas:
+Reglas estrictas de interacción:
 1. Límite Terapéutico: NO eres psicólogo ni das terapia. Si detectas crisis emocional clínica o terapéutica, deriva amablemente a un profesional de la salud mental sin bloquear la sesión y marca "isTherapeuticCase": true.
 2. Autonomía del Líder: NO tomas decisiones por el líder; cuestionas, orientas y sugieres.
-3. Cero Consejos Genéricos: Personaliza cada intervención al contexto del líder. NUNCA respondas con saludos de bienvenida genéricos repetitivos (por ejemplo: "Hola [Nombre], entiendo la situación que estás enfrentando..."). Responde de forma directa al contenido del mensaje del líder.
-4. Tono: Profesional, cercano, empático, claro y ejecutivo (1 a 3 párrafos cortos). Formula UNA pregunta a la vez.
-5. Validación Emocional y Seguimiento Específico: Valida la emoción expresada y formula una pregunta de seguimiento específica basada estrictamente en la última intervención del líder. Nunca repitas respuestas anteriores.
+3. Cero Consejos Genéricos ni Saludos Repetitivos: Personaliza cada intervención al contexto del líder. NUNCA respondas con saludos de bienvenida genéricos repetitivos (por ejemplo: "Hola [Nombre], entiendo la situación que estás enfrentando..."). Responde de forma directa al contenido del mensaje del líder.
+4. Tono: Profesional, cercano, empático, claro y ejecutivo (1 a 3 párrafos cortos). Formula UNA sola pregunta a la vez.
+5. PROHIBIDO REPETIR PREGUNTAS O COLETILLAS DE CIERRE:
+   - Está terminantemente PROHIBIDO repetir la misma pregunta, fórmula o coletilla de cierre en turnos consecutivos (por ejemplo: "¿qué impacto directo tiene no intervenir en este momento...?").
+   - Si una pregunta ya fue formulada o el líder ya aportó información al respecto, cambia de ángulo con una pregunta diferente o habilita el avance.
+6. MANEJO DE CONFUSIÓN Y FRUSTRACIÓN:
+   - Si el líder dice "No entiendo tu pregunta", "A qué te refieres", "No te sigo", o demuestra cualquier confusión, duda o frustración, DEBES reformular la pregunta con palabras más sencillas, transparentes y cotidianas, o brindar un ejemplo práctico de la vida laboral, en lugar de volver a copiar o insistir en la plantilla de la etapa.
+7. PROGRESO DINÁMICO DE LA CONVERSACIÓN:
+   - Adapta tus intervenciones según lo que el usuario ya compartió. Si el usuario ya dio parte de la información o muestra desgaste ("ya te dije", "estoy saturado"), valida su emoción de forma natural y haz una pregunta diferente que ayude a profundizar sin sonar repetitivo, o propone pasar a la siguiente etapa ("readyToAdvance": true).
 
 Contexto de la sesión:
 - Empresa: ${companyContext?.name || 'Empresa'}
