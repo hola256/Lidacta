@@ -1335,10 +1335,13 @@ El Equipo de Lidacta`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           stage: currentStage,
+          activeStage: currentStage,
           leaderProfile: currentUser,
           companyContext: company,
           conversationHistory: updatedMessages,
+          history: updatedMessages,
           userMessage: text,
+          currentMessage: text,
           sessionData: activeMentorship,
           isPracticeMode: isPractice,
         }),

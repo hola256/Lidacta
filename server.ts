@@ -51,15 +51,20 @@ app.post('/api/mentor/respond', async (req: Request, res: Response) => {
   try {
     const {
       stage,
+      activeStage,
       leaderProfile,
       companyContext,
       conversationHistory,
+      history,
       userMessage,
+      currentMessage,
       sessionData,
       isPracticeMode,
     } = req.body;
 
-    const currentStageNum = Number(stage) || 1;
+    const currentStageNum = Number(stage || activeStage) || 1;
+    const resolvedUserMessage = userMessage || currentMessage || '';
+    const resolvedHistory = conversationHistory || history || [];
 
     // Build the system prompt embedding all Lidacta rules (SYSTEM PROMPT DE 3 BLOQUES)
     const systemPrompt = `
@@ -316,8 +321,11 @@ Debes responder SIEMPRE en formato JSON con la siguiente estructura exacta:
     // Try Gemini API if initialized
     if (ai) {
       try {
-        const historyText = (conversationHistory || [])
-          .map((m: { sender: string; text: string }) => `${m.sender === 'leader' ? 'LÍDER' : 'LIDACTA'}: ${m.text}`)
+        const historyText = (resolvedHistory || [])
+          .map((m: { sender?: string; role?: string; text?: string; content?: string }) => {
+            const who = m.sender === 'leader' || m.role === 'user' ? 'LÍDER' : 'LIDACTA';
+            return `${who}: ${m.text || m.content || ''}`;
+          })
           .join('\n');
 
         const prompt = `
@@ -325,10 +333,12 @@ Historial reciente de la mentoría:
 ${historyText || '(Inicio de la mentoría)'}
 
 Último mensaje del líder:
-"${userMessage}"
+"${resolvedUserMessage}"
 
 ${isPracticeMode ? '[El líder está en modo práctica / roleplay de la Etapa 4]' : ''}
 Datos previos guardados: ${JSON.stringify(sessionData || {})}
+
+IMPORTANTE: Responde de forma empática, humana y reflexiva, validando la emoción expresada y formulando una pregunta de seguimiento específica basada estrictamente en la última intervención del líder. Nunca repitas respuestas anteriores.
 
 Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSON estricto.`;
 
@@ -343,7 +353,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         });
 
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Gemini API request timeout (fallback activated)')), 6000)
+          setTimeout(() => reject(new Error('Gemini API request timeout (fallback activated)')), 15000)
         );
 
         const response = await Promise.race([geminiCall, timeoutPromise]);
