@@ -1307,16 +1307,10 @@ export const LeaderView: React.FC = () => {
                   const isPending = isCaseCompleted ? false : activeMentorship.currentStage < st;
                   const isOpen = !!openStages[st];
                   const meta = STAGE_META[st];
-                  const stageMessages = activeMentorship.messages
-                    .filter((m) => (m.stage || 1) === st)
-                    .sort((a, b) => {
-                      const tA = new Date(a.timestamp || (a as any).createdAt || 0).getTime();
-                      const tB = new Date(b.timestamp || (b as any).createdAt || 0).getTime();
-                      if (Number.isFinite(tA) && Number.isFinite(tB) && tA !== tB) {
-                        return tA - tB;
-                      }
-                      return 0;
-                    });
+                  const allMessages = [...activeMentorship.messages].filter((m) => (m.stage || 1) === st);
+                  const sortedMessages = allMessages.sort(
+                    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                  );
 
                   return (
                     <div
@@ -1533,9 +1527,9 @@ export const LeaderView: React.FC = () => {
                           )}
 
                           {/* Messages Timeline for this Stage */}
-                          {stageMessages.length > 0 ? (
-                            <div className="flex flex-col space-y-3">
-                              {stageMessages.map(renderSingleMessage)}
+                          {sortedMessages.length > 0 ? (
+                            <div className="flex flex-col gap-4 w-full">
+                              {sortedMessages.map((msg) => renderSingleMessage(msg))}
                             </div>
                           ) : isPending ? (
                             <div className="p-4 bg-neutral-50 border border-dashed border-[#493447]/20 rounded-xl text-center space-y-1.5 text-xs text-[#4A3F55]/70">
@@ -1546,7 +1540,7 @@ export const LeaderView: React.FC = () => {
                           ) : null}
 
                           {/* Respuesta inicial / Pregunta detonadora de Lidacta en Etapa 1 (después del mensaje del líder) */}
-                          {!isPending && st === 1 && !stageMessages.some((m) => m.sender === 'lidacta') && (
+                          {!isPending && st === 1 && !sortedMessages.some((m) => m.sender === 'lidacta') && (
                             <div className="bg-[#FFF7EF] border border-[#FFD3BF] rounded-2xl p-4 sm:p-5 shadow-xs space-y-2.5">
                               <div className="flex items-center justify-between border-b border-[#FFD3BF]/60 pb-2">
                                 <div className="flex items-center gap-2.5">
