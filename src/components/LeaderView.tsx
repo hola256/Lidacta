@@ -1410,15 +1410,12 @@ export const LeaderView: React.FC = () => {
                               {isPassed ? <CheckCircle2 className="w-5 h-5 text-[#246B2A]" /> : st}
                             </div>
 
-                            <div className="min-w-0 flex-1 space-y-0.5">
+                            <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-heading font-extrabold text-sm text-[#2D1B4E] leading-snug">
                                   {meta.name}: {meta.shortTitle}
                                 </span>
                               </div>
-                              <p className="text-xs text-[#4A3F55]/85 leading-relaxed">
-                                {meta.subtitle}
-                              </p>
                             </div>
                           </div>
 
@@ -1456,27 +1453,6 @@ export const LeaderView: React.FC = () => {
                       {/* Accordion Content Panel */}
                       {isOpen && (
                         <div className="border-t border-[#493447]/10 p-3.5 sm:p-5 space-y-4 bg-white animate-in fade-in duration-200">
-                          {/* Objective Banner */}
-                          <div className="p-3 bg-[#FFF7EF] border border-[#FFD3BF]/60 rounded-xl text-xs text-[#4A3F55] flex items-start gap-2.5">
-                            <Compass className="w-4 h-4 text-[#BF3A1B] shrink-0 mt-0.5" />
-                            <div>
-                              <span className="font-bold text-[#2D1B4E] mr-1">Propósito de la etapa:</span>
-                              <span>{meta.objective}</span>
-                            </div>
-                          </div>
-
-                          {/* Stage 1: Initial Challenge Card */}
-                          {st === 1 && activeMentorship.initialChallenge && (
-                            <div className="p-3.5 bg-neutral-50 border border-[#493447]/10 rounded-xl space-y-1">
-                              <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#BF3A1B]">
-                                <FileText className="w-3.5 h-3.5" />
-                                <span>Situación o reto inicial planteado:</span>
-                              </div>
-                              <p className="text-xs sm:text-sm text-[#2D1B4E] leading-relaxed">
-                                {activeMentorship.initialChallenge}
-                              </p>
-                            </div>
-                          )}
 
                           {/* Stage 2: Identified Skills Highlight */}
                           {st === 2 && activeMentorship.identifiedSkills && activeMentorship.identifiedSkills.length > 0 && (
@@ -1555,11 +1531,7 @@ export const LeaderView: React.FC = () => {
 
                           {/* Messages Timeline for this Stage */}
                           {stageMessages.length > 0 ? (
-                            <div className="space-y-3 pt-1">
-                              <div className="text-[11px] font-bold uppercase tracking-wider text-[#4A3F55]/70 flex items-center gap-1.5">
-                                <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
-                                <span>Intercambios reflexivos de esta etapa:</span>
-                              </div>
+                            <div className="space-y-3">
                               {stageMessages.map(renderSingleMessage)}
                             </div>
                           ) : isPending ? (
