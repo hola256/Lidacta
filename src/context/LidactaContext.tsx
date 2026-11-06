@@ -560,8 +560,17 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
               m.learnings?.sharedReflectionToHR ??
               ''
             ).trim();
+            const cleanMessages = (m.messages || [])
+              .filter((msg: any) => (!msg.caseId || msg.caseId === m.id) && (!msg.mentorshipId || msg.mentorshipId === m.id))
+              .map((msg: any) => ({
+                ...msg,
+                caseId: m.id,
+                mentorshipId: m.id,
+              }));
+
             return {
               ...m,
+              messages: cleanMessages,
               shareActionPlanWithHR: isShared,
               actionPlanShared: isShared,
               sharedReflectionToHR: refl || undefined,
@@ -586,7 +595,14 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       }
     } catch {}
-    return INITIAL_MENTORSHIPS;
+    return INITIAL_MENTORSHIPS.map((m) => ({
+      ...m,
+      messages: (m.messages || []).map((msg) => ({
+        ...msg,
+        caseId: m.id,
+        mentorshipId: m.id,
+      })),
+    }));
   });
 
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
@@ -1119,6 +1135,8 @@ El Equipo de Lidacta`;
       messages: [
         {
           id: `msg_${Date.now()}_lead`,
+          caseId: newSessionId,
+          mentorshipId: newSessionId,
           sender: 'leader',
           text: challengeText,
           timestamp: new Date().toISOString(),
@@ -1149,18 +1167,24 @@ El Equipo de Lidacta`;
     };
     setNotifications((prev) => [hrNotification, ...prev]);
 
-    // Send first message to API
+    // Send first message to API with explicit caseId isolation
     setIsSendingMessage(true);
     try {
       const response = await fetch('/api/mentor/respond', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          caseId: newSessionId,
+          mentorshipId: newSessionId,
           stage: initialStage,
+          activeStage: initialStage,
           leaderProfile: currentUser,
           companyContext: company,
           conversationHistory: newSession.messages,
+          history: newSession.messages,
           userMessage: challengeText,
+          currentMessage: challengeText,
+          message: challengeText,
           sessionData: newSession,
         }),
       });
@@ -1176,6 +1200,8 @@ El Equipo de Lidacta`;
         const coachReply = data.data || {};
         const replyMsg = {
           id: `msg_${Date.now()}_lid`,
+          caseId: newSessionId,
+          mentorshipId: newSessionId,
           sender: 'lidacta' as const,
           text: resolvedReply,
           timestamp: new Date().toISOString(),
@@ -1307,11 +1333,19 @@ El Equipo de Lidacta`;
   const sendMessageInActiveSession = async (text: string, isPractice: boolean = false) => {
     if (!activeMentorship || !text.trim()) return;
 
+    const currentCaseId = activeMentorship.id;
     const currentStage = activeMentorship.currentStage;
     const company = companies.find((c) => c.id === activeMentorship.companyId) || companies[0];
 
+    // Filter strictly to ensure no foreign messages are passed
+    const isolatedExistingMessages = (activeMentorship.messages || []).filter(
+      (m: any) => (!m.caseId || m.caseId === currentCaseId) && (!m.mentorshipId || m.mentorshipId === currentCaseId)
+    );
+
     const leaderMsg = {
       id: `msg_${Date.now()}_lead`,
+      caseId: currentCaseId,
+      mentorshipId: currentCaseId,
       sender: 'leader' as const,
       text: text.trim(),
       timestamp: new Date().toISOString(),
@@ -1319,11 +1353,11 @@ El Equipo de Lidacta`;
       isLeaderVoiceQuote: text.length < 140, // Format short insights nicely
     };
 
-    const updatedMessages = [...activeMentorship.messages, leaderMsg];
+    const updatedMessages = [...isolatedExistingMessages, leaderMsg];
 
     setMentorships((prev) =>
       prev.map((m) =>
-        m.id === activeMentorship.id
+        m.id === currentCaseId
           ? {
               ...m,
               messages: updatedMessages,
@@ -1340,6 +1374,8 @@ El Equipo de Lidacta`;
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          caseId: currentCaseId,
+          mentorshipId: currentCaseId,
           message: text,
           history: updatedMessages,
           stage: currentStage,
@@ -1349,7 +1385,10 @@ El Equipo de Lidacta`;
           conversationHistory: updatedMessages,
           userMessage: text,
           currentMessage: text,
-          sessionData: activeMentorship,
+          sessionData: {
+            ...activeMentorship,
+            messages: updatedMessages,
+          },
           isPracticeMode: isPractice,
         }),
       });
@@ -1366,6 +1405,8 @@ El Equipo de Lidacta`;
 
         const lidactaMsg = {
           id: `msg_${Date.now()}_lid`,
+          caseId: currentCaseId,
+          mentorshipId: currentCaseId,
           sender: 'lidacta' as const,
           text: resolvedReply,
           timestamp: new Date().toISOString(),
@@ -1567,7 +1608,12 @@ El Equipo de Lidacta`;
       setNotifications((prev) => [hrNotification, ...prev]);
     }
 
-    // Trigger mentor introduction for new stage
+    // Trigger mentor introduction for new stage with case isolation
+    const currentCaseId = activeMentorship.id;
+    const isolatedMessages = (activeMentorship.messages || []).filter(
+      (m: any) => (!m.caseId || m.caseId === currentCaseId) && (!m.mentorshipId || m.mentorshipId === currentCaseId)
+    );
+
     const company = companies.find((c) => c.id === activeMentorship.companyId) || companies[0];
     setIsSendingMessage(true);
     try {
@@ -1575,11 +1621,17 @@ El Equipo de Lidacta`;
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          caseId: currentCaseId,
+          mentorshipId: currentCaseId,
           stage: nextStage,
+          activeStage: nextStage,
           leaderProfile: currentUser,
           companyContext: company,
-          conversationHistory: activeMentorship.messages,
+          conversationHistory: isolatedMessages,
+          history: isolatedMessages,
           userMessage: `[Avanzando a Etapa ${nextStage}]`,
+          currentMessage: `[Avanzando a Etapa ${nextStage}]`,
+          message: `[Avanzando a Etapa ${nextStage}]`,
           sessionData: activeMentorship,
         }),
       });
@@ -1595,6 +1647,8 @@ El Equipo de Lidacta`;
         const coachReply = data.data || {};
         const introMsg = {
           id: `msg_${Date.now()}_lid`,
+          caseId: currentCaseId,
+          mentorshipId: currentCaseId,
           sender: 'lidacta' as const,
           text: resolvedReply,
           timestamp: new Date().toISOString(),
@@ -1603,7 +1657,7 @@ El Equipo de Lidacta`;
 
         setMentorships((prev) =>
           prev.map((m) =>
-            m.id === activeMentorship.id
+            m.id === currentCaseId
               ? {
                   ...m,
                   messages: [...m.messages, introMsg],
@@ -2168,6 +2222,8 @@ El Equipo de Lidacta`;
     if (activeMentorship) {
       const leaderNoteMsg = {
         id: `msg_${Date.now()}_lead_req`,
+        caseId: activeMentorship.id,
+        mentorshipId: activeMentorship.id,
         sender: 'leader' as const,
         text: `[Solicitud de Asesoría 1:1 enviada a ${adminUser.name || 'Tania Padierna'}]\nMotivo: "${reasonText}"`,
         timestamp: new Date().toISOString(),
@@ -2176,6 +2232,8 @@ El Equipo de Lidacta`;
 
       const lidactaConfirmMsg = {
         id: `msg_${Date.now()}_lid_confirm`,
+        caseId: activeMentorship.id,
+        mentorshipId: activeMentorship.id,
         sender: 'lidacta' as const,
         text: `He recibido tu solicitud para una Asesoría 1:1, ${currentUser.name}. Se ha notificado inmediatamente a ${adminUser.name || 'Tania Padierna'} (Dirección de Mentoría) por correo electrónico (hola@taniapadierna.com) y WhatsApp (${adminUser.whatsapp || '+52 55 1234 5678'}) con tu contexto de la Etapa ${currentStageNum}. Nos pondremos en contacto contigo a la brevedad. Tu conversación sigue siendo 100% confidencial.`,
         timestamp: new Date().toISOString(),

@@ -52,6 +52,8 @@ export interface MentorshipMessage {
   timestamp: string;
   stage: StageNumber;
   isLeaderVoiceQuote?: boolean;
+  caseId?: string;
+  mentorshipId?: string;
 }
 
 export interface MentorshipActionPlan {

@@ -51,6 +51,8 @@ const STAGE_NAMES: Record<number, string> = {
 app.post('/api/mentor/respond', async (req: Request, res: Response) => {
   try {
     const {
+      caseId,
+      mentorshipId,
       stage,
       activeStage,
       leaderProfile,
@@ -64,12 +66,39 @@ app.post('/api/mentor/respond', async (req: Request, res: Response) => {
     } = req.body;
 
     const currentStageNum = Number(stage || activeStage) || 1;
-    const resolvedUserMessage = userMessage || currentMessage || '';
-    const resolvedHistory = conversationHistory || history || [];
+    const resolvedUserMessage = (userMessage || currentMessage || '').trim();
+    const targetCaseId = caseId || mentorshipId || sessionData?.id || '';
+
+    const rawHistory = Array.isArray(conversationHistory)
+      ? conversationHistory
+      : Array.isArray(history)
+      ? history
+      : [];
+
+    // STRICT CASE ISOLATION:
+    // Only accept messages that belong to the active caseId / mentorshipId
+    const resolvedHistory = rawHistory.filter((m: any) => {
+      if (!m || typeof m !== 'object') return false;
+      const mCase = m.caseId || m.mentorshipId;
+      if (targetCaseId && mCase && mCase !== targetCaseId) {
+        return false;
+      }
+      return true;
+    });
 
     // Build the system prompt embedding all Lidacta rules (SYSTEM PROMPT DE 3 BLOQUES)
     const systemPrompt = `
 Eres LIDACTA, un mentor y facilitador de desarrollo de liderazgo interactivo. Tu misión es acompañar a los líderes en su entorno laboral cotidiano mediante una conversación guiada, estructurada y orientada a la acción.
+
+======================================================================
+AISLAMIENTO ESTRICTO POR CASO Y CONTEXTO EXCLUSIVO (CRÍTICO)
+======================================================================
+1. AISLAMIENTO TOTAL POR CASO:
+   - Toda intervención, síntesis, diagnóstico, desglose y preguntas DEBEN basarse ÚNICA Y EXCLUSIVAMENTE en los hechos, personas, conductas y problemática expuestos en ESTE caso particular:
+     * Caso actual: "${sessionData?.title || 'Caso actual'}"
+     * Reto inicial planteado: "${sessionData?.initialChallenge || resolvedUserMessage || ''}"
+   - ESTÁ TERMINANTEMENTE PROHIBIDO mezclar, inventar o arrastrar información de otros casos o pruebas previas (como conflictos con clientes, entregas de bitácoras de piso o auditorías IATF, A MENOS que el líder los haya mencionado expresamente en ESTA conversación).
+   - Si el líder plantea una situación con un colaborador que exige un aumento de sueldo ("exigiendo sueldo"), tu análisis, desglose y preguntas DEBEN versar estrictamente sobre la exigencia salarial, la retención de talento, las expectativas de remuneración y la conversación difícil con ese colaborador. NUNCA introduzcas clientes ni temas ajenos.
 
 ======================================================================
 BLOQUE 1: CORE SYSTEM & METHODOLOGY
@@ -132,14 +161,14 @@ En todas sus interacciones, Lidacta debe cumplir tres objetivos:
   * Está TERMINANTEMENTE PROHIBIDO volver a preguntar si está listo para pasar a la Etapa 2.
   * Está TERMINANTEMENTE PROHIBIDO empujar o sugerir el avance de etapa.
   * La respuesta debe tener OBLIGATORIAMENTE "readyToAdvance": false y "advancePrompt": null.
-- REGLA 4 (FORMATO DE DESGLOSE DIAGNÓSTICO - DEVOLVER VALOR VISIBLE): Cuando el usuario pida ayuda para entender las variables, desglosar el problema, o manifieste que no quiere avanzar y necesita entender mejor:
-  La mentora DEBE estructurar su respuesta analizando activamente lo que ha escuchado con este formato exacto en viñetas y negritas:
-  • **Conflicto visible:** [Análisis concreto de lo ocurrido con el cliente, colaborador o situación operativa externa observable].
-  • **Tensión subyacente:** [Análisis de la dinámica relacional, presiones o expectativas no resueltas con el jefe, directores o la cultura organizacional].
-  • **Impacto emocional/operativo:** [Análisis del desgaste personal del líder, la sensación de estar atrapado al medio, la sobrecarga o frustración].
+- REGLA 4 (FORMATO DE DESGLOSE DIAGNÓSTICO - DEVOLVER VALOR VISIBLE EN ESTE CASO): Cuando el usuario pida ayuda para entender las variables, desglosar el problema, o manifieste que no quiere avanzar y necesita entender mejor:
+  La mentora DEBE estructurar su respuesta analizando y sintetizando activamente lo que ha escuchado en la conversación de ESTE caso exclusivo, devolviendo valor visible con esta estructura exacta en viñetas y negritas:
+  • **Conflicto visible:** [Síntesis objetiva y concreta de la situación observable planteada por el líder en ESTE caso exclusivo (por ejemplo: la solicitud salarial del colaborador, la omisión de una tarea, o el problema operativo)].
+  • **Tensión subyacente:** [Análisis de la dinámica relacional, expectativas no alineadas, jerarquía o fricción de fondo en ESTE caso exclusivo].
+  • **Impacto emocional/operativo:** [Reflejo del desgaste, sobrecarga, dilema o frustración expresados por el líder en ESTE caso exclusivo].
   Finalizará haciendo 1 o 2 preguntas reflexivas específicas sobre esos puntos desglosados para ayudar a esclarecer la causa raíz (sin preguntar sobre pasar de etapa).
 - REGLA 5 (CIERRE DE ETAPA MEDIANTE RESUMEN DE VALIDACIÓN):
-  Solo cuando se hayan explorado activamente las variables clave de la Etapa 1, Lidacta generará un breve resumen sintético de lo conversado (3 a 4 puntos clave en viñetas).
+  Solo cuando se hayan explorado activamente las variables clave de la Etapa 1, Lidacta generará un breve resumen sintético de lo conversado en ESTE caso (3 a 4 puntos clave en viñetas).
   Debe finalizar preguntando explícitamente: "¿Este resumen refleja con claridad lo que estás viviendo o hay algún punto que quieras profundizar antes de pasar a la siguiente etapa?" (con "readyToAdvance": false).
   Solo cuando el usuario confirme expresamente que el desglose y panorama tienen sentido para él (por ejemplo: "Tiene todo el sentido", "Exacto, así es", "De acuerdo, avancemos"), la mentora podrá validar el avance y proponer dar el paso a la Etapa 2 con "readyToAdvance": true.
 - PROHIBIDO REPETIR PREGUNTAS O COLETILLAS DE CIERRE: NUNCA repitas la misma pregunta, fórmula o coletilla de cierre en turnos consecutivos.
@@ -298,6 +327,8 @@ CONTEXTO DINÁMICO DE ESTA SESIÓN
 - Área: ${leaderProfile?.area || 'Operaciones'}
 - Personas a cargo: ${leaderProfile?.directReports ?? 5}
 - Etapa Operativa Actual: ETAPA ${currentStageNum} - ${STAGE_NAMES[currentStageNum] || ''}
+- Caso / Reto actual: ${sessionData?.title || 'Caso actual'}
+- Reto inicial: ${sessionData?.initialChallenge || resolvedUserMessage || ''}
 
 ======================================================================
 FORMATO ESTRICTO DE RESPUESTA JSON
@@ -508,23 +539,120 @@ function detectTherapeuticNature(text: string): { isTherapeutic: boolean; reason
   return { isTherapeutic: false, reason: '' };
 }
 
-function extractDiagnosticVariablesServer(history: any[], currentMsg: string) {
-  const allTexts = [...(history || []).map((m: any) => m.text || m.content || ''), currentMsg].join(' ');
-  const lower = allTexts.toLowerCase();
-
-  let visibleConflict = 'El roce operativo con el cliente y los compromisos de entrega o servicio afectados por la situación.';
-  if (lower.includes('cliente') || lower.includes('queja') || lower.includes('reclamo') || lower.includes('entrega') || lower.includes('retraso') || lower.includes('calidad') || lower.includes('pedido') || lower.includes('proyecto')) {
-    visibleConflict = 'El incidente directo con el cliente y la falla en los tiempos o calidad de los entregables operativos.';
+function extractDiagnosticVariablesServer(
+  history: any[],
+  currentMsg: string,
+  sessionContext?: any
+) {
+  const allUserTexts: string[] = [];
+  if (sessionContext?.title) {
+    allUserTexts.push(sessionContext.title);
+  }
+  if (sessionContext?.initialChallenge) {
+    allUserTexts.push(sessionContext.initialChallenge);
+  }
+  for (const m of history || []) {
+    const txt = (m.text || m.content || '').trim();
+    if (txt) allUserTexts.push(txt);
+  }
+  if (currentMsg) {
+    allUserTexts.push(currentMsg.trim());
   }
 
-  let underlyingTension = 'La exigencia vertical de la jefatura o directores, donde sientes la presión de responder sin contar con suficiente respaldo o alineación.';
-  if (lower.includes('jefe') || lower.includes('director') || lower.includes('gerente') || lower.includes('presion') || lower.includes('presión') || lower.includes('exigencia') || lower.includes('arriba') || lower.includes('apoyo')) {
-    underlyingTension = 'La dinámica de presión con tu jefatura y el temor a que la falta de resolución afecte la confianza en tu liderazgo.';
+  const combinedText = allUserTexts.join(' ');
+  const lower = combinedText.toLowerCase();
+
+  // 1. Detect salary / compensation / money / raise / counteroffer
+  const isSalaryCase = [
+    'sueldo', 'salario', 'aumento', 'aumento de sueldo', 'aumento salarial', 'pagar', 'paga',
+    'remuneracion', 'remuneración', 'compensacion', 'compensación', 'tabulador', 'dinero',
+    'aumenten', 'aumentar', 'renuncia', 'irse por dinero', 'oferta económica', 'oferta economica',
+    'ganar mas', 'ganar más', 'exige aumento', 'exigiendo sueldo', 'pide aumento'
+  ].some((k) => lower.includes(k));
+
+  // 2. Detect shift handoff / logs / veteran resistance
+  const isShiftLogCase = [
+    'bitacora', 'bitácora', 'cambio de turno', 'relevo de turno', 'supervisor veterano',
+    'prensas', 'celda robótica', 'ernesto'
+  ].some((k) => lower.includes(k));
+
+  // 3. Detect delegation / audit / micromanagement
+  const isDelegationCase = [
+    'delegar', 'delegación', 'delegacion', 'auditoría', 'auditoria', 'iatf', 'absorber',
+    'novato', 'novatos', 'revisar todo', 'cuello de botella', 'supervisores novatos'
+  ].some((k) => lower.includes(k));
+
+  // 4. Detect customer / client conflict (ONLY if actually mentioned!)
+  const isClientCase = [
+    'cliente', 'queja de cliente', 'entrega al cliente', 'pedido del cliente', 'proveedor'
+  ].some((k) => lower.includes(k));
+
+  // 5. Detect performance / task non-compliance
+  const isTaskNonComplianceCase = [
+    'entrega', 'entregable', 'plazo', 'fecha límite', 'fecha limite', 'no cumple', 'incumple',
+    'retraso', 'desempeño', 'desempeno', 'resultados', 'metas'
+  ].some((k) => lower.includes(k));
+
+  // 6. Detect interpersonal friction / attitude / resistance
+  const isAttitudeCase = [
+    'actitud', 'defensiva', 'desmotivacion', 'desmotivación', 'apatía', 'apatia', 'resistencia',
+    'conflicto', 'roce', 'desacuerdo', 'quejas'
+  ].some((k) => lower.includes(k));
+
+  // Formulate Conflicto Visible based on actual case
+  let visibleConflict = '';
+  if (isSalaryCase) {
+    visibleConflict = 'La exigencia o solicitud de ajuste salarial planteada por el colaborador y la expectativa de una resolución económica inmediata.';
+  } else if (isShiftLogCase) {
+    visibleConflict = 'La omisión en la entrega oportuna de las bitácoras y registros operativos durante el cambio de turno.';
+  } else if (isDelegationCase) {
+    visibleConflict = 'La absorción de revisiones operativas por temor a que el equipo cometa omisiones o no conformidades.';
+  } else if (isClientCase) {
+    visibleConflict = 'El roce operativo con el cliente y los compromisos de entrega o servicio afectados por la situación.';
+  } else if (isTaskNonComplianceCase) {
+    visibleConflict = 'El incumplimiento o desfase en los entregables y tareas prioritarias asignadas al equipo.';
+  } else if (isAttitudeCase) {
+    visibleConflict = 'La postura a la defensiva o falta de alineación en las dinámicas y compromisos de trabajo cotidianos.';
+  } else {
+    const rawSnippet = (sessionContext?.initialChallenge || sessionContext?.title || currentMsg || '').replace(/\s+/g, ' ').trim();
+    const snippet = rawSnippet ? rawSnippet.slice(0, 95) : 'la situación operativa y los acuerdos de trabajo';
+    visibleConflict = `La situación observada en tu equipo sobre: "${snippet}${rawSnippet.length > 95 ? '...' : ''}".`;
   }
 
-  let emotionalImpact = 'La sobrecarga personal y la sensación de quedar atrapado en el medio, cargando el estrés para evitar que la operación colapse.';
-  if (lower.includes('estres') || lower.includes('estrés') || lower.includes('frustra') || lower.includes('cansad') || lower.includes('abrumad') || lower.includes('medio') || lower.includes('desgaste')) {
-    emotionalImpact = 'El desgaste personal y la frustración de asumir toda la responsabilidad entre las demandas del cliente y la exigencia de tu jefe.';
+  // Formulate Tensión Subyacente based on actual case
+  let underlyingTension = '';
+  if (isSalaryCase) {
+    underlyingTension = 'El dilema entre reconocer el valor del colaborador frente a las políticas de tabulador o posibilidades reales de la empresa, sumado a la incertidumbre sobre cómo sostener la motivación si no se puede conceder el monto exigido.';
+  } else if (isShiftLogCase) {
+    underlyingTension = 'La fricción entre respetar la trayectoria del colaborador y la exigencia innegociable de disciplina y trazabilidad operativa.';
+  } else if (isDelegationCase) {
+    underlyingTension = 'La contradicción entre la necesidad de desarrollar autonomía en los supervisores y el riesgo de soltar el control ante una evaluación crítica.';
+  } else if (isClientCase) {
+    underlyingTension = 'La presión de equilibrar la satisfacción del cliente con las capacidades reales y tiempos de respuesta de tu equipo.';
+  } else {
+    const mentionsBoss = ['jefe', 'director', 'gerencia', 'liderazgo superior', 'directora'].some((k) => lower.includes(k));
+    if (mentionsBoss) {
+      underlyingTension = 'La presión vertical de responder a las expectativas de la dirección mientras gestionas la capacidad y bienestar de tu equipo.';
+    } else {
+      underlyingTension = 'Las expectativas y percepciones no alineadas entre lo que necesitas asegurar como líder y lo que la otra parte está buscando o experimentando.';
+    }
+  }
+
+  // Formulate Impacto Emocional/Operativo based on actual case
+  let emotionalImpact = '';
+  const expressesFatigue = ['cansad', 'agota', 'harto', 'frustra', 'estres', 'estrés', 'abrumad', 'desgaste'].some((k) => lower.includes(k));
+  if (isSalaryCase) {
+    emotionalImpact = expressesFatigue
+      ? 'La sensación de desgaste e incertidumbre al gestionar una conversación económica delicada sin desmotivar al colaborador ni sentar un precedente inviable.'
+      : 'La preocupación por mantener la estabilidad del equipo y la carga de encontrar una salida justa y viable para ambas partes.';
+  } else if (isShiftLogCase) {
+    emotionalImpact = 'El desgaste de reiterar requerimientos básicos y la incomodidad de confrontar a alguien experimentado sin generar fracturas en piso.';
+  } else if (isDelegationCase) {
+    emotionalImpact = 'El agotamiento físico y mental de cargar con revisiones detalladas, posponiendo tus responsabilidades estratégicas de liderazgo.';
+  } else {
+    emotionalImpact = expressesFatigue
+      ? 'El desgaste acumulado de asumir toda la carga y el estrés de evitar que la situación escale o afecte al resto del equipo.'
+      : 'La sobrecarga mental y la inquietud por resolver de raíz una situación que consume tiempo y energía de tu rol como líder.';
   }
 
   return { visibleConflict, underlyingTension, emotionalImpact };
@@ -581,7 +709,7 @@ function generateDeterministicCoaching({
 
   // Regla 2: Formato de Desglose Diagnóstico cuando el usuario pide ayuda para desglosar o entender
   if (wantsToPauseOrNotAdvance && stage === 1) {
-    const { visibleConflict, underlyingTension, emotionalImpact } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg);
+    const { visibleConflict, underlyingTension, emotionalImpact } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg, sessionData);
     return {
       replyText: `Te escucho con total atención, ${leaderName}. Frenamos el paso: no vamos a avanzar a la Etapa 2 hasta que tengamos total claridad sobre lo que estás viviendo.\n\nPara devolverte valor visible y ayudarte a ordenar las variables que hoy se sienten mezcladas, desgloso lo que he escuchado en tu relato:\n\n• **Conflicto visible:** ${visibleConflict}\n• **Tensión subyacente:** ${underlyingTension}\n• **Impacto emocional/operativo:** ${emotionalImpact}\n\nMirando este mapa con calma:\n1. De estos tres frentes, ¿cuál sientes que es el que genera mayor fricción o te cuesta más trabajo manejar en este momento?\n2. ¿Sientes que este desglose captura con precisión lo que estás viviendo, o hay alguna variable clave que se nos esté escapando?`,
       readyToAdvance: false,
@@ -619,7 +747,7 @@ function generateDeterministicCoaching({
 
   if (isConfusion) {
     if (stage === 1) {
-      const { visibleConflict, underlyingTension, emotionalImpact } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg);
+      const { visibleConflict, underlyingTension, emotionalImpact } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg, sessionData);
       return {
         replyText: `Te lo planteo de forma muy simple y cotidiana, ${leaderName}: a veces postergamos una charla o decisión difícil porque tenemos muchas cosas urgentes en el día a día. Para verlo claro:\n\n• **Conflicto visible:** ${visibleConflict}\n• **Tensión subyacente:** ${underlyingTension}\n• **Impacto emocional/operativo:** ${emotionalImpact}\n\n¿Cuál de estos tres puntos crees que es la verdadera causa raíz de lo que está pasando?`,
         readyToAdvance: false,
@@ -713,7 +841,7 @@ function generateDeterministicCoaching({
     }
 
     // Cierre mediante Resumen de Validación (cuando se exploraron las variables clave)
-    const { visibleConflict, underlyingTension, emotionalImpact } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg);
+    const { visibleConflict, underlyingTension, emotionalImpact } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg, sessionData);
     return {
       replyText: `Con esta información tenemos un panorama sólido y completo de la situación, ${leaderName}. Te comparto un breve resumen sintético de lo que hemos identificado:\n\n• **Hechos y tareas:** ${visibleConflict}\n• **Dinámica relacional y perfil:** ${underlyingTension}\n• **Antecedentes e impacto:** ${emotionalImpact}\n\n¿Este resumen refleja con claridad lo que estás viviendo o hay algún punto que quieras profundizar antes de pasar a la siguiente etapa?`,
       readyToAdvance: false,
