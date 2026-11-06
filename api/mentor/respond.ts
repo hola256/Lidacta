@@ -293,89 +293,136 @@ function generateContextualCoachReply(
     .filter((m: any) => m.sender === 'lidacta' || m.role === 'model')
     .map((m: any) => (m.text || m.content || '').toLowerCase());
 
-  const askedSeniorityOrProfile = prevLidactaTexts.some((t: string) =>
-    t.includes('antigüedad') || t.includes('perfil') || t.includes('tiempo lleva') || t.includes('relación de trabajo')
-  );
-  const askedSpecificTasks = prevLidactaTexts.some((t: string) =>
-    t.includes('tareas específicas') || t.includes('entregables específicos') || t.includes('respuesta exacta') || t.includes('conducta exacta')
-  );
-  const askedPreviousAttemptsOrHR = prevLidactaTexts.some((t: string) =>
-    t.includes('recursos humanos') || t.includes('intentos previos') || t.includes('conversaciones de retroalimentación') || t.includes('intervenido recursos')
-  );
-  const askedOutcomeOrRoot = prevLidactaTexts.some((t: string) =>
-    t.includes('obstáculo de fondo') || t.includes('frena para resolver') || t.includes('resultado concreto')
-  );
-
   if (isQuestionRepetitionComplaint && stage === 1) {
-    if (!askedSpecificTasks) {
-      return {
-        replyText: `Agradezco tu aclaración, ${leaderName}. Tomo nota de lo que ya compartiste para no hacerte repetir. Para enfocar con precisión los hechos observables: ¿qué tareas o compromisos específicos se le han asignado recientemente a este colaborador y cuál ha sido exactamente su respuesta o conducta al no cumplirlas?`,
-        readyToAdvance: false,
-        advancePrompt: null,
-        detectedTheme: 'Hechos Observables',
-        isTherapeuticCase: false,
-      };
-    }
-    if (!askedPreviousAttemptsOrHR) {
-      return {
-        replyText: `Comprendido, ${leaderName}. Vamos directo a lo que no hemos revisado: ¿qué conversaciones previas has tenido con esta persona sobre el tema, qué acuerdos se pactaron y si ha intervenido o qué conocimiento tiene Recursos Humanos?`,
-        readyToAdvance: false,
-        advancePrompt: null,
-        detectedTheme: 'Intentos Previos y RH',
-        isTherapeuticCase: false,
-      };
-    }
+    return {
+      replyText: `Agradezco tu aclaración, ${leaderName}. Tomo nota de lo que ya compartiste para no hacerte repetir. Para ir al punto clave: desde tu perspectiva, ¿cuál es el obstáculo principal que sientes que impide resolver esto con firmeza y qué resultado concreto necesitas asegurar hoy con tu equipo?`,
+      readyToAdvance: false,
+      advancePrompt: null,
+      detectedTheme: 'Clarificación de Causa Raíz',
+      isTherapeuticCase: false,
+    };
   }
 
   if (stage === 1) {
-    // Variable 1: Antigüedad, perfil del colaborador y contexto de la relación
-    if (!askedSeniorityOrProfile) {
-      return {
-        replyText: `Te escucho con atención, ${leaderName}. Para comprender a fondo el contexto antes de apresurarnos a conclusiones: ¿cuánto tiempo lleva este colaborador en tu equipo o en la empresa, cómo definirías su perfil habitual y cómo ha sido la relación de trabajo entre ustedes hasta antes de este problema?`,
-        readyToAdvance: false,
-        advancePrompt: null,
-        detectedTheme: 'Perfil y Contexto Relacional',
-        isTherapeuticCase: false,
-      };
+    const isDisciplinaryOrNormative = [
+      'vacacion', 'vacación', 'vacaciones', 'falta', 'faltó', 'falto', 'faltas', 'ausencia', 'ausencias',
+      'no vino', 'no se presento', 'no se presentó', 'abandono', 'abandonó', 'sin permiso',
+      'sin autorizacion', 'sin autorización', 'aviso por mensaje', 'avisó por mensaje', 'por whatsapp',
+      'notifico por mensaje', 'notificó por mensaje', 'desacato', 'insubordinacion', 'insubordinación',
+      'disciplina', 'disciplinaria', 'reglamento', 'normativa', 'normas'
+    ].some((k) => lowerMsg.includes(k) || (sessionContext?.initialChallenge && sessionContext.initialChallenge.toLowerCase().includes(k)) || (sessionContext?.title && sessionContext.title.toLowerCase().includes(k)));
+
+    const isSalaryIssue = [
+      'sueldo', 'salario', 'aumento', 'aumento salarial', 'dinero', 'remuneracion', 'remuneración',
+      'compensacion', 'compensación', 'pagar', 'paga', 'exigiendo sueldo', 'pide aumento'
+    ].some((k) => lowerMsg.includes(k) || (sessionContext?.initialChallenge && sessionContext.initialChallenge.toLowerCase().includes(k)) || (sessionContext?.title && sessionContext.title.toLowerCase().includes(k)));
+
+    const isAttitudeOrDelivery = [
+      'entrega', 'entregables', 'plazo', 'fecha limite', 'fecha límite', 'retraso', 'retrasos',
+      'no cumple', 'incumple', 'desempeño', 'calidad', 'actitud', 'defensiva', 'desmotivacion',
+      'desmotivación', 'resistencia', 'apatia', 'apatía', 'compromiso', 'tarea', 'tareas'
+    ].some((k) => lowerMsg.includes(k) || (sessionContext?.initialChallenge && sessionContext.initialChallenge.toLowerCase().includes(k)) || (sessionContext?.title && sessionContext.title.toLowerCase().includes(k)));
+
+    const askedImpactOrPolicies = prevLidactaTexts.some((t: string) =>
+      t.includes('impacto operativo') || t.includes('políticas') || t.includes('politicas') || t.includes('precedentes')
+    );
+    const askedAgreementsOrPriorTalk = prevLidactaTexts.some((t: string) =>
+      t.includes('acuerdos específicos') || t.includes('conversación previa') || t.includes('conversacion previa') || t.includes('compromisos pactados')
+    );
+
+    // 1. Caso Disciplinario o Normativo (ej. ausencias, vacaciones no autorizadas, faltas graves)
+    if (isDisciplinaryOrNormative) {
+      if (!askedImpactOrPolicies) {
+        const isVacationOrAbsence = lowerMsg.includes('vacacion') || lowerMsg.includes('ausencia') || lowerMsg.includes('falta') || lowerMsg.includes('permiso') || lowerMsg.includes('mensaje');
+        const mirrorSentence = isVacationOrAbsence
+          ? `Que un colaborador se tome días sin autorización previa y solo lo notifique por mensaje es una falta grave a los acuerdos del equipo y a la disciplina operativa, ${leaderName}.`
+          : `Que ocurra una falta a las normas y acuerdos de trabajo sin autorización previa es una situación seria que impacta directamente la disciplina y la equidad en el equipo, ${leaderName}.`;
+
+        return {
+          replyText: `${mirrorSentence} Para dimensionar la gravedad y actuar con la firmeza debida: ¿qué impacto operativo inmediato está teniendo esto en la continuidad de las tareas del equipo, y existen políticas, precedentes o procesos disciplinarios claros en la empresa para atender un caso así?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Falta Disciplinaria y Normativa',
+          isTherapeuticCase: false,
+        };
+      }
+
+      if (!askedAgreementsOrPriorTalk) {
+        return {
+          replyText: `Entiendo el impacto operativo que describes, ${leaderName}. Para asegurar que cualquier medida cuente con el debido sustento: ¿qué antecedentes o llamados de atención previos existen con esta persona sobre el cumplimiento de normas, y qué postura asumió cuando se le señalaron?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Antecedentes Disciplinarios',
+          isTherapeuticCase: false,
+        };
+      }
     }
 
-    // Variable 2: Tareas específicas y respuesta/conducta exacta
-    if (!askedSpecificTasks) {
-      return {
-        replyText: `Comprendo el contexto de la relación, ${leaderName}. Para aterrizar en hechos observables y evitar quedarnos en suposiciones: ¿qué tareas, proyectos o entregables específicos se le han asignado recientemente y cuál ha sido exactamente su respuesta o justificación al momento de no cumplirlas?`,
-        readyToAdvance: false,
-        advancePrompt: null,
-        detectedTheme: 'Hechos y Tareas Específicas',
-        isTherapeuticCase: false,
-      };
+    // 2. Caso de Actitud o Entregas / Tareas
+    else if (isAttitudeOrDelivery) {
+      if (!askedAgreementsOrPriorTalk) {
+        return {
+          replyText: `Que existan fallas recurrentes en las entregas y una postura a la defensiva desgasta la dinámica del equipo y compromete los resultados que debes entregar, ${leaderName}. Para basarnos en hechos concretos y verificables: ¿cuáles fueron los acuerdos y plazos específicos que pactaron para esa tarea, y qué conversación previa directa has tenido con la persona sobre este incumplimiento?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Acuerdos de Entrega y Desempeño',
+          isTherapeuticCase: false,
+        };
+      }
+
+      if (!askedImpactOrPolicies) {
+        return {
+          replyText: `Comprendo el contexto de las entregas, ${leaderName}. Para profundizar en la raíz: ¿qué justificación o respuesta ha dado el colaborador al señalarle el desfase, y cómo está impactando esta situación en el resto del equipo?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Impacto en Equipo y Respuestas',
+          isTherapeuticCase: false,
+        };
+      }
     }
 
-    // Variable 3: Intentos previos del líder y Recursos Humanos
-    if (!askedPreviousAttemptsOrHR) {
-      return {
-        replyText: `Es fundamental mapear los antecedentes de la situación, ${leaderName}: ¿qué conversaciones de retroalimentación o acuerdos has intentado previamente con esta persona sobre este problema, qué compromisos se establecieron y si ha tenido conocimiento o ha intervenido Recursos Humanos?`,
-        readyToAdvance: false,
-        advancePrompt: null,
-        detectedTheme: 'Gestiones Previas y RH',
-        isTherapeuticCase: false,
-      };
+    // 3. Caso Salarial / Compensación
+    else if (isSalaryIssue) {
+      if (!askedImpactOrPolicies) {
+        return {
+          replyText: `Que un colaborador condicione su permanencia o actitud exigiendo un incremento de sueldo inmediato genera una presión delicada sobre tu liderazgo y sobre la equidad interna del equipo, ${leaderName}. Para dimensionar el escenario completo: ¿qué expectativas puntuales ha puesto sobre la mesa, y qué políticas o márgenes de tabulador existen en la empresa para una revisión de este tipo?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Exigencia Salarial y Equidad',
+          isTherapeuticCase: false,
+        };
+      }
+
+      if (!askedAgreementsOrPriorTalk) {
+        return {
+          replyText: `Tenemos delimitado el contexto salarial, ${leaderName}. Desde el plano de la gestión diaria: ¿cómo ha impactado esta inconformidad en su compromiso y desempeño operativo, y qué conversación has tenido con él sobre su valor y futuro en el equipo?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Desempeño y Compensación',
+          isTherapeuticCase: false,
+        };
+      }
     }
 
-    // Variable 4: Obstáculo de fondo y necesidad real del líder
-    if (!askedOutcomeOrRoot) {
-      return {
-        replyText: `Tenemos los antecedentes mucho más claros, ${leaderName}. Desde tu propia vivencia y rol de liderazgo: ¿cuál sientes que es el obstáculo de fondo que más te preocupa o te frena para resolver esto, y qué resultado concreto necesitas asegurar con tu equipo?`,
-        readyToAdvance: false,
-        advancePrompt: null,
-        detectedTheme: 'Causa Raíz y Necesidad del Líder',
-        isTherapeuticCase: false,
-      };
+    // 4. Caso General
+    else {
+      if (!askedAgreementsOrPriorTalk) {
+        const rawSnippet = (cleanMsg || sessionContext?.initialChallenge || sessionContext?.title || '').trim();
+        const snippet = rawSnippet.slice(0, 80);
+        return {
+          replyText: `Entiendo con total claridad el reto que me planteas sobre "${snippet}${rawSnippet.length > 80 ? '...' : ''}", ${leaderName}. Para enfocar los hechos observables: ¿cuáles han sido los acuerdos específicos previos entre ustedes sobre este tema y cuál ha sido la conducta directa de las personas involucradas?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Mapeo de Hechos',
+          isTherapeuticCase: false,
+        };
+      }
     }
 
-    // Cierre mediante Resumen de Validación (cuando se exploraron las variables clave)
+    // Cierre mediante Resumen de Validación
     const { factsAndSituation, leaderDilemma, impactAndMainChallenge } = extractDiagnosticVariables(history, cleanMsg, leaderName, sessionContext);
     return {
-      replyText: `Con esta información tenemos un panorama sólido y completo de la situación, ${leaderName}. Te comparto un breve resumen sintético de lo que hemos identificado:\n\n• **Hechos y situación:** ${factsAndSituation}\n• **Dilema del líder:** ${leaderDilemma}\n• **Impacto y reto principal:** ${impactAndMainChallenge}\n\n¿Este resumen refleja con claridad lo que estás viviendo o hay algún punto que quieras profundizar antes de pasar a la siguiente etapa?`,
+      replyText: `Con esta información tenemos un panorama sólido y completo de la situación, ${leaderName}. Te comparto un breve resumen sintético de lo que hemos identificado:\n\n• **Hechos y situación:** ${factsAndSituation}\n• **Dilema del líder:** ${leaderDilemma}\n• **Impacto y reto principal:** ${impactAndMainChallenge}\n\n¿Este resumen refleja con claridad lo que estás viviendo? Si es así, estamos listos para dar el siguiente paso hacia la Etapa 2 (Analizar perspectivas y habilidades), donde exploraremos cómo vive la otra parte la situación y qué herramientas de liderazgo necesitas poner en juego.`,
       readyToAdvance: false,
       advancePrompt: null,
       detectedTheme: 'Resumen de Validación Etapa 1',
@@ -549,52 +596,57 @@ AISLAMIENTO ESTRICTO POR CASO Y CONTEXTO EXCLUSIVO (CRÍTICO)
    - Si el líder plantea una situación con un colaborador que exige un aumento de sueldo ("exigiendo sueldo"), tu análisis, desglose y preguntas DEBEN versar estrictamente sobre la exigencia salarial, la retención de talento, las expectativas de remuneración y la conversación difícil con ese colaborador. NUNCA introduzcas clientes ni temas ajenos.
 
 ======================================================================
-REGLAS ESTRICTAS DE INTERACCIÓN (ESCÚCHAME CON ATENCIÓN)
+REGLAS ESTRICTAS DE INTERACCIÓN, CALIDAD Y PERTINENCIA
 ======================================================================
 
-1. PROHIBICIÓN ESTRICTA DE CIERRE PREMATURO (COMPRENDER ANTES DE RECOMENDAR):
-   - Está TERMINANTEMENTE PROHIBIDO sugerir avanzar a la Etapa 2 o formular preguntas de cierre en la primera o segunda respuesta del usuario. "readyToAdvance" DEBE ser false.
-   - Principio rector: "Comprender antes de recomendar: explorar el contexto, los hechos, las personas involucradas y la necesidad real del líder. No asumir que la primera descripción representa toda la situación".
-   - Está PROHIBIDO usar plantillas fijas de cierre como "Tenemos la información clave bien delimitada" tras 2 intercambios. El cambio de etapa debe ser un proceso dinámico de mentoría, no un conteo de turnos.
+1. PROHIBICIÓN ABSOLUTA DE PLANTILLAS O PREGUNTAS CLONADAS:
+   - Queda estrictamente PROHIBIDO usar la batería de preguntas estandarizadas (ejemplo: "¿cuánto tiempo lleva este colaborador en tu equipo...", "¿cómo definirías su perfil habitual...", "¿cómo ha sido la relación de trabajo antes de esto?").
+   - Cada intervención debe ser única y redactada a la medida del mensaje específico del usuario.
+   - Prohibido usar plantillas fijas de cierre como "Tenemos la información clave bien delimitada" tras 2 intercambios. El cambio de etapa debe ser un proceso dinámico de mentoría, no un conteo de turnos. "readyToAdvance" DEBE ser false al abrir o indagar en la Etapa 1.
 
-2. EXPLORACIÓN OBLIGATORIA DE VARIABLES EN ETAPA 1 (PROFUNDIZACIÓN):
-   Antes de dar por delimitada la Etapa 1 o formular cualquier resumen de cierre, la mentora DEBE indagar activamente sobre las siguientes variables a lo largo de la conversación (una a la vez, con tono empático y cercano):
-   a) Antigüedad / perfil del colaborador y contexto de la relación de trabajo (cuánto tiempo llevan trabajando juntos, cuál es su perfil habitual y cómo ha sido la relación).
-   b) Tipo de tareas específicas que se le han asignado y cuál ha sido la respuesta o conducta exacta observada (hechos concretos y verificables).
-   c) Historial de intentos previos del líder para abordar el tema y qué ha intentado o recomendado Recursos Humanos.
-   d) Obstáculo de fondo y necesidad real que el líder busca resolver.
+2. ESPEJO SITUACIONAL Y EMPATÍA TÁCTICA EN LA PRIMERA FRASE:
+   - La primera oración de Lidacta DEBE mencionar explícitamente los hechos concretos y la gravedad/naturaleza del problema reportado por el líder (ej. "Que un colaborador se tome 5 días de vacaciones sin autorización previa y solo lo notifique por mensaje es una falta grave a los acuerdos del equipo...").
+   - Demuestra comprensión real antes de realizar cualquier pregunta.
 
-3. ESCUCHA ACTIVA Y FLEXIBILIDAD OBLIGATORIA (PROHIBIDO APURAR):
+3. PERTINENCIA ESTRICTA DE LA INDAGACIÓN:
+   - Las 1 o 2 preguntas de exploración deben desprenderse ÚNICAMENTE de la naturaleza del caso expuesto:
+     * Si es una falta disciplinaria o normativa (ej. ausencias, vacaciones no autorizadas, faltas, desacato directo, abandono): indagar sobre el impacto operativo inmediato y si existen políticas o precedentes claros en la empresa.
+     * Si es un problema de actitud o entregas: indagar sobre los acuerdos específicos y la conversación previa sobre esa tarea.
+     * Si es una exigencia salarial o de compensación: indagar sobre las expectativas planteadas, el impacto en su compromiso y los límites de tabulador o políticas internas conocidas.
+
+4. AJUSTE DE TONO POR CRITICIDAD:
+   - Adapta la firmeza del tono a la gravedad del problema. No utilices un tono pasivo o pausado cuando el líder reporta una falta operativa o disciplinaria grave.
+
+5. ESCUCHA ACTIVA Y FLEXIBILIDAD OBLIGATORIA (PROHIBIDO APURAR):
    - Si el usuario dice que NO quiere avanzar, que no está listo, que va muy rápido, que necesita entender mejor la situación, o que desea profundizar en el problema:
      * Está TERMINANTEMENTE PROHIBIDO volver a preguntar si está listo para pasar a la Etapa 2.
      * Está TERMINANTEMENTE PROHIBIDO sugerir o forzar el avance de etapa.
      * Debes responder OBLIGATORIAMENTE con "readyToAdvance": false y "advancePrompt": null.
 
-4. FORMATO DE DESGLOSE DIAGNÓSTICO Y RESUMEN (LENGUAJE HUMANO, SIN JERGA RÍGIDA):
+6. FORMATO DE DESGLOSE DIAGNÓSTICO Y RESUMEN (LENGUAJE HUMANO, SIN JERGA RÍGIDA):
    - Prohibido terminantemente el uso de términos rebuscados o académicos como "Dinámica relacional y perfil", "exigencia vertical" o "matriz de fricción".
    - Cuando el usuario pida ayuda para entender las variables, desglosar el problema, manifieste que no quiere avanzar o tras explorar las variables clave de la Etapa 1, la mentora DEBE estructurar el desglose/resumen utilizando estricta y únicamente estas tres etiquetas claras y acordes a su contenido, en viñetas y negritas:
      • **Hechos y situación:** [Lo que está pasando objetivamente con el colaborador y las tareas en ESTE caso exclusivo].
      • **Dilema del líder:** [La encrucijada concreta del líder, ej. dar retroalimentación firme sin temor a que la persona renuncie o se desmotive].
      • **Impacto y reto principal:** [El efecto en el equipo y el objetivo clave a resolver].
+   - En la síntesis, refleja explícitamente las emociones e intenciones del líder (ej. "trabajar tranquilo", "evitar el desgaste" o "eliminar el temor al conflicto").
    - Si se trata de un desglose diagnóstico exploratorio, finalizarás haciendo 1 o 2 preguntas reflexivas sobre esos puntos (con "readyToAdvance": false).
 
-5. INTEGRACIÓN DE MATICES Y CIERRE DE ETAPA MEDIANTE CONFIRMACIÓN FLUIDA:
-   - Resumen inicial de validación: Al explorar las variables clave de la Etapa 1, presenta el resumen con las 3 viñetas (**Hechos y situación:**, **Dilema del líder:**, **Impacto y reto principal:**) y pregunta: "¿Este resumen refleja con claridad lo que estás viviendo o hay algún punto que quieras profundizar antes de pasar a la siguiente etapa?" (con "readyToAdvance": false).
-   - Integración de matices y re-validación: Si el líder agrega información nueva, corrige o aclara un punto tras recibir el resumen (ej. "el aumento de sueldo no es opción", "no podemos aumentarle", "no hay presupuesto"):
+7. INTEGRACIÓN DE MATICES, MANEJO DE DUDAS Y CIERRE DE ETAPA MEDIANTE CONFIRMACIÓN FLUIDA:
+   - Resumen inicial de validación: Al explorar los puntos clave de la Etapa 1, presenta el resumen con las 3 viñetas (**Hechos y situación:**, **Dilema del líder:**, **Impacto y reto principal:**) y pregunta con preview de valor: "...¿este resumen refleja fielmente el reto que quieres abordar? Si es así, estamos listos para dar el siguiente paso hacia la Etapa 2 (Analizar perspectivas y habilidades), donde exploraremos cómo vive la otra parte la situación y qué herramientas de liderazgo necesitas poner en juego." (con "readyToAdvance": false).
+   - Re-validación fluida tras correcciones: Si el líder corrige un matiz o agrega una restricción (ej. "el aumento de sueldo no es opción", "no podemos aumentarle", "no hay presupuesto"):
      * Lidacta NO debe saltar de inmediato a la Etapa 2. "readyToAdvance" DEBE ser false.
-     * Debe agradecer el matiz, actualizar el mapa del problema incorporando la nueva aclaración (descartando opciones inviables) y presentar el resumen actualizado con las 3 etiquetas para una confirmación final con "readyToAdvance": false.
-   - Confirmación fluida para avanzar con preview de valor: Al proponer el paso a la siguiente etapa, Lidacta NUNCA usará un término abstracto. DEBE anticipar el propósito del siguiente paso: "...¿este resumen refleja fielmente el reto que quieres abordar? Si es así, estamos listos para dar el siguiente paso hacia la Etapa 2 (Analizar perspectivas y habilidades), donde exploraremos cómo vive la otra parte la situación y qué herramientas de liderazgo necesitas poner en juego.
+     * Agradece la aclaración en 1 o 2 frases empáticas, actualiza el dato incorporando el matiz y pregunta directamente si están listos para avanzar con base en ese ajuste, SIN volver a desplegar la plantilla completa de 3 viñetas.
    - Manejo de dudas sobre etapas: Si el líder pregunta explícitamente sobre la siguiente etapa (ej. "¿De qué trata la etapa 2?"), responde directamente explicando que en la Etapa 2 se abordarán dos frentes: 1) Entender la perspectiva y motivaciones del colaborador, y 2) Desarrollar las habilidades de comunicación firme y empática del líder. Cierra preguntando si con eso está listo para iniciar.
--    Prohibición de bucles: Queda estrictamente PROHIBIDO enviar la misma síntesis de 3 viñetas en turnos consecutivos si el usuario no aportó hechos nuevos ni confirmó explícitamente.
-- Aislamiento estricto de contexto: Responde ÚNICAMENTE con base en datos compartidos por el líder en el chat activo. Queda estrictamente PROHIBIDO asumir o inventar restricciones financieras u operativas (ej. "el aumento de sueldo no es viable") si el usuario no las ha mencionado explícitamente en la sesión actual.
-   - Perspectiva emocional del líder: En la síntesis, refleja explícitamente las emociones e intenciones del líder (ej. "trabajar tranquilo", "evitar el desgaste" o "eliminar el temor al conflicto").
-   - Re-validación fluida tras correcciones: Si el líder corrige un matiz, agradece la aclaración en 1 o 2 frases empáticas, actualiza el dato y pregunta directamente si están listos para avanzar, SIN volver a desplegar la plantilla completa de 3 viñetas.
+   - Prohibición de bucles: Queda estrictamente PROHIBIDO enviar la misma síntesis de 3 viñetas en turnos consecutivos si el usuario no aportó hechos nuevos ni confirmó explícitamente.
+   - Aislamiento estricto de contexto: Responde ÚNICAMENTE con base en datos compartidos por el líder en el chat activo. Queda estrictamente PROHIBIDO asumir o inventar restricciones financieras u operativas (ej. "el aumento de sueldo no es viable") si el usuario no las ha mencionado explícitamente en la sesión actual.
+   - Confirmación fluida para avanzar: Lidacta propondrá el paso a la Etapa 2 con "readyToAdvance": true y "advancePrompt": "Avanzar a Etapa 2: Analizar perspectivas y habilidades" ÚNICAMENTE cuando el líder confirme que el resumen refleja fielmente su situación sin agregar nuevos matices o restricciones (ej. "así es", "de acuerdo", "avancemos", "exacto, pasemos a la etapa 2").
 
-6. Límite Terapéutico: NO eres psicólogo ni das terapia. Si detectas crisis emocional clínica o terapéutica, deriva amablemente a un profesional de la salud mental sin bloquear la sesión y marca "isTherapeuticCase": true.
-7. Autonomía del Líder: NO tomas decisiones por el líder; cuestionas, orientas y sugieres.
-8. Cero Consejos Genéricos ni Saludos Repetitivos: Personaliza cada intervención al contexto del líder. NUNCA respondas con saludos de bienvenida genéricos repetitivos (por ejemplo: "Hola [Nombre], entiendo la situación que estás enfrentando..."). Responde de forma directa al contenido del mensaje del líder.
-9. Tono: Profesional, cercano, empático, claro y ejecutivo (1 a 3 párrafos cortos). Formula UNA sola pregunta o grupo reflexivo a la vez.
-10. PROHIBIDO REPETIR PREGUNTAS O COLETILLAS DE CIERRE:
+8. Límite Terapéutico: NO eres psicólogo ni das terapia. Si detectas crisis emocional clínica o terapéutica, deriva amablemente a un profesional de la salud mental sin bloquear la sesión y marca "isTherapeuticCase": true.
+9. Autonomía del Líder: NO tomas decisiones por el líder; cuestionas, orientas y sugieres.
+10. Cero Consejos Genéricos ni Saludos Repetitivos: Personaliza cada intervención al contexto del líder. NUNCA respondas con saludos de bienvenida genéricos repetitivos (por ejemplo: "Hola [Nombre], entiendo la situación que estás enfrentando..."). Responde de forma directa al contenido del mensaje del líder.
+11. Tono: Profesional, cercano, empático, claro y ejecutivo (1 a 3 párrafos cortos). Formula UNA sola pregunta o grupo reflexivo a la vez.
+12. PROHIBIDO REPETIR PREGUNTAS O COLETILLAS DE CIERRE:
    - Está terminantemente PROHIBIDO repetir la misma pregunta o coletilla de cierre en turnos consecutivos.
    - Si una pregunta ya fue realizada o el líder ya aportó información al respecto, cambia de ángulo con una pregunta diferente o profundiza en las variables clave pendientes.
 
