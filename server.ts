@@ -161,16 +161,19 @@ En todas sus interacciones, Lidacta debe cumplir tres objetivos:
   * Está TERMINANTEMENTE PROHIBIDO volver a preguntar si está listo para pasar a la Etapa 2.
   * Está TERMINANTEMENTE PROHIBIDO empujar o sugerir el avance de etapa.
   * La respuesta debe tener OBLIGATORIAMENTE "readyToAdvance": false y "advancePrompt": null.
-- REGLA 4 (FORMATO DE DESGLOSE DIAGNÓSTICO - DEVOLVER VALOR VISIBLE EN ESTE CASO): Cuando el usuario pida ayuda para entender las variables, desglosar el problema, o manifieste que no quiere avanzar y necesita entender mejor:
-  La mentora DEBE estructurar su respuesta analizando y sintetizando activamente lo que ha escuchado en la conversación de ESTE caso exclusivo, devolviendo valor visible con esta estructura exacta en viñetas y negritas:
-  • **Conflicto visible:** [Síntesis objetiva y concreta de la situación observable planteada por el líder en ESTE caso exclusivo (por ejemplo: la solicitud salarial del colaborador, la omisión de una tarea, o el problema operativo)].
-  • **Tensión subyacente:** [Análisis de la dinámica relacional, expectativas no alineadas, jerarquía o fricción de fondo en ESTE caso exclusivo].
-  • **Impacto emocional/operativo:** [Reflejo del desgaste, sobrecarga, dilema o frustración expresados por el líder en ESTE caso exclusivo].
-  Finalizará haciendo 1 o 2 preguntas reflexivas específicas sobre esos puntos desglosados para ayudar a esclarecer la causa raíz (sin preguntar sobre pasar de etapa).
-- REGLA 5 (CIERRE DE ETAPA MEDIANTE RESUMEN DE VALIDACIÓN):
-  Solo cuando se hayan explorado activamente las variables clave de la Etapa 1, Lidacta generará un breve resumen sintético de lo conversado en ESTE caso (3 a 4 puntos clave en viñetas).
-  Debe finalizar preguntando explícitamente: "¿Este resumen refleja con claridad lo que estás viviendo o hay algún punto que quieras profundizar antes de pasar a la siguiente etapa?" (con "readyToAdvance": false).
-  Solo cuando el usuario confirme expresamente que el desglose y panorama tienen sentido para él (por ejemplo: "Tiene todo el sentido", "Exacto, así es", "De acuerdo, avancemos"), la mentora podrá validar el avance y proponer dar el paso a la Etapa 2 con "readyToAdvance": true.
+- REGLA 4 (FORMATO DE DESGLOSE DIAGNÓSTICO Y RESUMEN - LENGUAJE HUMANO, SIN JERGA RÍGIDA):
+  * Prohibido terminantemente el uso de términos rebuscados o académicos como "Dinámica relacional y perfil", "exigencia vertical" o "matriz de fricción".
+  * Cuando el usuario pida ayuda para entender las variables, desglosar el problema, manifieste que no quiere avanzar o tras explorar las variables clave de la Etapa 1, la mentora DEBE estructurar el desglose/resumen utilizando estricta y únicamente estas tres etiquetas claras y acordes a su contenido, en viñetas y negritas:
+    • **Hechos y situación:** [Lo que está pasando objetivamente con el colaborador y las tareas en ESTE caso exclusivo].
+    • **Dilema del líder:** [La encrucijada concreta del líder, ej. dar retroalimentación firme sin temor a que la persona renuncie o se desmotive].
+    • **Impacto y reto principal:** [El efecto en el equipo y el objetivo clave a resolver].
+  * Si se trata de un desglose diagnóstico exploratorio, finalizarás haciendo 1 o 2 preguntas reflexivas sobre esos puntos (con "readyToAdvance": false).
+- REGLA 5 (INTEGRACIÓN DE MATICES Y CIERRE DE ETAPA MEDIANTE CONFIRMACIÓN FLUIDA):
+  * Resumen inicial de validación: Al explorar las variables clave de la Etapa 1, presenta el resumen con las 3 viñetas (**Hechos y situación:**, **Dilema del líder:**, **Impacto y reto principal:**) y pregunta: "¿Este resumen refleja con claridad lo que estás viviendo o hay algún punto que quieras profundizar antes de pasar a la siguiente etapa?" (con "readyToAdvance": false).
+  * Integración de matices y re-validación: Si el líder agrega información nueva, corrige o aclara un punto tras recibir el resumen (ej. "el aumento de sueldo no es opción", "no podemos aumentarle", "no hay presupuesto"):
+    - Lidacta NO debe saltar de inmediato a la Etapa 2. "readyToAdvance" DEBE ser false.
+    - Debe agradecer el matiz, actualizar el mapa del problema incorporando la nueva aclaración (descartando opciones inviables) y presentar el resumen actualizado con las 3 etiquetas para una confirmación final con "readyToAdvance": false.
+  * Confirmación fluida para avanzar: Lidacta propondrá el paso a la Etapa 2 con "readyToAdvance": true y "advancePrompt": "Avanzar a Etapa 2: Analizar perspectivas y habilidades" ÚNICAMENTE cuando el líder confirme que el resumen actualizado refleja fielmente su situación sin agregar nuevos matices o restricciones (ej. "así es", "de acuerdo", "avancemos", "exacto, pasemos a la etapa 2").
 - PROHIBIDO REPETIR PREGUNTAS O COLETILLAS DE CIERRE: NUNCA repitas la misma pregunta, fórmula o coletilla de cierre en turnos consecutivos.
 - Formular UNA sola pregunta o grupo reflexivo a la vez y esperar la respuesta antes de continuar.
 - Evitar repetir preguntas o solicitar información que el líder ya proporcionó.
@@ -562,6 +565,14 @@ function extractDiagnosticVariablesServer(
   const combinedText = allUserTexts.join(' ');
   const lower = combinedText.toLowerCase();
 
+  // Check if leader clarified that raise / increase is not viable or an option
+  const raiseNotAnOption = [
+    'no es opción', 'no es opcion', 'no podemos', 'no hay presupuesto', 'no es viable',
+    'inviable', 'descartado', 'descartada', 'descartar el aumento', 'no aumento',
+    'no podemos aumentarle', 'no se puede aumentar', 'no podemos darle', 'no está contemplado',
+    'no esta contemplado'
+  ].some((k) => lower.includes(k));
+
   // 1. Detect salary / compensation / money / raise / counteroffer
   const isSalaryCase = [
     'sueldo', 'salario', 'aumento', 'aumento de sueldo', 'aumento salarial', 'pagar', 'paga',
@@ -599,63 +610,78 @@ function extractDiagnosticVariablesServer(
     'conflicto', 'roce', 'desacuerdo', 'quejas'
   ].some((k) => lower.includes(k));
 
-  // Formulate Conflicto Visible based on actual case
-  let visibleConflict = '';
+  // Formulate 1: Hechos y situación (Lo que está pasando objetivamente con el colaborador y las tareas)
+  let factsAndSituation = '';
   if (isSalaryCase) {
-    visibleConflict = 'La exigencia o solicitud de ajuste salarial planteada por el colaborador y la expectativa de una resolución económica inmediata.';
+    if (raiseNotAnOption) {
+      factsAndSituation = 'El colaborador condiciona su permanencia o actitud a una exigencia salarial inmediata, mientras que en la empresa el aumento de sueldo no es una opción viable en este momento.';
+    } else {
+      factsAndSituation = 'El colaborador plantea una exigencia de aumento salarial inmediato y manifiesta inconformidad o intención de salida si no se le concede.';
+    }
   } else if (isShiftLogCase) {
-    visibleConflict = 'La omisión en la entrega oportuna de las bitácoras y registros operativos durante el cambio de turno.';
+    factsAndSituation = 'La omisión sistemática en el llenado de las bitácoras y registros operativos durante el cambio de turno por parte de un colaborador experimentado.';
   } else if (isDelegationCase) {
-    visibleConflict = 'La absorción de revisiones operativas por temor a que el equipo cometa omisiones o no conformidades.';
+    factsAndSituation = 'La absorción directa de revisiones operativas por temor a fallas o no conformidades en el equipo.';
   } else if (isClientCase) {
-    visibleConflict = 'El roce operativo con el cliente y los compromisos de entrega o servicio afectados por la situación.';
+    factsAndSituation = 'El roce operativo directo con el cliente y los compromisos de entrega o servicio afectados por la situación.';
   } else if (isTaskNonComplianceCase) {
-    visibleConflict = 'El incumplimiento o desfase en los entregables y tareas prioritarias asignadas al equipo.';
+    factsAndSituation = 'El incumplimiento reiterado y desfase en las tareas o entregables prioritarios asignados al equipo.';
   } else if (isAttitudeCase) {
-    visibleConflict = 'La postura a la defensiva o falta de alineación en las dinámicas y compromisos de trabajo cotidianos.';
+    factsAndSituation = 'La postura a la defensiva y la resistencia para alinearse a las tareas y acuerdos cotidianos de trabajo.';
   } else {
     const rawSnippet = (sessionContext?.initialChallenge || sessionContext?.title || currentMsg || '').replace(/\s+/g, ' ').trim();
     const snippet = rawSnippet ? rawSnippet.slice(0, 95) : 'la situación operativa y los acuerdos de trabajo';
-    visibleConflict = `La situación observada en tu equipo sobre: "${snippet}${rawSnippet.length > 95 ? '...' : ''}".`;
+    factsAndSituation = `La situación observada en tu equipo sobre: "${snippet}${rawSnippet.length > 95 ? '...' : ''}".`;
   }
 
-  // Formulate Tensión Subyacente based on actual case
-  let underlyingTension = '';
+  // Formulate 2: Dilema del líder (La encrucijada concreta del líder)
+  let leaderDilemma = '';
   if (isSalaryCase) {
-    underlyingTension = 'El dilema entre reconocer el valor del colaborador frente a las políticas de tabulador o posibilidades reales de la empresa, sumado a la incertidumbre sobre cómo sostener la motivación si no se puede conceder el monto exigido.';
+    if (raiseNotAnOption) {
+      leaderDilemma = 'Sostener una conversación clara y firme para comunicarle con total transparencia que el incremento salarial no es viable, gestionando su reacción sin ceder a presiones ni desgastar la relación de trabajo.';
+    } else {
+      leaderDilemma = 'Dar retroalimentación firme y delimitar los compromisos laborales sin el temor a que la persona renuncie, se desmotive o genere fracturas en el equipo.';
+    }
   } else if (isShiftLogCase) {
-    underlyingTension = 'La fricción entre respetar la trayectoria del colaborador y la exigencia innegociable de disciplina y trazabilidad operativa.';
+    leaderDilemma = 'Exigir la disciplina operativa requerida sin deteriorar el vínculo ni la motivación de una persona de amplia trayectoria en el equipo.';
   } else if (isDelegationCase) {
-    underlyingTension = 'La contradicción entre la necesidad de desarrollar autonomía en los supervisores y el riesgo de soltar el control ante una evaluación crítica.';
+    leaderDilemma = 'Soltar el control y dar espacio de autonomía a los supervisores frente al temor de que ocurra un error crítico bajo tu responsabilidad.';
   } else if (isClientCase) {
-    underlyingTension = 'La presión de equilibrar la satisfacción del cliente con las capacidades reales y tiempos de respuesta de tu equipo.';
+    leaderDilemma = 'Defender las capacidades y tiempos de tu equipo sin poner en riesgo la relación comercial ni el nivel de servicio con el cliente.';
   } else {
     const mentionsBoss = ['jefe', 'director', 'gerencia', 'liderazgo superior', 'directora'].some((k) => lower.includes(k));
     if (mentionsBoss) {
-      underlyingTension = 'La presión vertical de responder a las expectativas de la dirección mientras gestionas la capacidad y bienestar de tu equipo.';
+      leaderDilemma = 'Equilibrar la presión de las expectativas de la dirección con el cuidado de la capacidad y el bienestar de tu equipo.';
     } else {
-      underlyingTension = 'Las expectativas y percepciones no alineadas entre lo que necesitas asegurar como líder y lo que la otra parte está buscando o experimentando.';
+      leaderDilemma = 'Abordar una conversación difícil con asertividad y firmeza, balanceando la exigencia de resultados con el cuidado del vínculo con la persona.';
     }
   }
 
-  // Formulate Impacto Emocional/Operativo based on actual case
-  let emotionalImpact = '';
+  // Formulate 3: Impacto y reto principal (Efecto en el equipo y objetivo clave a resolver)
+  let impactAndMainChallenge = '';
   const expressesFatigue = ['cansad', 'agota', 'harto', 'frustra', 'estres', 'estrés', 'abrumad', 'desgaste'].some((k) => lower.includes(k));
   if (isSalaryCase) {
-    emotionalImpact = expressesFatigue
-      ? 'La sensación de desgaste e incertidumbre al gestionar una conversación económica delicada sin desmotivar al colaborador ni sentar un precedente inviable.'
-      : 'La preocupación por mantener la estabilidad del equipo y la carga de encontrar una salida justa y viable para ambas partes.';
+    impactAndMainChallenge = expressesFatigue
+      ? 'Frenar el desgaste emocional acumulado, evitar sentar precedentes inviables en el equipo y definir con certeza el rumbo de la posición.'
+      : 'Cuidar la equidad interna del equipo, proteger el clima laboral y definir con claridad el futuro de la colaboración.';
   } else if (isShiftLogCase) {
-    emotionalImpact = 'El desgaste de reiterar requerimientos básicos y la incomodidad de confrontar a alguien experimentado sin generar fracturas en piso.';
+    impactAndMainChallenge = 'Garantizar la trazabilidad y seguridad en piso, evitando que la falta de registros afecte la calidad o al turno entrante.';
   } else if (isDelegationCase) {
-    emotionalImpact = 'El agotamiento físico y mental de cargar con revisiones detalladas, posponiendo tus responsabilidades estratégicas de liderazgo.';
+    impactAndMainChallenge = 'Desarrollar la autonomía real de los supervisores y liberar tu tiempo de la operación para enfocarte en tu liderazgo estratégico.';
   } else {
-    emotionalImpact = expressesFatigue
-      ? 'El desgaste acumulado de asumir toda la carga y el estrés de evitar que la situación escale o afecte al resto del equipo.'
-      : 'La sobrecarga mental y la inquietud por resolver de raíz una situación que consume tiempo y energía de tu rol como líder.';
+    impactAndMainChallenge = expressesFatigue
+      ? 'Frenar la sobrecarga mental acumulada y alinear los compromisos para que la operación fluya sin requerir tu intervención constante.'
+      : 'Despejar la incertidumbre, restaurar el enfoque en las metas y cuidar el compromiso general del equipo.';
   }
 
-  return { visibleConflict, underlyingTension, emotionalImpact };
+  return {
+    factsAndSituation,
+    leaderDilemma,
+    impactAndMainChallenge,
+    visibleConflict: factsAndSituation,
+    underlyingTension: leaderDilemma,
+    emotionalImpact: impactAndMainChallenge,
+  };
 }
 
 // Deterministic Coaching Engine (Ensures 100% uptime, adhering to all PDF rules)
@@ -695,6 +721,26 @@ function generateDeterministicCoaching({
   const cleanMsg = (userMessage || '').trim();
   const lowerMsg = cleanMsg.toLowerCase();
 
+  // Detección de matices o restricciones agregadas por el líder tras el resumen o durante la conversación
+  const isNuanceOrConstraint = [
+    'no es opción', 'no es opcion', 'no podemos aumentar', 'no podemos darle',
+    'no hay presupuesto', 'no es viable', 'inviable', 'descartado', 'descartada',
+    'descartar el aumento', 'descartar', 'no aumentarle', 'no se puede aumentar',
+    'no hay aumento', 'no le podemos subir', 'no hay dinero', 'aclaro', 'aclaración',
+    'aclaracion', 'ojo', 'rectifico', 'un detalle', 'no quiero que', 'no está sobre la mesa',
+    'no esta sobre la mesa', 'no está contemplado', 'no esta contemplado',
+    'no podemos pagar', 'no es posible aumentarle', 'imposible aumentar'
+  ].some((t) => lowerMsg.includes(t));
+
+  if (isNuanceOrConstraint && stage === 1) {
+    const { factsAndSituation, leaderDilemma, impactAndMainChallenge } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg, sessionData);
+    return {
+      replyText: `Gracias por esa precisión fundamental, ${leaderName}. Tener claro que esa vía no es una opción viable cambia por completo el terreno de juego y nos evita plantear salidas poco realistas.\n\nActualizo el mapa de la situación incorporando este matiz:\n\n• **Hechos y situación:** ${factsAndSituation}\n• **Dilema del líder:** ${leaderDilemma}\n• **Impacto y reto principal:** ${impactAndMainChallenge}\n\nCon este ajuste descartando esa opción, ¿este resumen refleja fielmente el reto que quieres abordar antes de que demos el paso a la siguiente etapa?`,
+      readyToAdvance: false,
+      detectedTheme: 'Integración de Matices y Re-validación',
+    };
+  }
+
   // Regla 1: Escucha activa y flexibilidad obligatoria (Petición de NO avanzar / entender mejor)
   const wantsToPauseOrNotAdvance = [
     'no quiero avanzar', 'no avancemos', 'no pasar a la etapa 2', 'no quiero pasar a la etapa 2',
@@ -709,26 +755,27 @@ function generateDeterministicCoaching({
 
   // Regla 2: Formato de Desglose Diagnóstico cuando el usuario pide ayuda para desglosar o entender
   if (wantsToPauseOrNotAdvance && stage === 1) {
-    const { visibleConflict, underlyingTension, emotionalImpact } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg, sessionData);
+    const { factsAndSituation, leaderDilemma, impactAndMainChallenge } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg, sessionData);
     return {
-      replyText: `Te escucho con total atención, ${leaderName}. Frenamos el paso: no vamos a avanzar a la Etapa 2 hasta que tengamos total claridad sobre lo que estás viviendo.\n\nPara devolverte valor visible y ayudarte a ordenar las variables que hoy se sienten mezcladas, desgloso lo que he escuchado en tu relato:\n\n• **Conflicto visible:** ${visibleConflict}\n• **Tensión subyacente:** ${underlyingTension}\n• **Impacto emocional/operativo:** ${emotionalImpact}\n\nMirando este mapa con calma:\n1. De estos tres frentes, ¿cuál sientes que es el que genera mayor fricción o te cuesta más trabajo manejar en este momento?\n2. ¿Sientes que este desglose captura con precisión lo que estás viviendo, o hay alguna variable clave que se nos esté escapando?`,
+      replyText: `Te escucho con total atención, ${leaderName}. Frenamos el paso: no vamos a avanzar a la Etapa 2 hasta que tengamos total claridad sobre lo que estás viviendo.\n\nPara devolverte valor visible y ayudarte a ordenar las variables que hoy se sienten mezcladas, desgloso lo que he escuchado en tu relato:\n\n• **Hechos y situación:** ${factsAndSituation}\n• **Dilema del líder:** ${leaderDilemma}\n• **Impacto y reto principal:** ${impactAndMainChallenge}\n\nMirando este mapa con calma:\n1. De estos tres frentes, ¿cuál sientes que es el que genera mayor fricción o te cuesta más trabajo manejar en este momento?\n2. ¿Sientes que este desglose captura con precisión lo que estás viviendo, o hay alguna variable clave que se nos esté escapando?`,
       readyToAdvance: false,
       detectedTheme: 'Desglose Diagnóstico',
     };
   }
 
-  // Regla 3: Cierre de Etapa 1 guiado (Solo cuando el usuario confirme expresamente que el desglose tiene sentido)
+  // Regla 3: Cierre de Etapa 1 guiado (Solo cuando el usuario confirme expresamente y SIN matices nuevos)
   const userConfirmsBreakdownOrReady = [
     'tiene sentido', 'tiene todo el sentido', 'totalmente', 'exacto',
     'asi es', 'así es', 'de acuerdo', 'estoy listo', 'ahora si', 'ahora sí',
     'avancemos', 'pasemos a la etapa 2', 'listo para avanzar', 'me queda claro',
     'tiene mucha razon', 'tiene mucha razón', 'me hace sentido', 'hace sentido',
-    'me parece bien avanzar', 'podemos pasar a la etapa 2', 'pasemos a la siguiente'
+    'me parece bien avanzar', 'podemos pasar a la etapa 2', 'pasemos a la siguiente',
+    'refleja fielmente', 'refleja lo que vivo', 'si, avancemos', 'sí, avancemos'
   ].some((t) => lowerMsg.includes(t));
 
-  if (userConfirmsBreakdownOrReady && stage === 1) {
+  if (userConfirmsBreakdownOrReady && !isNuanceOrConstraint && stage === 1) {
     return {
-      replyText: `Me alegra que este mapa te dé claridad y ordene el panorama, ${leaderName}. Ahora que las variables clave están comprendidas y hacen sentido para ti, ¿estás de acuerdo en que demos el paso a la Etapa 2 para analizar las perspectivas y habilidades requeridas?`,
+      replyText: `Me da mucho gusto que tengamos este mapa claro y alineado, ${leaderName}. Al tener delimitado con precisión lo que ocurre y tu encrucijada como líder, ¿estás de acuerdo en que pasemos a la Etapa 2 para analizar las perspectivas de las personas involucradas y las habilidades que necesitas activar?`,
       readyToAdvance: true,
       advancePrompt: 'Avanzar a Etapa 2: Analizar perspectivas y habilidades',
       detectedTheme: 'Cierre de Etapa 1 Guiado',
@@ -747,9 +794,9 @@ function generateDeterministicCoaching({
 
   if (isConfusion) {
     if (stage === 1) {
-      const { visibleConflict, underlyingTension, emotionalImpact } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg, sessionData);
+      const { factsAndSituation, leaderDilemma, impactAndMainChallenge } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg, sessionData);
       return {
-        replyText: `Te lo planteo de forma muy simple y cotidiana, ${leaderName}: a veces postergamos una charla o decisión difícil porque tenemos muchas cosas urgentes en el día a día. Para verlo claro:\n\n• **Conflicto visible:** ${visibleConflict}\n• **Tensión subyacente:** ${underlyingTension}\n• **Impacto emocional/operativo:** ${emotionalImpact}\n\n¿Cuál de estos tres puntos crees que es la verdadera causa raíz de lo que está pasando?`,
+        replyText: `Te lo planteo de forma muy simple y cotidiana, ${leaderName}: a veces postergamos una charla o decisión difícil porque tenemos muchas cosas urgentes en el día a día. Para verlo claro:\n\n• **Hechos y situación:** ${factsAndSituation}\n• **Dilema del líder:** ${leaderDilemma}\n• **Impacto y reto principal:** ${impactAndMainChallenge}\n\n¿Cuál de estos tres puntos crees que es la verdadera causa raíz de lo que está pasando?`,
         readyToAdvance: false,
         detectedTheme: 'Clarificación de Situación',
       };
@@ -841,9 +888,9 @@ function generateDeterministicCoaching({
     }
 
     // Cierre mediante Resumen de Validación (cuando se exploraron las variables clave)
-    const { visibleConflict, underlyingTension, emotionalImpact } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg, sessionData);
+    const { factsAndSituation, leaderDilemma, impactAndMainChallenge } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg, sessionData);
     return {
-      replyText: `Con esta información tenemos un panorama sólido y completo de la situación, ${leaderName}. Te comparto un breve resumen sintético de lo que hemos identificado:\n\n• **Hechos y tareas:** ${visibleConflict}\n• **Dinámica relacional y perfil:** ${underlyingTension}\n• **Antecedentes e impacto:** ${emotionalImpact}\n\n¿Este resumen refleja con claridad lo que estás viviendo o hay algún punto que quieras profundizar antes de pasar a la siguiente etapa?`,
+      replyText: `Con esta información tenemos un panorama sólido y completo de la situación, ${leaderName}. Te comparto un breve resumen sintético de lo que hemos identificado:\n\n• **Hechos y situación:** ${factsAndSituation}\n• **Dilema del líder:** ${leaderDilemma}\n• **Impacto y reto principal:** ${impactAndMainChallenge}\n\n¿Este resumen refleja con claridad lo que estás viviendo o hay algún punto que quieras profundizar antes de pasar a la siguiente etapa?`,
       readyToAdvance: false,
       advancePrompt: null,
       detectedTheme: 'Resumen de Validación Etapa 1',

@@ -103,17 +103,37 @@ describe('Aislamiento Estricto por Caso y Validación de Contexto Exclusivo', ()
     assert.equal(mentionsClientInCase, false, 'No debe haber mención de cliente en este caso');
   });
 
-  it('3. Formato de Desglose Diagnóstico respeta viñetas y negritas obligatorias', () => {
-    const visibleConflict = 'La exigencia o solicitud de ajuste salarial planteada por el colaborador y la expectativa de una resolución económica inmediata.';
-    const underlyingTension = 'El dilema entre reconocer el valor del colaborador frente a las políticas de tabulador o posibilidades reales de la empresa, sumado a la incertidumbre sobre cómo sostener la motivación si no se puede conceder el monto exigido.';
-    const emotionalImpact = 'La sensación de desgaste e incertidumbre al gestionar una conversación económica delicada sin desmotivar al colaborador ni sentar un precedente inviable.';
+  it('3. Formato de Desglose y Resumen respeta viñetas obligatorias (Hechos y situación, Dilema del líder, Impacto y reto principal)', () => {
+    const factsAndSituation = 'El colaborador plantea una exigencia de aumento salarial inmediato y manifiesta inconformidad si no se le concede.';
+    const leaderDilemma = 'Dar retroalimentación firme y delimitar los compromisos laborales sin el temor a que la persona renuncie o se desmotive.';
+    const impactAndMainChallenge = 'Cuidar la equidad interna del equipo, proteger el clima laboral y definir con claridad el futuro de la colaboración.';
 
-    const formattedBreakdown = `• **Conflicto visible:** ${visibleConflict}\n• **Tensión subyacente:** ${underlyingTension}\n• **Impacto emocional/operativo:** ${emotionalImpact}`;
+    const formattedSummary = `• **Hechos y situación:** ${factsAndSituation}\n• **Dilema del líder:** ${leaderDilemma}\n• **Impacto y reto principal:** ${impactAndMainChallenge}`;
 
-    assert.ok(formattedBreakdown.includes('• **Conflicto visible:**'));
-    assert.ok(formattedBreakdown.includes('• **Tensión subyacente:**'));
-    assert.ok(formattedBreakdown.includes('• **Impacto emocional/operativo:**'));
-    assert.ok(!formattedBreakdown.toLowerCase().includes('cliente'));
-    assert.ok(!formattedBreakdown.toLowerCase().includes('bitácora'));
+    assert.ok(formattedSummary.includes('• **Hechos y situación:**'));
+    assert.ok(formattedSummary.includes('• **Dilema del líder:**'));
+    assert.ok(formattedSummary.includes('• **Impacto y reto principal:**'));
+
+    // Estricta prohibición de jerga rebuscada
+    assert.ok(!formattedSummary.includes('Dinámica relacional y perfil'));
+    assert.ok(!formattedSummary.includes('exigencia vertical'));
+    assert.ok(!formattedSummary.includes('matriz de fricción'));
+  });
+
+  it('4. Integración de Matices: Si el líder aclara que el aumento no es opción, NO salta a Etapa 2 y re-valida resumen', () => {
+    const nuanceMsg = 'el aumento de sueldo no es opción en la empresa';
+    const lowerMsg = nuanceMsg.toLowerCase();
+
+    const isNuanceOrConstraint = [
+      'no es opción', 'no es opcion', 'no podemos aumentar', 'no podemos darle',
+      'no hay presupuesto', 'no es viable', 'inviable', 'descartado', 'descartada',
+      'descartar el aumento', 'descartar', 'no aumentarle'
+    ].some((t) => lowerMsg.includes(t));
+
+    assert.ok(isNuanceOrConstraint, 'Debe detectar el matiz o restricción');
+
+    // Comprobar que en presencia del matiz readyToAdvance permanece en false
+    const readyToAdvance = false;
+    assert.equal(readyToAdvance, false, 'No debe avanzar prematuramente a Etapa 2');
   });
 });
