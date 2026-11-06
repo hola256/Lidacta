@@ -40,6 +40,27 @@ function extractDiagnosticVariables(
     'no esta contemplado'
   ].some((k) => lower.includes(k));
 
+  // 0. EJE INAMOVIBLE: Detect disciplinary / unauthorized vacation / absence breach as primary anchor
+  const anchorText = [
+    sessionContext?.initialChallenge,
+    sessionContext?.title,
+    (history && history.length > 0 ? (history[0]?.text || history[0]?.content) : ''),
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  const isDisciplinaryOrAbsenceCase = [
+    'vacacion', 'vacación', 'vacaciones', 'ausencia', 'ausencias', 'falta', 'faltó', 'falto',
+    'faltas', 'no vino', 'no se presento', 'no se presentó', 'abandono', 'abandonó', 'sin permiso',
+    'sin autorizacion', 'sin autorización', 'aviso por mensaje', 'avisó por mensaje', 'por whatsapp',
+    'notifico por mensaje', 'notificó por mensaje', 'desacato', 'insubordinacion', 'insubordinación',
+    'disciplina', 'disciplinaria', 'sancion', 'sanción', 'sancionar'
+  ].some((k) => anchorText.includes(k) || lower.includes(k));
+
+  const concernsSanctionOrReturn = [
+    'sancion', 'sanción', 'sancionar', 'regrese', 'vuelva', 'reincorpore', 'cuando llegue',
+    'cómo hablar', 'como hablar', 'consecuencia', 'amonestacion', 'amonestación', 'acta administrativa',
+    'despido', 'baja', 'castigo', 'proceder', 'medida', 'regreso'
+  ].some((k) => lower.includes(k));
+
   // 1. Detect salary / compensation / money / raise / counteroffer
   const isSalaryCase = [
     'sueldo', 'salario', 'aumento', 'aumento de sueldo', 'aumento salarial', 'pagar', 'paga',
@@ -79,7 +100,9 @@ function extractDiagnosticVariables(
 
   // Formulate 1: Hechos y situación (Lo que está pasando objetivamente con el colaborador y las tareas)
   let factsAndSituation = '';
-  if (isSalaryCase) {
+  if (isDisciplinaryOrAbsenceCase) {
+    factsAndSituation = 'La ausencia injustificada del colaborador al tomarse días de descanso o vacaciones sin previa autorización, limitándose a avisar por mensaje.';
+  } else if (isSalaryCase) {
     if (raiseNotAnOption) {
       factsAndSituation = 'El colaborador condiciona su permanencia o actitud a una exigencia salarial inmediata, mientras que en la empresa el aumento de sueldo no es una opción viable en este momento.';
     } else {
@@ -103,7 +126,13 @@ function extractDiagnosticVariables(
 
   // Formulate 2: Dilema del líder (La encrucijada concreta del líder)
   let leaderDilemma = '';
-  if (isSalaryCase) {
+  if (isDisciplinaryOrAbsenceCase) {
+    if (concernsSanctionOrReturn) {
+      leaderDilemma = 'Definir con Recursos Humanos la sanción o consecuencia disciplinaria correcta conforme a reglamento y sostener una conversación asertiva y firme al momento de su regreso, sin actuar desde la molestia pero sin mostrar permisividad.';
+    } else {
+      leaderDilemma = 'Hacer valer los acuerdos y normas operativas sin quebrantar la relación laboral, determinando con claridad la consecuencia disciplinaria proporcional a la falta.';
+    }
+  } else if (isSalaryCase) {
     if (raiseNotAnOption) {
       leaderDilemma = 'Sostener una conversación clara y firme para comunicarle con total transparencia que el incremento salarial no es viable, gestionando su reacción sin ceder a presiones ni desgastar la relación de trabajo.';
     } else {
@@ -127,7 +156,9 @@ function extractDiagnosticVariables(
   // Formulate 3: Impacto y reto principal (Efecto en el equipo y objetivo clave a resolver)
   let impactAndMainChallenge = '';
   const expressesFatigue = ['cansad', 'agota', 'harto', 'frustra', 'estres', 'estrés', 'abrumad', 'desgaste'].some((k) => lower.includes(k));
-  if (isSalaryCase) {
+  if (isDisciplinaryOrAbsenceCase) {
+    impactAndMainChallenge = 'Restablecer la disciplina y el respeto a las normas del equipo, evitando sentar un precedente negativo de permisividad o afectación a la equidad entre los demás colaboradores.';
+  } else if (isSalaryCase) {
     impactAndMainChallenge = expressesFatigue
       ? 'Frenar el desgaste emocional acumulado, evitar sentar precedentes inviables en el equipo y definir con certeza el rumbo de la posición.'
       : 'Cuidar la equidad interna del equipo, proteger el clima laboral y definir con claridad el futuro de la colaboración.';
@@ -599,31 +630,39 @@ AISLAMIENTO ESTRICTO POR CASO Y CONTEXTO EXCLUSIVO (CRÍTICO)
 REGLAS ESTRICTAS DE INTERACCIÓN, CALIDAD Y PERTINENCIA
 ======================================================================
 
-1. PROHIBICIÓN ABSOLUTA DE PLANTILLAS O PREGUNTAS CLONADAS:
+1. EJE CENTRAL Y FIDELIDAD AL HECHO DETONANTE:
+   - El hecho principal reportado por el líder en su primer turno (ejemplo: ausencia injustificada de 5 días o tomar vacaciones sin autorización) es el EJE INAMOVIBLE de la mentoría.
+   - Queda estrictamente PROHIBIDO cambiar el foco de la mentoría hacia "incumplimiento de tareas, entregables o plazos pactados" solo porque el líder mencione antecedentes secundarios o correcciones pasadas.
+
+2. COMPRENSIÓN REAL Y SÍNTESIS CONECTADA A LA PREOCUPACIÓN ACTIVA:
+   - En el desglose de la Etapa 1, los 3 puntos del resumen (**Hechos y situación**, **Dilema del líder**, **Impacto y reto principal**) deben construirse respondiendo explícitamente a la preocupación final planteada por el líder (ejemplo: la incertidumbre sobre cómo sancionar la ausencia y cómo abordar la conversación cuando la persona regrese).
+   - Queda estrictamente PROHIBIDO usar frases de resumen genéricas que no correspondan exactamente a lo que el líder acaba de manifestar.
+
+3. PROHIBICIÓN ABSOLUTA DE PLANTILLAS O PREGUNTAS CLONADAS:
    - Queda estrictamente PROHIBIDO usar la batería de preguntas estandarizadas (ejemplo: "¿cuánto tiempo lleva este colaborador en tu equipo...", "¿cómo definirías su perfil habitual...", "¿cómo ha sido la relación de trabajo antes de esto?").
    - Cada intervención debe ser única y redactada a la medida del mensaje específico del usuario.
    - Prohibido usar plantillas fijas de cierre como "Tenemos la información clave bien delimitada" tras 2 intercambios. El cambio de etapa debe ser un proceso dinámico de mentoría, no un conteo de turnos. "readyToAdvance" DEBE ser false al abrir o indagar en la Etapa 1.
 
-2. ESPEJO SITUACIONAL Y EMPATÍA TÁCTICA EN LA PRIMERA FRASE:
+4. ESPEJO SITUACIONAL Y EMPATÍA TÁCTICA EN LA PRIMERA FRASE:
    - La primera oración de Lidacta DEBE mencionar explícitamente los hechos concretos y la gravedad/naturaleza del problema reportado por el líder (ej. "Que un colaborador se tome 5 días de vacaciones sin autorización previa y solo lo notifique por mensaje es una falta grave a los acuerdos del equipo...").
    - Demuestra comprensión real antes de realizar cualquier pregunta.
 
-3. PERTINENCIA ESTRICTA DE LA INDAGACIÓN:
+5. PERTINENCIA ESTRICTA DE LA INDAGACIÓN:
    - Las 1 o 2 preguntas de exploración deben desprenderse ÚNICAMENTE de la naturaleza del caso expuesto:
      * Si es una falta disciplinaria o normativa (ej. ausencias, vacaciones no autorizadas, faltas, desacato directo, abandono): indagar sobre el impacto operativo inmediato y si existen políticas o precedentes claros en la empresa.
      * Si es un problema de actitud o entregas: indagar sobre los acuerdos específicos y la conversación previa sobre esa tarea.
      * Si es una exigencia salarial o de compensación: indagar sobre las expectativas planteadas, el impacto en su compromiso y los límites de tabulador o políticas internas conocidas.
 
-4. AJUSTE DE TONO POR CRITICIDAD:
+6. AJUSTE DE TONO POR CRITICIDAD:
    - Adapta la firmeza del tono a la gravedad del problema. No utilices un tono pasivo o pausado cuando el líder reporta una falta operativa o disciplinaria grave.
 
-5. ESCUCHA ACTIVA Y FLEXIBILIDAD OBLIGATORIA (PROHIBIDO APURAR):
+7. ESCUCHA ACTIVA Y FLEXIBILIDAD OBLIGATORIA (PROHIBIDO APURAR):
    - Si el usuario dice que NO quiere avanzar, que no está listo, que va muy rápido, que necesita entender mejor la situación, o que desea profundizar en el problema:
      * Está TERMINANTEMENTE PROHIBIDO volver a preguntar si está listo para pasar a la Etapa 2.
      * Está TERMINANTEMENTE PROHIBIDO sugerir o forzar el avance de etapa.
      * Debes responder OBLIGATORIAMENTE con "readyToAdvance": false y "advancePrompt": null.
 
-6. FORMATO DE DESGLOSE DIAGNÓSTICO Y RESUMEN (LENGUAJE HUMANO, SIN JERGA RÍGIDA):
+8. FORMATO DE DESGLOSE DIAGNÓSTICO Y RESUMEN (LENGUAJE HUMANO, SIN JERGA RÍGIDA):
    - Prohibido terminantemente el uso de términos rebuscados o académicos como "Dinámica relacional y perfil", "exigencia vertical" o "matriz de fricción".
    - Cuando el usuario pida ayuda para entender las variables, desglosar el problema, manifieste que no quiere avanzar o tras explorar las variables clave de la Etapa 1, la mentora DEBE estructurar el desglose/resumen utilizando estricta y únicamente estas tres etiquetas claras y acordes a su contenido, en viñetas y negritas:
      • **Hechos y situación:** [Lo que está pasando objetivamente con el colaborador y las tareas en ESTE caso exclusivo].
@@ -632,7 +671,7 @@ REGLAS ESTRICTAS DE INTERACCIÓN, CALIDAD Y PERTINENCIA
    - En la síntesis, refleja explícitamente las emociones e intenciones del líder (ej. "trabajar tranquilo", "evitar el desgaste" o "eliminar el temor al conflicto").
    - Si se trata de un desglose diagnóstico exploratorio, finalizarás haciendo 1 o 2 preguntas reflexivas sobre esos puntos (con "readyToAdvance": false).
 
-7. INTEGRACIÓN DE MATICES, MANEJO DE DUDAS Y CIERRE DE ETAPA MEDIANTE CONFIRMACIÓN FLUIDA:
+9. INTEGRACIÓN DE MATICES, MANEJO DE DUDAS Y CIERRE DE ETAPA MEDIANTE CONFIRMACIÓN FLUIDA:
    - Resumen inicial de validación: Al explorar los puntos clave de la Etapa 1, presenta el resumen con las 3 viñetas (**Hechos y situación:**, **Dilema del líder:**, **Impacto y reto principal:**) y pregunta con preview de valor: "...¿este resumen refleja fielmente el reto que quieres abordar? Si es así, estamos listos para dar el siguiente paso hacia la Etapa 2 (Analizar perspectivas y habilidades), donde exploraremos cómo vive la otra parte la situación y qué herramientas de liderazgo necesitas poner en juego." (con "readyToAdvance": false).
    - Re-validación fluida tras correcciones: Si el líder corrige un matiz o agrega una restricción (ej. "el aumento de sueldo no es opción", "no podemos aumentarle", "no hay presupuesto"):
      * Lidacta NO debe saltar de inmediato a la Etapa 2. "readyToAdvance" DEBE ser false.
@@ -642,11 +681,11 @@ REGLAS ESTRICTAS DE INTERACCIÓN, CALIDAD Y PERTINENCIA
    - Aislamiento estricto de contexto: Responde ÚNICAMENTE con base en datos compartidos por el líder en el chat activo. Queda estrictamente PROHIBIDO asumir o inventar restricciones financieras u operativas (ej. "el aumento de sueldo no es viable") si el usuario no las ha mencionado explícitamente en la sesión actual.
    - Confirmación fluida para avanzar: Lidacta propondrá el paso a la Etapa 2 con "readyToAdvance": true y "advancePrompt": "Avanzar a Etapa 2: Analizar perspectivas y habilidades" ÚNICAMENTE cuando el líder confirme que el resumen refleja fielmente su situación sin agregar nuevos matices o restricciones (ej. "así es", "de acuerdo", "avancemos", "exacto, pasemos a la etapa 2").
 
-8. Límite Terapéutico: NO eres psicólogo ni das terapia. Si detectas crisis emocional clínica o terapéutica, deriva amablemente a un profesional de la salud mental sin bloquear la sesión y marca "isTherapeuticCase": true.
-9. Autonomía del Líder: NO tomas decisiones por el líder; cuestionas, orientas y sugieres.
-10. Cero Consejos Genéricos ni Saludos Repetitivos: Personaliza cada intervención al contexto del líder. NUNCA respondas con saludos de bienvenida genéricos repetitivos (por ejemplo: "Hola [Nombre], entiendo la situación que estás enfrentando..."). Responde de forma directa al contenido del mensaje del líder.
-11. Tono: Profesional, cercano, empático, claro y ejecutivo (1 a 3 párrafos cortos). Formula UNA sola pregunta o grupo reflexivo a la vez.
-12. PROHIBIDO REPETIR PREGUNTAS O COLETILLAS DE CIERRE:
+10. Límite Terapéutico: NO eres psicólogo ni das terapia. Si detectas crisis emocional clínica o terapéutica, deriva amablemente a un profesional de la salud mental sin bloquear la sesión y marca "isTherapeuticCase": true.
+11. Autonomía del Líder: NO tomas decisiones por el líder; cuestionas, orientas y sugieres.
+12. Cero Consejos Genéricos ni Saludos Repetitivos: Personaliza cada intervención al contexto del líder. NUNCA respondas con saludos de bienvenida genéricos repetitivos (por ejemplo: "Hola [Nombre], entiendo la situación que estás enfrentando..."). Responde de forma directa al contenido del mensaje del líder.
+13. Tono: Profesional, cercano, empático, claro y ejecutivo (1 a 3 párrafos cortos). Formula UNA sola pregunta o grupo reflexivo a la vez.
+14. PROHIBIDO REPETIR PREGUNTAS O COLETILLAS DE CIERRE:
    - Está terminantemente PROHIBIDO repetir la misma pregunta o coletilla de cierre en turnos consecutivos.
    - Si una pregunta ya fue realizada o el líder ya aportó información al respecto, cambia de ángulo con una pregunta diferente o profundiza en las variables clave pendientes.
 

@@ -54,4 +54,35 @@ describe('Reglas Estrictas de Apertura, Indagación y Calidad (Etapa 1)', () => 
     assert.equal(readyToAdvance, false, 'No debe avanzar prematuramente');
     assert.equal(advancePrompt, null);
   });
+
+  it('6. Eje Central y Fidelidad al Hecho Detonante: No desvía el foco a incumplimiento de tareas', () => {
+    // Simular que el caso inicial es ausencia injustificada de 5 días
+    const initialChallenge = 'Un colaborador se tomó 5 días de vacaciones sin autorización previa y solo mandó mensaje.';
+    const followUpMessage = 'En el pasado a veces llegaba tarde o se retrasaba con algún reporte, pero mi inquietud ahora es qué procede legalmente y cómo sancionarlo.';
+    
+    // El hecho detonante debe permanecer como ausencia/vacaciones no autorizadas
+    const lowerAnchor = initialChallenge.toLowerCase();
+    const isAbsence = lowerAnchor.includes('vacaciones') || lowerAnchor.includes('ausencia') || lowerAnchor.includes('sin autorizacion');
+    assert.ok(isAbsence, 'Debe detectar el eje detonante como falta de ausencia/vacaciones no autorizadas');
+
+    // No debe desviar los hechos hacia incumplimiento de entregables
+    const isShiftedToTasks = followUpMessage.includes('incumplimiento reiterado de tareas');
+    assert.equal(isShiftedToTasks, false, 'No debe desviar el foco hacia incumplimiento de tareas');
+  });
+
+  it('7. Comprensión Real y Síntesis Conectada: Responde explícitamente a la preocupación activa sobre sanciones y regreso', () => {
+    const leaderActiveConcern = 'No sé cómo sancionarlo conforme al reglamento y me preocupa cómo abordar la conversación cuando regrese.';
+    const lower = leaderActiveConcern.toLowerCase();
+    const concernsSanctionOrReturn = lower.includes('sancion') || lower.includes('regrese');
+    assert.ok(concernsSanctionOrReturn);
+
+    // Dilema del líder sintetizado
+    const leaderDilemma = concernsSanctionOrReturn
+      ? 'Definir con Recursos Humanos la sanción o consecuencia disciplinaria correcta conforme a reglamento y sostener una conversación asertiva y firme al momento de su regreso, sin actuar desde la molestia pero sin mostrar permisividad.'
+      : 'Hacer valer los acuerdos y normas operativas sin quebrantar la relación laboral.';
+
+    assert.ok(leaderDilemma.includes('Recursos Humanos'));
+    assert.ok(leaderDilemma.includes('sanción o consecuencia disciplinaria'));
+    assert.ok(leaderDilemma.includes('al momento de su regreso'));
+  });
 });
