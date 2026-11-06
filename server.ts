@@ -118,18 +118,31 @@ En todas sus interacciones, Lidacta debe cumplir tres objetivos:
 - Idioma: Lidacta siempre hablará en español al líder.
 
 1.5 Criterio para formular preguntas, Escucha Activa y Progreso Dinámico
-- REGLA 1 (ESCUCHA ACTIVA Y FLEXIBILIDAD OBLIGATORIA - PROHIBIDO APURAR): Si el usuario dice que NO quiere avanzar, que no está listo, que va muy rápido, que necesita entender mejor la situación, o que desea profundizar en el problema:
+- REGLA 1 (PROHIBICIÓN ESTRICTA DE CIERRE PREMATURO EN ETAPA 1 - COMPRENDER ANTES DE RECOMENDAR):
+  * Está TERMINANTEMENTE PROHIBIDO sugerir avanzar a la Etapa 2 o formular preguntas de cierre en la primera o segunda respuesta del usuario. "readyToAdvance" DEBE ser false.
+  * Principio rector: "Comprender antes de recomendar: explorar el contexto, los hechos, las personas involucradas y la necesidad real del líder. No asumir que la primera descripción representa toda la situación".
+  * Está PROHIBIDO usar plantillas fijas de cierre como "Tenemos la información clave bien delimitada" tras 2 intercambios. El cambio de etapa debe ser un proceso dinámico de mentoría, no un conteo de turnos.
+- REGLA 2 (EXPLORACIÓN OBLIGATORIA DE VARIABLES EN ETAPA 1):
+  Antes de dar por delimitada la Etapa 1 o formular cualquier resumen de cierre, la mentora DEBE indagar activamente sobre:
+  a) Antigüedad / perfil del colaborador y contexto de la relación de trabajo.
+  b) Tipo de tareas específicas que se le han asignado y cuál ha sido la respuesta o conducta exacta observada (hechos concretos y verificables).
+  c) Historial de intentos previos del líder para abordar el tema y qué ha intentado o recomendado Recursos Humanos.
+  d) Obstáculo de fondo y necesidad real que el líder busca resolver.
+- REGLA 3 (ESCUCHA ACTIVA Y FLEXIBILIDAD OBLIGATORIA - PROHIBIDO APURAR): Si el usuario dice que NO quiere avanzar, que no está listo, que va muy rápido, que necesita entender mejor la situación, o que desea profundizar en el problema:
   * Está TERMINANTEMENTE PROHIBIDO volver a preguntar si está listo para pasar a la Etapa 2.
   * Está TERMINANTEMENTE PROHIBIDO empujar o sugerir el avance de etapa.
   * La respuesta debe tener OBLIGATORIAMENTE "readyToAdvance": false y "advancePrompt": null.
-- REGLA 2 (FORMATO DE DESGLOSE DIAGNÓSTICO - DEVOLVER VALOR VISIBLE): Cuando el usuario pida ayuda para entender las variables, desglosar el problema, o manifieste que no quiere avanzar y necesita entender mejor:
+- REGLA 4 (FORMATO DE DESGLOSE DIAGNÓSTICO - DEVOLVER VALOR VISIBLE): Cuando el usuario pida ayuda para entender las variables, desglosar el problema, o manifieste que no quiere avanzar y necesita entender mejor:
   La mentora DEBE estructurar su respuesta analizando activamente lo que ha escuchado con este formato exacto en viñetas y negritas:
   • **Conflicto visible:** [Análisis concreto de lo ocurrido con el cliente, colaborador o situación operativa externa observable].
   • **Tensión subyacente:** [Análisis de la dinámica relacional, presiones o expectativas no resueltas con el jefe, directores o la cultura organizacional].
   • **Impacto emocional/operativo:** [Análisis del desgaste personal del líder, la sensación de estar atrapado al medio, la sobrecarga o frustración].
   Finalizará haciendo 1 o 2 preguntas reflexivas específicas sobre esos puntos desglosados para ayudar a esclarecer la causa raíz (sin preguntar sobre pasar de etapa).
-- REGLA 3 (CIERRE DE ETAPA 1 GUIADO): Solo cuando el usuario confirme expresamente que el desglose y panorama tienen sentido para él (por ejemplo: "Tiene todo el sentido", "Exacto, así es", "De acuerdo, avancemos"), la mentora podrá validar el avance y proponer dar el paso a la Etapa 2 con "readyToAdvance": true.
-- PROHIBIDO REPETIR PREGUNTAS O COLETILLAS DE CIERRE: NUNCA repitas la misma pregunta, fórmula o coletilla de cierre en turnos consecutivos (por ejemplo: "¿qué impacto directo tiene no intervenir en este momento...?").
+- REGLA 5 (CIERRE DE ETAPA MEDIANTE RESUMEN DE VALIDACIÓN):
+  Solo cuando se hayan explorado activamente las variables clave de la Etapa 1, Lidacta generará un breve resumen sintético de lo conversado (3 a 4 puntos clave en viñetas).
+  Debe finalizar preguntando explícitamente: "¿Este resumen refleja con claridad lo que estás viviendo o hay algún punto que quieras profundizar antes de pasar a la siguiente etapa?" (con "readyToAdvance": false).
+  Solo cuando el usuario confirme expresamente que el desglose y panorama tienen sentido para él (por ejemplo: "Tiene todo el sentido", "Exacto, así es", "De acuerdo, avancemos"), la mentora podrá validar el avance y proponer dar el paso a la Etapa 2 con "readyToAdvance": true.
+- PROHIBIDO REPETIR PREGUNTAS O COLETILLAS DE CIERRE: NUNCA repitas la misma pregunta, fórmula o coletilla de cierre en turnos consecutivos.
 - Formular UNA sola pregunta o grupo reflexivo a la vez y esperar la respuesta antes de continuar.
 - Evitar repetir preguntas o solicitar información que el líder ya proporcionó.
 - Nunca inventar información.
@@ -615,39 +628,98 @@ function generateDeterministicCoaching({
     }
   }
 
-  // Detección de fatiga o repetición expresada por el líder
-  const isFatigue = [
-    'ya te dije', 'ya te respondi', 'ya te respondí', 'ya lo dije',
-    'ya te comente', 'ya te comenté', 'estoy cansado', 'me cansa',
-    'me frustra', 'otra vez', 'de nuevo la misma pregunta',
-    'ya respondi', 'ya respondí', 'ya te explique', 'ya te expliqué',
-    'repetitivo', 'lo mismo', 'otra vez lo mismo'
+  // Si el líder señala que una pregunta se repite, validar con empatía y pivotar a otra variable sin avanzar
+  const isQuestionRepetitionComplaint = [
+    'de nuevo la misma pregunta', 'otra vez la misma pregunta', 'ya te respondí esa pregunta',
+    'ya te respondi esa pregunta', 'ya te contesté eso', 'ya te conteste eso', 'repetitivo'
   ].some((t) => lowerMsg.includes(t));
 
-  if (isFatigue) {
-    return {
-      replyText: `Tienes toda la razón, ${leaderName}, y aprecio tu paciencia. Comprendo perfectamente el desgaste de sentir que repetimos el punto cuando lo que buscas es avanzar. Tenemos la información clave bien delimitada. ¿Te parece bien que avancemos a la siguiente etapa para concentrarnos en las soluciones?`,
-      readyToAdvance: true,
-      advancePrompt: `Avanzar a Etapa ${stage + 1}: ${STAGE_NAMES[stage + 1] || 'Siguiente Etapa'}`,
-      detectedTheme: 'Validación y Avance',
-    };
+  // Extraer preguntas previas de Lidacta para evitar repetir
+  const prevLidactaTexts = (conversationHistory || [])
+    .filter((m: any) => m.sender === 'lidacta' || m.role === 'model')
+    .map((m: any) => (m.text || m.content || '').toLowerCase());
+
+  const askedSeniorityOrProfile = prevLidactaTexts.some((t: string) =>
+    t.includes('antigüedad') || t.includes('perfil') || t.includes('tiempo lleva') || t.includes('relación de trabajo')
+  );
+  const askedSpecificTasks = prevLidactaTexts.some((t: string) =>
+    t.includes('tareas específicas') || t.includes('entregables específicos') || t.includes('respuesta exacta') || t.includes('conducta exacta')
+  );
+  const askedPreviousAttemptsOrHR = prevLidactaTexts.some((t: string) =>
+    t.includes('recursos humanos') || t.includes('intentos previos') || t.includes('conversaciones de retroalimentación') || t.includes('intervenido recursos')
+  );
+  const askedOutcomeOrRoot = prevLidactaTexts.some((t: string) =>
+    t.includes('obstáculo de fondo') || t.includes('frena para resolver') || t.includes('resultado concreto')
+  );
+
+  if (isQuestionRepetitionComplaint && stage === 1) {
+    if (!askedSpecificTasks) {
+      return {
+        replyText: `Agradezco tu aclaración, ${leaderName}. Tomo nota de lo que ya compartiste para no hacerte repetir. Para enfocar con precisión los hechos observables: ¿qué tareas o compromisos específicos se le han asignado recientemente a este colaborador y cuál ha sido exactamente su respuesta o conducta al no cumplirlas?`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        detectedTheme: 'Hechos Observables',
+      };
+    }
+    if (!askedPreviousAttemptsOrHR) {
+      return {
+        replyText: `Comprendido, ${leaderName}. Vamos directo a lo que no hemos revisado: ¿qué conversaciones previas has tenido con esta persona sobre el tema, qué acuerdos se pactaron y si ha intervenido o qué conocimiento tiene Recursos Humanos?`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        detectedTheme: 'Intentos Previos y RH',
+      };
+    }
   }
 
   if (stage === 1) {
-    const isFirst = conversationHistory.length <= 1;
-    if (isFirst) {
+    // Variable 1: Antigüedad, perfil del colaborador y contexto de la relación
+    if (!askedSeniorityOrProfile) {
       return {
-        replyText: `Hola ${leaderName}, te agradezco la honestidad y apertura al plantear esto. En el contexto de ${company}, entiendo perfectamente que estas situaciones generan fricción y demandan claridad.\n\nPara que podamos abordarlo con foco y agilidad durante tu día:\n1. ¿Quiénes son las personas clave involucradas y cuál es su postura?\n2. ¿Qué es exactamente lo que tú quieres lograr como resultado en esta situación?\n3. ¿Hay algo que sientas que estás postergando o evitando abordar directamente?`,
+        replyText: `Te escucho con atención, ${leaderName}. Para comprender a fondo el contexto antes de apresurarnos a conclusiones: ¿cuánto tiempo lleva este colaborador en tu equipo o en la empresa, cómo definirías su perfil habitual y cómo ha sido la relación de trabajo entre ustedes hasta antes de este problema?`,
         readyToAdvance: false,
-        detectedTheme: detectTopicFromText(userMessage),
-      };
-    } else {
-      return {
-        replyText: `Comprendo el cuadro con mucha mayor claridad, ${leaderName}. Es completamente natural que al buscar resultados surjan estas tensiones operativas.\n\nMirando el escenario que planteas: ¿cuál es el obstáculo principal que sientes que impide destrabar esta situación de raíz con tu equipo?`,
-        readyToAdvance: false,
-        detectedTheme: detectTopicFromText(userMessage),
+        advancePrompt: null,
+        detectedTheme: 'Perfil y Contexto Relacional',
       };
     }
+
+    // Variable 2: Tareas específicas y respuesta/conducta exacta
+    if (!askedSpecificTasks) {
+      return {
+        replyText: `Comprendo el contexto de la relación, ${leaderName}. Para aterrizar en hechos observables y evitar quedarnos en suposiciones: ¿qué tareas, proyectos o entregables específicos se le han asignado recientemente y cuál ha sido exactamente su respuesta o justificación al momento de no cumplirlas?`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        detectedTheme: 'Hechos y Tareas Específicas',
+      };
+    }
+
+    // Variable 3: Intentos previos del líder y Recursos Humanos
+    if (!askedPreviousAttemptsOrHR) {
+      return {
+        replyText: `Es fundamental mapear los antecedentes de la situación, ${leaderName}: ¿qué conversaciones de retroalimentación o acuerdos has intentado previamente con esta persona sobre este problema, qué compromisos se establecieron y si ha tenido conocimiento o ha intervenido Recursos Humanos?`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        detectedTheme: 'Gestiones Previas y RH',
+      };
+    }
+
+    // Variable 4: Obstáculo de fondo y necesidad real del líder
+    if (!askedOutcomeOrRoot) {
+      return {
+        replyText: `Tenemos los antecedentes mucho más claros, ${leaderName}. Desde tu propia vivencia y rol de liderazgo: ¿cuál sientes que es el obstáculo de fondo que más te preocupa o te frena para resolver esto, y qué resultado concreto necesitas asegurar con tu equipo?`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        detectedTheme: 'Causa Raíz y Necesidad del Líder',
+      };
+    }
+
+    // Cierre mediante Resumen de Validación (cuando se exploraron las variables clave)
+    const { visibleConflict, underlyingTension, emotionalImpact } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg);
+    return {
+      replyText: `Con esta información tenemos un panorama sólido y completo de la situación, ${leaderName}. Te comparto un breve resumen sintético de lo que hemos identificado:\n\n• **Hechos y tareas:** ${visibleConflict}\n• **Dinámica relacional y perfil:** ${underlyingTension}\n• **Antecedentes e impacto:** ${emotionalImpact}\n\n¿Este resumen refleja con claridad lo que estás viviendo o hay algún punto que quieras profundizar antes de pasar a la siguiente etapa?`,
+      readyToAdvance: false,
+      advancePrompt: null,
+      detectedTheme: 'Resumen de Validación Etapa 1',
+    };
   }
 
   if (stage === 2) {
