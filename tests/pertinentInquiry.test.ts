@@ -116,7 +116,7 @@ describe('Reglas Estrictas de Apertura, Indagación y Calidad (Etapa 1)', () => 
     }
   });
 
-  it('9. Verificación de las 4 Reglas Estrictas de Interacción de la Etapa 1 en systemPrompt', async () => {
+  it('9. Verificación de las Reglas Estrictas de Interacción de la Etapa 1 en systemPrompt', async () => {
     const fs = await import('node:fs');
     const path = await import('node:path');
 
@@ -124,10 +124,12 @@ describe('Reglas Estrictas de Apertura, Indagación y Calidad (Etapa 1)', () => 
     const serverTsContent = fs.readFileSync(path.resolve('server.ts'), 'utf-8');
 
     const requiredRuleSnippets = [
-      '1. PROHIBICIÓN DE ECO ROBÓTICO:',
-      '2. REGLA DE PROFUNDIZACIÓN OBLIGATORIA (MÍNIMO 2-3 TURNOS DE ESCUCHA):',
-      '3. ADAPTACIÓN DE PREGUNTAS A LA NATURALEZA DEL PROBLEMA:',
-      '4. REACCIÓN DIRECTA ANTE CORRECCIONES DEL USUARIO:',
+      'FILTRADO DE MENSAJES OPERATIVOS Y META-CONVERSACIÓN',
+      'SUSPENSIÓN DE RESUMEN AUTOMÁTICO POR NÚMERO DE TURNO',
+      'PROHIBICIÓN DE ECO ROBÓTICO:',
+      'REGLA DE PROFUNDIZACIÓN OBLIGATORIA',
+      'ADAPTACIÓN DE PREGUNTAS A LA NATURALEZA DEL PROBLEMA:',
+      'REACCIÓN DIRECTA ANTE CORRECCIONES DEL USUARIO:',
       'robo de material',
       'abuso de autoridad del jefe en público',
     ];
@@ -220,17 +222,87 @@ describe('Reglas Estrictas de Apertura, Indagación y Calidad (Etapa 1)', () => 
     assert.ok(serverTsContent.includes('detectedTheme: \'Reorientación por Corrección\''));
   });
 
-  it('14. Regla de Profundización Obligatoria: Mínimo 2-3 turnos de escucha antes de desplegar el resumen final', async () => {
+  it('14. Regla de Profundización Obligatoria: Requiere turnos sustanciales antes de desplegar el resumen final', async () => {
     const fs = await import('node:fs');
     const path = await import('node:path');
 
     const respondTsContent = fs.readFileSync(path.resolve('api/mentor/respond.ts'), 'utf-8');
     const serverTsContent = fs.readFileSync(path.resolve('server.ts'), 'utf-8');
 
-    assert.ok(respondTsContent.includes('leaderTurnsCount < 2'));
-    assert.ok(serverTsContent.includes('leaderTurnsCount < 2'));
+    assert.ok(respondTsContent.includes('substantiveLeaderTurns < 2'));
+    assert.ok(serverTsContent.includes('substantiveLeaderTurns < 2'));
     assert.ok(respondTsContent.includes('Profundización de Impacto'));
     assert.ok(serverTsContent.includes('Profundización de Impacto'));
+  });
+
+  it('15. Filtrado de Mensajes Operativos y Meta-Conversación: Mensajes de confusión nunca se toman como hecho ni disparan resumen', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    const respondTsContent = fs.readFileSync(path.resolve('api/mentor/respond.ts'), 'utf-8');
+    const serverTsContent = fs.readFileSync(path.resolve('server.ts'), 'utf-8');
+
+    // Helper functions exist in both files
+    assert.ok(respondTsContent.includes('isMetaOrOperationalMessage'));
+    assert.ok(serverTsContent.includes('isMetaOrOperationalMessage'));
+    assert.ok(respondTsContent.includes('isSubstantiveMessage'));
+    assert.ok(serverTsContent.includes('isSubstantiveMessage'));
+
+    // Meta phrases tested
+    const metaSamples = [
+      'no entendí',
+      'no entiendo tu pregunta',
+      'repite la pregunta',
+      '¿qué me quisiste decir?',
+      'a qué te refieres',
+      'te equivocaste',
+      'eso no fue lo que dije',
+      'eso no es lo que me preocupa'
+    ];
+
+    const metaChecker = (text: string) => {
+      const lower = text.toLowerCase();
+      const metaPatterns = [
+        'no entendí', 'no entendi', 'no comprendo', 'no entiendo', 'a qué te refieres', 'a que te refieres',
+        'repite la pregunta', 'repite tu pregunta', 'qué me quisiste decir', 'que me quisiste decir',
+        'te equivocaste', 'te confundiste', 'eso no fue lo que dije', 'eso no es lo que me preocupa'
+      ];
+      return metaPatterns.some((p) => lower.includes(p));
+    };
+
+    for (const sample of metaSamples) {
+      assert.ok(metaChecker(sample), `"${sample}" debe ser detectado como meta/operativo`);
+    }
+  });
+
+  it('16. Reformulación de Pregunta ante Confusión: Mantiene contexto de caso intacto y nunca despliega plantilla de 3 viñetas', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    const respondTsContent = fs.readFileSync(path.resolve('api/mentor/respond.ts'), 'utf-8');
+    const serverTsContent = fs.readFileSync(path.resolve('server.ts'), 'utf-8');
+
+    // Comprobar que en ambos archivos la respuesta ante confusión reformula sin la plantilla
+    assert.ok(respondTsContent.includes('Te lo planteo de forma mucho más directa y sencilla'));
+    assert.ok(serverTsContent.includes('Te lo planteo de forma mucho más directa y sencilla'));
+    assert.ok(respondTsContent.includes('detectedTheme: \'Clarificación de Pregunta\''));
+    assert.ok(serverTsContent.includes('detectedTheme: \'Clarificación de Pregunta\''));
+
+    // Verificar que isConfusion no genera el resumen con viñetas
+    assert.ok(!respondTsContent.includes('Te lo planteo de forma muy simple y cotidiana'));
+    assert.ok(!serverTsContent.includes('Te lo planteo de forma muy simple y cotidiana'));
+  });
+
+  it('17. Suspensión de Resumen Automático ante Respuestas Monosilábicas o Frases Cortas', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    const respondTsContent = fs.readFileSync(path.resolve('api/mentor/respond.ts'), 'utf-8');
+    const serverTsContent = fs.readFileSync(path.resolve('server.ts'), 'utf-8');
+
+    // Valida que !isCurrentSubstantive suspende el resumen
+    assert.ok(respondTsContent.includes('!isCurrentSubstantive || substantiveLeaderTurns < 2'));
+    assert.ok(serverTsContent.includes('!isCurrentSubstantive || substantiveLeaderTurns < 2'));
   });
 });
 

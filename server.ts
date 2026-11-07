@@ -47,6 +47,50 @@ const STAGE_NAMES: Record<number, string> = {
   7: 'Cierre y retroalimentación de liderazgo',
 };
 
+function isMetaOrOperationalMessage(text: string): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase().trim();
+  const metaPatterns = [
+    'no entiendo', 'no entendí', 'no entendi', 'no comprendo', 'no comprendí', 'no comprendi',
+    'repite la pregunta', 'repite tu pregunta', 'repíteme la pregunta', 'repiteme la pregunta',
+    'qué me quisiste decir', 'que me quisiste decir', 'qué quisiste decir', 'que quisiste decir',
+    'a qué te refieres', 'a que te refieres', 'no me queda claro', 'explícate', 'explicate',
+    'explica mejor', 'explícamelo', 'explicamelo', 'no te sigo', 'no te comprendo',
+    'de qué hablas', 'de que hablas', 'no sé a qué te refieres', 'no se a que te refieres',
+    'reformula', 'reformula la pregunta', 'hazla más sencilla', 'hazla mas sencilla',
+    'no sé qué responder', 'no se que responder', 'cómo que', 'como que', 'cómo así', 'como asi',
+    'qué significa', 'que significa', 'no entiendo tu pregunta', 'no entiendo la pregunta',
+    'no entendí la pregunta', 'no entendi la pregunta', 'a qué viene esa pregunta',
+    'te equivocaste', 'te confundiste', 'te estás equivocando', 'te estas equivocando',
+    'eso no fue lo que dije', 'eso no es lo que dije', 'no dije eso', 'yo no dije eso',
+    'eso no es lo que me preocupa', 'no es lo que me preocupa', 'no me preocupa eso',
+    'no me entendiste', 'no me has entendido', 'no me comprendiste', 'no es por ahí', 'no es por ahi',
+    'entendiste mal', 'comprendiste mal', 'no es ese el problema', 'no es ese mi problema',
+    'te fuiste por otro lado', 'no estás entendiendo', 'no estas entendiendo'
+  ];
+  return metaPatterns.some((p) => lower.includes(p));
+}
+
+function isSubstantiveMessage(text: string): boolean {
+  if (!text) return false;
+  const trimmed = text.trim();
+  if (isMetaOrOperationalMessage(trimmed)) return false;
+
+  const lower = trimmed.toLowerCase();
+  const trivialPhrases = [
+    'ok', 'okay', 'si', 'sí', 'no', 'ya', 'bien', 'claro', 'de acuerdo',
+    'no sé', 'no se', 'tal vez', 'quizas', 'quizás', 'puede ser',
+    'no mucho', 'nada', 'mas o menos', 'más o menos', 'después', 'luego',
+    'hola', 'buenos dias', 'buenas tardes', 'buenas noches'
+  ];
+  if (trivialPhrases.includes(lower)) return false;
+
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length < 5 && trimmed.length < 25) return false;
+
+  return true;
+}
+
 // POST /api/mentor/respond
 app.post('/api/mentor/respond', async (req: Request, res: Response) => {
   try {
@@ -105,8 +149,21 @@ app.post('/api/mentor/respond', async (req: Request, res: Response) => {
       }
     }
 
-    const activeCaseTitle = (sessionData?.id === targetCaseId ? sessionData?.title : '') || resolvedUserMessage.slice(0, 60);
-    const activeCaseChallenge = (sessionData?.id === targetCaseId ? sessionData?.initialChallenge : '') || resolvedUserMessage;
+    // In order to prevent meta-conversations from overwriting the case challenge/title,
+    // find the first substantive leader message from history or current message:
+    const allLeaderTexts = [
+      ...resolvedHistory
+        .filter((m: any) => m.sender === 'leader' || m.role === 'user')
+        .map((m: any) => (m.text || m.content || '').trim()),
+      resolvedUserMessage,
+    ].filter(Boolean);
+
+    const initialSubstantiveChallenge =
+      allLeaderTexts.find((t: string) => isSubstantiveMessage(t)) ||
+      (isSubstantiveMessage(resolvedUserMessage) ? resolvedUserMessage : '');
+
+    const activeCaseTitle = (sessionData?.id === targetCaseId ? sessionData?.title : '') || (initialSubstantiveChallenge ? initialSubstantiveChallenge.slice(0, 60) : 'Caso de liderazgo activo');
+    const activeCaseChallenge = (sessionData?.id === targetCaseId ? sessionData?.initialChallenge : '') || initialSubstantiveChallenge || 'Reto de liderazgo y gestión de equipo';
     const safeSessionContext = {
       id: targetCaseId,
       title: activeCaseTitle,
@@ -204,53 +261,65 @@ Regla fundamental: No respondas solamente al problema que el líder menciona ini
 REGLAS ESTRICTAS DE INTERACCIÓN, CALIDAD Y PERTINENCIA EN ETAPA 1
 ======================================================================
 
-1. PROHIBICIÓN DE ECO ROBÓTICO:
+1. FILTRADO DE MENSAJES OPERATIVOS Y META-CONVERSACIÓN (CRÍTICO):
+   - Si el mensaje del usuario expresa confusión, pide reformular una pregunta ("no entendí", "repite la pregunta", "¿qué me quisiste decir?", "a qué te refieres") o corrige a la IA ("te equivocaste", "eso no fue lo que dije", "eso no es lo que me preocupa"):
+     * Queda estrictamente PROHIBIDO tomar ese mensaje como el "Hecho" o "Situación" del caso de liderazgo.
+     * Lidacta DEBE responder únicamente reformulando su pregunta anterior de forma más sencilla, humana y concreta, manteniendo intacto el contexto del caso original (ej. el robo de almacén o la falta del jefe).
+     * Queda PROHIBIDO desplegar la plantilla de resumen (Hechos, Dilema, Impacto) cuando el usuario pide aclarar una pregunta.
+     * "readyToAdvance" DEBE ser false y "advancePrompt": null.
+
+2. SUSPENSIÓN DE RESUMEN AUTOMÁTICO POR NÚMERO DE TURNO:
+   - El resumen sintético de la Etapa 1 SOLO se debe generar cuando el usuario haya compartido datos sustanciales sobre la situación real de su equipo.
+   - Si el turno actual es un intento de aclaración o una respuesta de una sola frase, Lidacta DEBE continuar indagando en lugar de forzar la plantilla de cierre de etapa.
+   - Prohibido disparar el resumen solo por haber alcanzado 2 o 3 turnos si el usuario no ha aportado hechos, personas y consecuencias sustanciales.
+
+3. PROHIBICIÓN DE ECO ROBÓTICO:
    - Queda estrictamente PROHIBIDO iniciar respuestas con frases mecánicas como: "Entiendo con total claridad el reto que me planteas sobre [repetir texto del usuario]...".
    - Lidacta debe responder como una mentora humana real: validando la emoción o la gravedad del hecho en sus propias palabras de forma natural.
 
-2. REGLA DE PROFUNDIZACIÓN OBLIGATORIA (MÍNIMO 2-3 TURNOS DE ESCUCHA):
-   - Lidacta NO DEBE desplegar la plantilla de resumen final de la Etapa 1 (Hechos, Dilema, Impacto) en el primer ni segundo turno a menos que el usuario haya entregado toda la información.
+4. REGLA DE PROFUNDIZACIÓN OBLIGATORIA (MÍNIMO 2-3 TURNOS DE ESCUCHA SUSTANCIAL):
+   - Lidacta NO DEBE desplegar la plantilla de resumen final de la Etapa 1 (Hechos, Dilema, Impacto) en el primer ni segundo turno a menos que el usuario haya entregado toda la información sustancial.
    - En los primeros turnos, Lidacta DEBE priorizar hacer 1 o 2 preguntas de profundización pertinentes y específicas sobre el hecho real expuesto.
    - "readyToAdvance" DEBE ser false al abrir o indagar en la Etapa 1.
 
-3. ADAPTACIÓN DE PREGUNTAS A LA NATURALEZA DEL PROBLEMA:
+5. ADAPTACIÓN DE PREGUNTAS A LA NATURALEZA DEL PROBLEMA:
    - Si el hecho es grave, un delito o falta operativa crítica (ej. robo de material): indagar sobre evidencia concreta, protocolos de la empresa con RRHH o Seguridad, y si ya se confrontó a la persona. Prohibido terminantemente hacer preguntas genéricas como "¿qué cambio concreto buscas obtener?".
    - Si es un conflicto jerárquico (ej. abuso de autoridad del jefe en público): indagar sobre el contexto de la reunión, si hubo una reacción inmediata, y si es una conducta repetitiva o aislada del jefe.
    - Si es una falta disciplinaria o normativa (ej. ausencias, vacaciones no autorizadas, faltas, desacato directo, abandono): indagar sobre el impacto operativo inmediato y si existen políticas o precedentes claros en la empresa.
    - Si es un problema de actitud o entregas: indagar sobre los acuerdos específicos y la conversación previa sobre esa tarea.
    - Si es una exigencia salarial o de compensación: indagar sobre las expectativas planteadas, el impacto en su compromiso y los límites de tabulador o políticas internas conocidas.
 
-4. REACCIÓN DIRECTA ANTE CORRECCIONES DEL USUARIO:
+6. REACCIÓN DIRECTA ANTE CORRECCIONES DEL USUARIO:
    - Si el líder corrige a Lidacta indicando que se equivocó de tema o enfoque (ej. "te confundiste", "eso no es lo que me preocupa"):
    - Lidacta NO DEBE desplegar la síntesis resumida de inmediato.
    - Debe disculparse brevemente en una sola frase, hacer la pregunta correcta sobre lo aclarado y permitir que el líder exprese los detalles.
 
-5. EJE CENTRAL Y FIDELIDAD AL HECHO DETONANTE:
+7. EJE CENTRAL Y FIDELIDAD AL HECHO DETONANTE:
    - El hecho principal reportado por el líder en su primer turno (ejemplo: ausencia injustificada de 5 días o tomar vacaciones sin autorización) es el EJE INAMOVIBLE de la mentoría.
    - Queda estrictamente PROHIBIDO cambiar el foco de la mentoría hacia "incumplimiento de tareas, entregables o plazos pactados" solo porque el líder mencione antecedentes secundarios o correcciones pasadas.
 
-6. COMPRENSIÓN REAL Y SÍNTESIS CONECTADA A LA PREOCUPACIÓN ACTIVA:
+8. COMPRENSIÓN REAL Y SÍNTESIS CONECTADA A LA PREOCUPACIÓN ACTIVA:
    - En el desglose de la Etapa 1, los 3 puntos del resumen (**Hechos y situación**, **Dilema del líder**, **Impacto y reto principal**) deben construirse respondiendo explícitamente a la preocupación final planteada por el líder (ejemplo: la incertidumbre sobre cómo sancionar la ausencia y cómo abordar la conversación cuando la persona regrese).
    - Queda estrictamente PROHIBIDO usar frases de resumen genéricas que no correspondan exactamente a lo que el líder acaba de manifestar.
 
-7. PROHIBICIÓN ABSOLUTA DE PLANTILLAS O PREGUNTAS CLONADAS:
+9. PROHIBICIÓN ABSOLUTA DE PLANTILLAS O PREGUNTAS CLONADAS:
    - Queda estrictamente PROHIBIDO usar la batería de preguntas estandarizadas (ejemplo: "¿cuánto tiempo lleva este colaborador en tu equipo...", "¿cómo definirías su perfil habitual...", "¿cómo ha sido la relación de trabajo antes de esto?").
    - Cada intervención debe ser única y redactada a la medida del mensaje específico del usuario.
    - Prohibido usar plantillas fijas de cierre como "Tenemos la información clave bien delimitada" tras 2 intercambios. El cambio de etapa debe ser un proceso dinámico de mentoría, no un conteo de turnos. "readyToAdvance" DEBE ser false al abrir o indagar en la Etapa 1.
 
-8. ESPEJO SITUACIONAL Y EMPATÍA TÁCTICA EN LA PRIMERA FRASE:
+10. ESPEJO SITUACIONAL Y EMPATÍA TÁCTICA EN LA PRIMERA FRASE:
    - La primera oración de Lidacta DEBE mencionar explícitamente los hechos concretos y la gravedad/naturaleza del problema reportado por el líder (ej. "Que un colaborador se tome 5 días de vacaciones sin autorización previa y solo lo notifique por mensaje es una falta grave a los acuerdos del equipo...").
    - Demuestra comprensión real antes de realizar cualquier pregunta.
 
-9. AJUSTE DE TONO POR CRITICIDAD:
+11. AJUSTE DE TONO POR CRITICIDAD:
    - Adapta la firmeza del tono a la gravedad del problema. No utilices un tono pasivo o pausado cuando el líder reporta una falta operativa o disciplinaria grave.
 
-10. ESCUCHA ACTIVA Y FLEXIBILIDAD OBLIGATORIA (PROHIBIDO APURAR): Si el usuario dice que NO quiere avanzar, que no está listo, que va muy rápido, que necesita entender mejor la situación, o que desea profundizar en el problema:
+12. ESCUCHA ACTIVA Y FLEXIBILIDAD OBLIGATORIA (PROHIBIDO APURAR): Si el usuario dice que NO quiere avanzar, que no está listo, que va muy rápido, que necesita entender mejor la situación, o que desea profundizar en el problema:
    - Está TERMINANTEMENTE PROHIBIDO volver a preguntar si está listo para pasar a la Etapa 2.
    - Está TERMINANTEMENTE PROHIBIDO empujar o sugerir el avance de etapa.
    - La respuesta debe tener OBLIGATORIAMENTE "readyToAdvance": false y "advancePrompt": null.
 
-11. FORMATO DE DESGLOSE DIAGNÓSTICO Y RESUMEN (LENGUAJE HUMANO, SIN JERGA RÍGIDA):
+13. FORMATO DE DESGLOSE DIAGNÓSTICO Y RESUMEN (LENGUAJE HUMANO, SIN JERGA RÍGIDA):
    - Prohibido terminantemente el uso de términos rebuscados o académicos como "Dinámica relacional y perfil", "exigencia vertical" o "matriz de fricción".
    - Cuando el usuario pida ayuda para entender las variables, desglosar el problema, manifieste que no quiere avanzar o tras explorar las variables clave de la Etapa 1, la mentora DEBE estructurar el desglose/resumen utilizando estricta y únicamente estas tres etiquetas claras y acordes a su contenido, en viñetas y negritas:
      • **Hechos y situación:** [Lo que está pasando objetivamente con el colaborador y las tareas en ESTE caso exclusivo].
@@ -259,7 +328,7 @@ REGLAS ESTRICTAS DE INTERACCIÓN, CALIDAD Y PERTINENCIA EN ETAPA 1
    - En la síntesis, refleja explícitamente las emociones e intenciones del líder (ej. "trabajar tranquilo", "evitar el desgaste" o "eliminar el temor al conflicto").
    - Si se trata de un desglose diagnóstico exploratorio, finalizarás haciendo 1 o 2 preguntas reflexivas sobre esos puntos (con "readyToAdvance": false).
 
-12. INTEGRACIÓN DE MATICES, MANEJO DE DUDAS Y CIERRE DE ETAPA MEDIANTE CONFIRMACIÓN FLUIDA:
+14. INTEGRACIÓN DE MATICES, MANEJO DE DUDAS Y CIERRE DE ETAPA MEDIANTE CONFIRMACIÓN FLUIDA:
    - Resumen inicial de validación: Al explorar los puntos clave de la Etapa 1, presenta el resumen con las 3 viñetas (**Hechos y situación:**, **Dilema del líder:**, **Impacto y reto principal:**) y pregunta con preview de valor: "...¿este resumen refleja fielmente el reto que quieres abordar? Si es así, estamos listos para dar el siguiente paso hacia la Etapa 2 (Analizar perspectivas y habilidades), donde exploraremos cómo vive la otra parte la situación y qué herramientas de liderazgo necesitas poner en juego." (con "readyToAdvance": false).
    - Re-validación fluida tras correcciones: Si el líder agrega información nueva, corrige o aclara un punto tras recibir el resumen (ej. "el aumento de sueldo no es opción", "no podemos aumentarle", "no hay presupuesto"):
      - Lidacta NO debe saltar de inmediato a la Etapa 2. "readyToAdvance" DEBE ser false.
@@ -642,17 +711,17 @@ function extractDiagnosticVariablesServer(
   sessionContext?: any
 ) {
   const allUserTexts: string[] = [];
-  if (sessionContext?.title) {
+  if (sessionContext?.title && !isMetaOrOperationalMessage(sessionContext.title)) {
     allUserTexts.push(sessionContext.title);
   }
-  if (sessionContext?.initialChallenge) {
+  if (sessionContext?.initialChallenge && !isMetaOrOperationalMessage(sessionContext.initialChallenge)) {
     allUserTexts.push(sessionContext.initialChallenge);
   }
   for (const m of history || []) {
     const txt = (m.text || m.content || '').trim();
-    if (txt) allUserTexts.push(txt);
+    if (txt && !isMetaOrOperationalMessage(txt)) allUserTexts.push(txt);
   }
-  if (currentMsg) {
+  if (currentMsg && !isMetaOrOperationalMessage(currentMsg)) {
     allUserTexts.push(currentMsg.trim());
   }
 
@@ -666,6 +735,12 @@ function extractDiagnosticVariablesServer(
     'no podemos aumentarle', 'no se puede aumentar', 'no podemos darle', 'no está contemplado',
     'no esta contemplado'
   ].some((k) => lower.includes(k));
+
+  // Priority: Detect crime / theft / inventory loss
+  const isCrimeOrTheft = [
+    'robo', 'robaron', 'sustraccion', 'sustracción', 'material', 'delito', 'seguridad patrimonial',
+    'guardias', 'almacen', 'almacén', 'inventario', 'faltante ilicito', 'faltante ilícito'
+  ].some((k) => lower.includes(k) || (sessionContext?.initialChallenge && sessionContext.initialChallenge.toLowerCase().includes(k)) || (sessionContext?.title && sessionContext.title.toLowerCase().includes(k)));
 
   // Priority: Detect hierarchy or boss disrespect / conflict
   const isHierarchyOrBossConflict = [
@@ -682,7 +757,7 @@ function extractDiagnosticVariablesServer(
     (history && history.length > 0 ? (history[0]?.text || history[0]?.content) : ''),
   ].filter(Boolean).join(' ').toLowerCase();
 
-  const isDisciplinaryOrAbsenceCase = !isHierarchyOrBossConflict && [
+  const isDisciplinaryOrAbsenceCase = !isHierarchyOrBossConflict && !isCrimeOrTheft && [
     'vacacion', 'vacación', 'vacaciones', 'ausencia injustificada', 'ausencias injustificadas',
     'días sin permiso', 'dias sin permiso', 'sin autorizacion', 'sin autorización',
     'aviso por mensaje', 'avisó por mensaje', 'notifico por mensaje', 'notificó por mensaje',
@@ -696,7 +771,7 @@ function extractDiagnosticVariablesServer(
   ].some((k) => lower.includes(k));
 
   // 1. Detect salary / compensation / money / raise / counteroffer
-  const isSalaryCase = [
+  const isSalaryCase = !isCrimeOrTheft && [
     'sueldo', 'salario', 'aumento', 'aumento de sueldo', 'aumento salarial', 'pagar', 'paga',
     'remuneracion', 'remuneración', 'compensacion', 'compensación', 'tabulador', 'dinero',
     'aumenten', 'aumentar', 'renuncia', 'irse por dinero', 'oferta económica', 'oferta economica',
@@ -721,20 +796,22 @@ function extractDiagnosticVariablesServer(
   ].some((k) => lower.includes(k));
 
   // 5. Detect performance / task non-compliance
-  const isTaskNonComplianceCase = !isHierarchyOrBossConflict && [
+  const isTaskNonComplianceCase = !isHierarchyOrBossConflict && !isCrimeOrTheft && [
     'entrega', 'entregable', 'plazo', 'fecha límite', 'fecha limite', 'no cumple', 'incumple',
     'retraso', 'desempeño', 'desempeno', 'resultados', 'metas'
   ].some((k) => lower.includes(k));
 
   // 6. Detect interpersonal friction / attitude / resistance
-  const isAttitudeCase = !isHierarchyOrBossConflict && [
+  const isAttitudeCase = !isHierarchyOrBossConflict && !isCrimeOrTheft && [
     'actitud', 'defensiva', 'desmotivacion', 'desmotivación', 'apatía', 'apatia', 'resistencia',
     'conflicto', 'roce', 'desacuerdo', 'quejas'
   ].some((k) => lower.includes(k));
 
   // Formulate 1: Hechos y situación (Lo que está pasando objetivamente con el colaborador y las tareas)
   let factsAndSituation = '';
-  if (isHierarchyOrBossConflict) {
+  if (isCrimeOrTheft) {
+    factsAndSituation = 'El faltante y presunto robo o sustracción no autorizada de material en el almacén o área operativa.';
+  } else if (isHierarchyOrBossConflict) {
     factsAndSituation = 'La situación de tensión y falta de respeto experimentada en la relación o interacción con la jefatura.';
   } else if (isDisciplinaryOrAbsenceCase) {
     factsAndSituation = 'La ausencia injustificada del colaborador al tomarse días de descanso o vacaciones sin previa autorización, limitándose a avisar por mensaje.';
@@ -755,14 +832,18 @@ function extractDiagnosticVariablesServer(
   } else if (isAttitudeCase) {
     factsAndSituation = 'La postura a la defensiva y la resistencia para alinearse a las tareas y acuerdos cotidianos de trabajo.';
   } else {
-    const rawSnippet = (sessionContext?.initialChallenge || sessionContext?.title || currentMsg || '').replace(/\s+/g, ' ').trim();
+    // Pick the most substantive snippet available from history or challenge, NEVER from a meta message
+    const substantiveSnippet = allUserTexts.filter((t) => isSubstantiveMessage(t)).pop() || '';
+    const rawSnippet = (sessionContext?.initialChallenge || sessionContext?.title || substantiveSnippet).replace(/\s+/g, ' ').trim();
     const snippet = rawSnippet ? rawSnippet.slice(0, 95) : 'la situación operativa y los acuerdos de trabajo';
     factsAndSituation = `La situación observada en tu equipo sobre: "${snippet}${rawSnippet.length > 95 ? '...' : ''}".`;
   }
 
   // Formulate 2: Dilema del líder (La encrucijada concreta del líder)
   let leaderDilemma = '';
-  if (isHierarchyOrBossConflict) {
+  if (isCrimeOrTheft) {
+    leaderDilemma = 'Actuar con apego estricto a las normas y lineamientos legales o de seguridad patrimonial, asegurando que la investigación se realice de forma objetiva sin caer en señalamientos prematuros ni omisiones.';
+  } else if (isHierarchyOrBossConflict) {
     leaderDilemma = 'Hacer valer tus límites profesionales y defender tu dignidad y autonomía laboral con asertividad y temple, sin poner en riesgo la relación jerárquica ni la estabilidad de tu posición o la de tu equipo.';
   } else if (isDisciplinaryOrAbsenceCase) {
     if (concernsSanctionOrReturn) {
@@ -794,7 +875,9 @@ function extractDiagnosticVariablesServer(
   // Formulate 3: Impacto y reto principal (Efecto en el equipo y objetivo clave a resolver)
   let impactAndMainChallenge = '';
   const expressesFatigue = ['cansad', 'agota', 'harto', 'frustra', 'estres', 'estrés', 'abrumad', 'desgaste'].some((k) => lower.includes(k));
-  if (isHierarchyOrBossConflict) {
+  if (isCrimeOrTheft) {
+    impactAndMainChallenge = 'Proteger la integridad del área, evitar riesgos legales para la empresa y proceder conforme a los lineamientos institucionales con total objetividad.';
+  } else if (isHierarchyOrBossConflict) {
     impactAndMainChallenge = 'Frenar el desgaste emocional, recuperar la claridad estratégica y definir el mejor canal o momento para sostener una conversación asertiva y firme que restablezca el respeto mutuo.';
   } else if (isDisciplinaryOrAbsenceCase) {
     impactAndMainChallenge = 'Restablecer la disciplina y el respeto a las normas del equipo, evitando sentar un precedente negativo de permisividad o afectación a la equidad entre los demás colaboradores.';
@@ -939,8 +1022,8 @@ function generateDeterministicCoaching({
     };
   }
 
-  // Detección de confusión o solicitud de aclaración del líder
-  const isConfusion = [
+  // Detección de confusión o solicitud de aclaración del líder (FILTRADO DE MENSAJES OPERATIVOS)
+  const isConfusion = isMetaOrOperationalMessage(cleanMsg) || [
     'no entiendo', 'no comprendo', 'a que te refieres', 'a qué te refieres',
     'como que', 'cómo que', 'como asi', 'cómo así', 'no se que responder',
     'no sé qué responder', 'no se a que te refieres', 'no sé a qué te refieres',
@@ -951,11 +1034,41 @@ function generateDeterministicCoaching({
 
   if (isConfusion) {
     if (stage === 1) {
-      const { factsAndSituation, leaderDilemma, impactAndMainChallenge } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg, sessionData);
+      // Re-formular la pregunta anterior de forma más sencilla y concreta,
+      // preservando estrictamente el contexto original del caso SIN plantilla de resumen
+      const anchorForConfusion = [
+        sessionData?.initialChallenge,
+        sessionData?.title,
+        ...(conversationHistory || []).map((m: any) => m.text || m.content || '')
+      ].filter(Boolean).join(' ').toLowerCase();
+
+      const isCrimeOrTheftConfusion = ['robo', 'material', 'sustraccion', 'sustracción', 'delito', 'almacen', 'almacén'].some((k) => anchorForConfusion.includes(k));
+      const isBossConfusion = ['jefe', 'jefatura', 'gritó', 'grito', 'humilló', 'humillo', 'respeto'].some((k) => anchorForConfusion.includes(k));
+      const isDisciplinaryConfusion = ['vacacion', 'vacación', 'ausencia', 'sin permiso', 'sin autorizacion', 'sin autorización'].some((k) => anchorForConfusion.includes(k));
+      const isSalaryConfusion = ['sueldo', 'salario', 'aumento', 'dinero', 'paga'].some((k) => anchorForConfusion.includes(k));
+      const isDeliveryConfusion = ['entrega', 'plazo', 'retraso', 'calidad', 'compromiso'].some((k) => anchorForConfusion.includes(k));
+
+      let simplifiedQuestion = '';
+      if (isCrimeOrTheftConfusion) {
+        simplifiedQuestion = `Te lo planteo de forma mucho más directa y sencilla, ${leaderName}: sobre lo ocurrido con el material o almacén, ¿cuentan ya con registros o evidencias claras de lo que pasó, o alguien en Recursos Humanos o Seguridad ya fue informado?`;
+      } else if (isBossConfusion) {
+        simplifiedQuestion = `Te lo pongo en palabras muy sencillas y directas, ${leaderName}: sobre lo que viviste con tu jefe en esa reunión, ¿qué fue exactamente lo que él dijo o hizo frente a los demás, y pudiste decirle algo en ese momento o no se pudo reaccionar?`;
+      } else if (isDisciplinaryConfusion) {
+        simplifiedQuestion = `Te lo formulo de manera más clara y simple, ${leaderName}: respecto al colaborador que se tomó los días sin autorización, ¿qué tareas urgentes quedaron afectadas en el equipo y qué reglamento interno tienen para atender una falta así?`;
+      } else if (isSalaryConfusion) {
+        simplifiedQuestion = `Te lo pregunto de forma más clara y cotidiana, ${leaderName}: sobre este colaborador que pide más sueldo, ¿cuánto incremento está solicitando y qué margen real tiene la empresa para considerar o descartar esa petición?`;
+      } else if (isDeliveryConfusion) {
+        simplifiedQuestion = `Te lo pregunto de forma más clara y concreta, ${leaderName}: sobre los retrasos o la postura del colaborador en las entregas, ¿cuáles eran las fechas y compromisos exactos pactados y qué te respondió cuando hablaste con él?`;
+      } else {
+        simplifiedQuestion = `Te lo planteo de forma más sencilla y aterrizada, ${leaderName}: sobre la situación que me compartiste con tu equipo, ¿qué fue exactamente lo que ocurrió en la última conversación con las personas involucradas y qué es lo que más te preocupa si no se resuelve pronto?`;
+      }
+
       return {
-        replyText: `Te lo planteo de forma muy simple y cotidiana, ${leaderName}: a veces postergamos una charla o decisión difícil porque tenemos muchas cosas urgentes en el día a día. Para verlo claro:\n\n• **Hechos y situación:** ${factsAndSituation}\n• **Dilema del líder:** ${leaderDilemma}\n• **Impacto y reto principal:** ${impactAndMainChallenge}\n\n¿Cuál de estos tres puntos crees que es la verdadera causa raíz de lo que está pasando?`,
+        replyText: simplifiedQuestion,
         readyToAdvance: false,
-        detectedTheme: 'Clarificación de Situación',
+        advancePrompt: null,
+        detectedTheme: 'Clarificación de Pregunta',
+        isTherapeuticCase: false,
       };
     }
   }
@@ -1182,9 +1295,16 @@ function generateDeterministicCoaching({
       }
     }
 
-    // Regla de profundización obligatoria: Mínimo 2-3 turnos de escucha antes de desplegar el resumen final
-    const leaderTurnsCount = (conversationHistory || []).filter((m: any) => m.sender === 'leader' || m.role === 'user').length;
-    if (leaderTurnsCount < 2) {
+    // SUSPENSIÓN DE RESUMEN AUTOMÁTICO POR NÚMERO DE TURNO:
+    // Contar únicamente turnos del líder que sean sustanciales (no meta-conversaciones ni monosílabos)
+    const substantiveLeaderTurns = (conversationHistory || [])
+      .filter((m: any) => (m.sender === 'leader' || m.role === 'user') && isSubstantiveMessage(m.text || m.content || ''))
+      .length;
+    const isCurrentSubstantive = isSubstantiveMessage(cleanMsg);
+
+    // Si el turno actual es un intento de aclaración, frase corta o el líder aún no aporta suficientes datos sustanciales:
+    // LIDACTA DEBE CONTINUAR INDAGANDO en lugar de forzar la plantilla de cierre de etapa
+    if (!isCurrentSubstantive || substantiveLeaderTurns < 2) {
       if (isCrimeOrTheft) {
         return {
           replyText: `Tomo nota de este antecedente, ${leaderName}. Para asegurar que cualquier paso cuente con el debido respaldo interno y legal: ¿quién más en la gerencia o dirección tiene conocimiento de esto y qué medidas provisionales se han tomado para resguardar la operación?`,
@@ -1200,6 +1320,15 @@ function generateDeterministicCoaching({
           readyToAdvance: false,
           advancePrompt: null,
           detectedTheme: 'Delimitación de Límites Jerárquicos',
+        };
+      }
+
+      if (isDisciplinaryOrAbsenceCase) {
+        return {
+          replyText: `Entiendo el impacto que describes, ${leaderName}. Para tener el contexto completo antes de estructurar el análisis: ¿qué antecedentes o llamados de atención previos existen con esta persona y qué postura asumió cuando se le señalaron?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Antecedentes Disciplinarios',
         };
       }
 
