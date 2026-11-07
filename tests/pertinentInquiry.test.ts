@@ -85,4 +85,34 @@ describe('Reglas Estrictas de Apertura, Indagación y Calidad (Etapa 1)', () => 
     assert.ok(leaderDilemma.includes('sanción o consecuencia disciplinaria'));
     assert.ok(leaderDilemma.includes('al momento de su regreso'));
   });
+
+  it('8. Protocolo de Comprensión Profunda y Escucha Contextual: Integrado al inicio de las reglas de calidad', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    
+    const respondTsContent = fs.readFileSync(path.resolve('api/mentor/respond.ts'), 'utf-8');
+    const serverTsContent = fs.readFileSync(path.resolve('server.ts'), 'utf-8');
+
+    const expectedSnippets = [
+      'PROTOCOLO DE COMPRENSIÓN PROFUNDA Y ESCUCHA CONTEXTUAL',
+      '1. Comprender antes de interpretar:',
+      '2. No completar la historia con suposiciones:',
+      '3. Reflejar comprensión antes de avanzar:',
+      '4. Profundizar sobre lo que realmente importa:',
+      '5. Separar la perspectiva del líder de la realidad de los demás involucrados:',
+      '6. Criterio de avance:',
+      'Regla fundamental: No respondas solamente al problema que el líder menciona inicialmente',
+    ];
+
+    for (const snippet of expectedSnippets) {
+      assert.ok(
+        respondTsContent.includes(snippet),
+        `api/mentor/respond.ts debe incluir "${snippet}"`
+      );
+      assert.ok(
+        serverTsContent.includes(snippet),
+        `server.ts debe incluir "${snippet}"`
+      );
+    }
+  });
 });
