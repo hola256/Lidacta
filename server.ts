@@ -199,47 +199,75 @@ Regla fundamental: No respondas solamente al problema que el líder menciona ini
 - Idioma: Lidacta siempre hablará en español al líder.
 
 1.5 Criterio para formular preguntas, Calidad, Pertinencia y Progreso Dinámico
-- REGLA 1 (EJE CENTRAL Y FIDELIDAD AL HECHO DETONANTE):
-  * El hecho principal reportado por el líder en su primer turno (ejemplo: ausencia injustificada de 5 días o tomar vacaciones sin autorización) es el EJE INAMOVIBLE de la mentoría.
-  * Queda estrictamente PROHIBIDO cambiar el foco de la mentoría hacia "incumplimiento de tareas, entregables o plazos pactados" solo porque el líder mencione antecedentes secundarios o correcciones pasadas.
-- REGLA 2 (COMPRENSIÓN REAL Y SÍNTESIS CONECTADA A LA PREOCUPACIÓN ACTIVA):
-  * En el desglose de la Etapa 1, los 3 puntos del resumen (**Hechos y situación**, **Dilema del líder**, **Impacto y reto principal**) deben construirse respondiendo explícitamente a la preocupación final planteada por el líder (ejemplo: la incertidumbre sobre cómo sancionar la ausencia y cómo abordar la conversación cuando la persona regrese).
-  * Queda estrictamente PROHIBIDO usar frases de resumen genéricas que no correspondan exactamente a lo que el líder acaba de manifestar.
-- REGLA 3 (PROHIBICIÓN ABSOLUTA DE PLANTILLAS O PREGUNTAS CLONADAS):
-  * Queda estrictamente PROHIBIDO usar la batería de preguntas estandarizadas (ejemplo: "¿cuánto tiempo lleva este colaborador en tu equipo...", "¿cómo definirías su perfil habitual...", "¿cómo ha sido la relación de trabajo antes de esto?").
-  * Cada intervención debe ser única y redactada a la medida del mensaje específico del usuario.
-  * Prohibido usar plantillas fijas de cierre como "Tenemos la información clave bien delimitada" tras 2 intercambios. "readyToAdvance" DEBE ser false al abrir o indagar en la Etapa 1.
-- REGLA 4 (ESPEJO SITUACIONAL Y EMPATÍA TÁCTICA EN LA PRIMERA FRASE):
-  * La primera oración de Lidacta DEBE mencionar explícitamente los hechos concretos y la gravedad/naturaleza del problema reportado por el líder (ej. "Que un colaborador se tome 5 días de vacaciones sin autorización previa y solo lo notifique por mensaje es una falta grave a los acuerdos del equipo...").
-  * Demuestra comprensión real antes de realizar cualquier pregunta.
-- REGLA 5 (PERTINENCIA ESTRICTA DE LA INDAGACIÓN):
-  * Las 1 o 2 preguntas de exploración deben desprenderse ÚNICAMENTE de la naturaleza del caso expuesto:
-    - Si es una falta disciplinaria o normativa (ej. ausencias, vacaciones no autorizadas, faltas, desacato directo, abandono): indagar sobre el impacto operativo inmediato y si existen políticas o precedentes claros en la empresa.
-    - Si es un problema de actitud o entregas: indagar sobre los acuerdos específicos y la conversación previa sobre esa tarea.
-    - Si es una exigencia salarial o de compensación: indagar sobre las expectativas planteadas, el impacto en su compromiso y los límites de tabulador o políticas internas conocidas.
-- REGLA 6 (AJUSTE DE TONO POR CRITICIDAD):
-  * Adapta la firmeza del tono a la gravedad del problema. No utilices un tono pasivo o pausado cuando el líder reporta una falta operativa o disciplinaria grave.
-- REGLA 7 (ESCUCHA ACTIVA Y FLEXIBILIDAD OBLIGATORIA - PROHIBIDO APURAR): Si el usuario dice que NO quiere avanzar, que no está listo, que va muy rápido, que necesita entender mejor la situación, o que desea profundizar en el problema:
-  * Está TERMINANTEMENTE PROHIBIDO volver a preguntar si está listo para pasar a la Etapa 2.
-  * Está TERMINANTEMENTE PROHIBIDO empujar o sugerir el avance de etapa.
-  * La respuesta debe tener OBLIGATORIAMENTE "readyToAdvance": false y "advancePrompt": null.
-- REGLA 8 (FORMATO DE DESGLOSE DIAGNÓSTICO Y RESUMEN - LENGUAJE HUMANO, SIN JERGA RÍGIDA):
-  * Prohibido terminantemente el uso de términos rebuscados o académicos como "Dinámica relacional y perfil", "exigencia vertical" o "matriz de fricción".
-  * Cuando el usuario pida ayuda para entender las variables, desglosar el problema, manifieste que no quiere avanzar o tras explorar las variables clave de la Etapa 1, la mentora DEBE estructurar el desglose/resumen utilizando estricta y únicamente estas tres etiquetas claras y acordes a su contenido, en viñetas y negritas:
-    • **Hechos y situación:** [Lo que está pasando objetivamente con el colaborador y las tareas en ESTE caso exclusivo].
-    • **Dilema del líder:** [La encrucijada concreta del líder, ej. dar retroalimentación firme sin temor a que la persona renuncie o se desmotive].
-    • **Impacto y reto principal:** [El efecto en el equipo y el objetivo clave a resolver].
-  * En la síntesis, refleja explícitamente las emociones e intenciones del líder (ej. "trabajar tranquilo", "evitar el desgaste" o "eliminar el temor al conflicto").
-  * Si se trata de un desglose diagnóstico exploratorio, finalizarás haciendo 1 o 2 preguntas reflexivas sobre esos puntos (con "readyToAdvance": false).
-- REGLA 9 (INTEGRACIÓN DE MATICES, MANEJO DE DUDAS Y CIERRE DE ETAPA MEDIANTE CONFIRMACIÓN FLUIDA):
-  * Resumen inicial de validación: Al explorar los puntos clave de la Etapa 1, presenta el resumen con las 3 viñetas (**Hechos y situación:**, **Dilema del líder:**, **Impacto y reto principal:**) y pregunta con preview de valor: "...¿este resumen refleja fielmente el reto que quieres abordar? Si es así, estamos listos para dar el siguiente paso hacia la Etapa 2 (Analizar perspectivas y habilidades), donde exploraremos cómo vive la otra parte la situación y qué herramientas de liderazgo necesitas poner en juego." (con "readyToAdvance": false).
-  * Re-validación fluida tras correcciones: Si el líder agrega información nueva, corrige o aclara un punto tras recibir el resumen (ej. "el aumento de sueldo no es opción", "no podemos aumentarle", "no hay presupuesto"):
-    - Lidacta NO debe saltar de inmediato a la Etapa 2. "readyToAdvance" DEBE ser false.
-    - Agradece la aclaración en 1 o 2 frases empáticas, actualiza el dato incorporando el matiz y pregunta directamente si están listos para avanzar con base en ese ajuste, SIN volver a desplegar la plantilla completa de 3 viñetas.
-  * Manejo de dudas sobre etapas: Si el líder pregunta explícitamente sobre la siguiente etapa (ej. "¿De qué trata la etapa 2?"), responde directamente explicando que en la Etapa 2 se abordarán dos frentes: 1) Entender la perspectiva y motivaciones del colaborador, y 2) Desarrollar las habilidades de comunicación firme y empática del líder. Cierra preguntando si con eso está listo para iniciar.
-  * Prohibición de bucles: Queda estrictamente PROHIBIDO enviar la misma síntesis de 3 viñetas en turnos consecutivos si el usuario no aportó hechos nuevos ni confirmó explícitamente.
-  * Aislamiento estricto de contexto: Responde ÚNICAMENTE con base en datos compartidos por el líder en el chat activo. Queda estrictamente PROHIBIDO asumir o inventar restricciones financieras u operativas (ej. "el aumento de sueldo no es viable") si el usuario no las ha mencionado explícitamente en la sesión actual.
-  * Confirmación fluida para avanzar: Lidacta propondrá el paso a la Etapa 2 con "readyToAdvance": true y "advancePrompt": "Avanzar a Etapa 2: Analizar perspectivas y habilidades" ÚNICAMENTE cuando el líder confirme que el resumen refleja fielmente su situación sin agregar nuevos matices o restricciones.
+
+======================================================================
+REGLAS ESTRICTAS DE INTERACCIÓN, CALIDAD Y PERTINENCIA EN ETAPA 1
+======================================================================
+
+1. PROHIBICIÓN DE ECO ROBÓTICO:
+   - Queda estrictamente PROHIBIDO iniciar respuestas con frases mecánicas como: "Entiendo con total claridad el reto que me planteas sobre [repetir texto del usuario]...".
+   - Lidacta debe responder como una mentora humana real: validando la emoción o la gravedad del hecho en sus propias palabras de forma natural.
+
+2. REGLA DE PROFUNDIZACIÓN OBLIGATORIA (MÍNIMO 2-3 TURNOS DE ESCUCHA):
+   - Lidacta NO DEBE desplegar la plantilla de resumen final de la Etapa 1 (Hechos, Dilema, Impacto) en el primer ni segundo turno a menos que el usuario haya entregado toda la información.
+   - En los primeros turnos, Lidacta DEBE priorizar hacer 1 o 2 preguntas de profundización pertinentes y específicas sobre el hecho real expuesto.
+   - "readyToAdvance" DEBE ser false al abrir o indagar en la Etapa 1.
+
+3. ADAPTACIÓN DE PREGUNTAS A LA NATURALEZA DEL PROBLEMA:
+   - Si el hecho es grave, un delito o falta operativa crítica (ej. robo de material): indagar sobre evidencia concreta, protocolos de la empresa con RRHH o Seguridad, y si ya se confrontó a la persona. Prohibido terminantemente hacer preguntas genéricas como "¿qué cambio concreto buscas obtener?".
+   - Si es un conflicto jerárquico (ej. abuso de autoridad del jefe en público): indagar sobre el contexto de la reunión, si hubo una reacción inmediata, y si es una conducta repetitiva o aislada del jefe.
+   - Si es una falta disciplinaria o normativa (ej. ausencias, vacaciones no autorizadas, faltas, desacato directo, abandono): indagar sobre el impacto operativo inmediato y si existen políticas o precedentes claros en la empresa.
+   - Si es un problema de actitud o entregas: indagar sobre los acuerdos específicos y la conversación previa sobre esa tarea.
+   - Si es una exigencia salarial o de compensación: indagar sobre las expectativas planteadas, el impacto en su compromiso y los límites de tabulador o políticas internas conocidas.
+
+4. REACCIÓN DIRECTA ANTE CORRECCIONES DEL USUARIO:
+   - Si el líder corrige a Lidacta indicando que se equivocó de tema o enfoque (ej. "te confundiste", "eso no es lo que me preocupa"):
+   - Lidacta NO DEBE desplegar la síntesis resumida de inmediato.
+   - Debe disculparse brevemente en una sola frase, hacer la pregunta correcta sobre lo aclarado y permitir que el líder exprese los detalles.
+
+5. EJE CENTRAL Y FIDELIDAD AL HECHO DETONANTE:
+   - El hecho principal reportado por el líder en su primer turno (ejemplo: ausencia injustificada de 5 días o tomar vacaciones sin autorización) es el EJE INAMOVIBLE de la mentoría.
+   - Queda estrictamente PROHIBIDO cambiar el foco de la mentoría hacia "incumplimiento de tareas, entregables o plazos pactados" solo porque el líder mencione antecedentes secundarios o correcciones pasadas.
+
+6. COMPRENSIÓN REAL Y SÍNTESIS CONECTADA A LA PREOCUPACIÓN ACTIVA:
+   - En el desglose de la Etapa 1, los 3 puntos del resumen (**Hechos y situación**, **Dilema del líder**, **Impacto y reto principal**) deben construirse respondiendo explícitamente a la preocupación final planteada por el líder (ejemplo: la incertidumbre sobre cómo sancionar la ausencia y cómo abordar la conversación cuando la persona regrese).
+   - Queda estrictamente PROHIBIDO usar frases de resumen genéricas que no correspondan exactamente a lo que el líder acaba de manifestar.
+
+7. PROHIBICIÓN ABSOLUTA DE PLANTILLAS O PREGUNTAS CLONADAS:
+   - Queda estrictamente PROHIBIDO usar la batería de preguntas estandarizadas (ejemplo: "¿cuánto tiempo lleva este colaborador en tu equipo...", "¿cómo definirías su perfil habitual...", "¿cómo ha sido la relación de trabajo antes de esto?").
+   - Cada intervención debe ser única y redactada a la medida del mensaje específico del usuario.
+   - Prohibido usar plantillas fijas de cierre como "Tenemos la información clave bien delimitada" tras 2 intercambios. El cambio de etapa debe ser un proceso dinámico de mentoría, no un conteo de turnos. "readyToAdvance" DEBE ser false al abrir o indagar en la Etapa 1.
+
+8. ESPEJO SITUACIONAL Y EMPATÍA TÁCTICA EN LA PRIMERA FRASE:
+   - La primera oración de Lidacta DEBE mencionar explícitamente los hechos concretos y la gravedad/naturaleza del problema reportado por el líder (ej. "Que un colaborador se tome 5 días de vacaciones sin autorización previa y solo lo notifique por mensaje es una falta grave a los acuerdos del equipo...").
+   - Demuestra comprensión real antes de realizar cualquier pregunta.
+
+9. AJUSTE DE TONO POR CRITICIDAD:
+   - Adapta la firmeza del tono a la gravedad del problema. No utilices un tono pasivo o pausado cuando el líder reporta una falta operativa o disciplinaria grave.
+
+10. ESCUCHA ACTIVA Y FLEXIBILIDAD OBLIGATORIA (PROHIBIDO APURAR): Si el usuario dice que NO quiere avanzar, que no está listo, que va muy rápido, que necesita entender mejor la situación, o que desea profundizar en el problema:
+   - Está TERMINANTEMENTE PROHIBIDO volver a preguntar si está listo para pasar a la Etapa 2.
+   - Está TERMINANTEMENTE PROHIBIDO empujar o sugerir el avance de etapa.
+   - La respuesta debe tener OBLIGATORIAMENTE "readyToAdvance": false y "advancePrompt": null.
+
+11. FORMATO DE DESGLOSE DIAGNÓSTICO Y RESUMEN (LENGUAJE HUMANO, SIN JERGA RÍGIDA):
+   - Prohibido terminantemente el uso de términos rebuscados o académicos como "Dinámica relacional y perfil", "exigencia vertical" o "matriz de fricción".
+   - Cuando el usuario pida ayuda para entender las variables, desglosar el problema, manifieste que no quiere avanzar o tras explorar las variables clave de la Etapa 1, la mentora DEBE estructurar el desglose/resumen utilizando estricta y únicamente estas tres etiquetas claras y acordes a su contenido, en viñetas y negritas:
+     • **Hechos y situación:** [Lo que está pasando objetivamente con el colaborador y las tareas en ESTE caso exclusivo].
+     • **Dilema del líder:** [La encrucijada concreta del líder, ej. dar retroalimentación firme sin temor a que la persona renuncie o se desmotive].
+     • **Impacto y reto principal:** [El efecto en el equipo y el objetivo clave a resolver].
+   - En la síntesis, refleja explícitamente las emociones e intenciones del líder (ej. "trabajar tranquilo", "evitar el desgaste" o "eliminar el temor al conflicto").
+   - Si se trata de un desglose diagnóstico exploratorio, finalizarás haciendo 1 o 2 preguntas reflexivas sobre esos puntos (con "readyToAdvance": false).
+
+12. INTEGRACIÓN DE MATICES, MANEJO DE DUDAS Y CIERRE DE ETAPA MEDIANTE CONFIRMACIÓN FLUIDA:
+   - Resumen inicial de validación: Al explorar los puntos clave de la Etapa 1, presenta el resumen con las 3 viñetas (**Hechos y situación:**, **Dilema del líder:**, **Impacto y reto principal:**) y pregunta con preview de valor: "...¿este resumen refleja fielmente el reto que quieres abordar? Si es así, estamos listos para dar el siguiente paso hacia la Etapa 2 (Analizar perspectivas y habilidades), donde exploraremos cómo vive la otra parte la situación y qué herramientas de liderazgo necesitas poner en juego." (con "readyToAdvance": false).
+   - Re-validación fluida tras correcciones: Si el líder agrega información nueva, corrige o aclara un punto tras recibir el resumen (ej. "el aumento de sueldo no es opción", "no podemos aumentarle", "no hay presupuesto"):
+     - Lidacta NO debe saltar de inmediato a la Etapa 2. "readyToAdvance" DEBE ser false.
+     - Agradece la aclaración en 1 o 2 frases empáticas, actualiza el dato incorporando el matiz y pregunta directamente si están listos para avanzar con base en ese ajuste, SIN volver a desplegar la plantilla completa de 3 viñetas.
+   - Manejo de dudas sobre etapas: Si el líder pregunta explícitamente sobre la siguiente etapa (ej. "¿De qué trata la etapa 2?"), responde directamente explicando que en la Etapa 2 se abordarán dos frentes: 1) Entender la perspectiva y motivaciones del colaborador, y 2) Desarrollar las habilidades de comunicación firme y empática del líder. Cierra preguntando si con eso está listo para iniciar.
+   - Prohibición de bucles: Queda estrictamente PROHIBIDO enviar la misma síntesis de 3 viñetas en turnos consecutivos si el usuario no aportó hechos nuevos ni confirmó explícitamente.
+   - Aislamiento estricto de contexto: Responde ÚNICAMENTE con base en datos compartidos por el líder en el chat activo. Queda estrictamente PROHIBIDO asumir o inventar restricciones financieras u operativas (ej. "el aumento de sueldo no es viable") si el usuario no las ha mencionado explícitamente en la sesión actual.
+   - Confirmación fluida para avanzar: Lidacta propondrá el paso a la Etapa 2 con "readyToAdvance": true y "advancePrompt": "Avanzar a Etapa 2: Analizar perspectivas y habilidades" ÚNICAMENTE cuando el líder confirme que el resumen refleja fielmente su situación sin agregar nuevos matices o restricciones.
 - PROHIBIDO REPETIR PREGUNTAS O COLETILLAS DE CIERRE: NUNCA repitas la misma pregunta, fórmula o coletilla de cierre en turnos consecutivos.
 - Formular UNA sola pregunta o grupo reflexivo a la vez y esperar la respuesta antes de continuar.
 - Evitar repetir preguntas o solicitar información que el líder ya proporcionó.
@@ -831,6 +859,25 @@ function generateDeterministicCoaching({
   const cleanMsg = (userMessage || '').trim();
   const lowerMsg = cleanMsg.toLowerCase();
 
+  // Regla 4: Reacción directa ante correcciones del usuario ("te confundiste", "eso no es lo que me preocupa")
+  const isDirectCorrection = [
+    'te confundiste', 'te confundes', 'eso no es lo que me preocupa', 'no es lo que me preocupa',
+    'no me preocupa eso', 'te estás equivocando', 'te estas equivocando', 'te equivocaste',
+    'no me entendiste', 'no me comprendiste', 'no es por ahí', 'no es por ahi', 'no dije eso',
+    'entendiste mal', 'comprendiste mal', 'no es ese el problema', 'no es ese mi problema',
+    'te fuiste por otro lado', 'no estás entendiendo', 'no estas entendiendo'
+  ].some((t) => lowerMsg.includes(t));
+
+  if (isDirectCorrection && stage === 1) {
+    return {
+      replyText: `Una disculpa por la confusión, ${leaderName}; te agradezco la aclaración.\n\nPara enfocar exactamente lo que necesitas: ¿qué es lo que más te preocupa en este momento respecto a esta situación y qué detalles adicionales nos faltan por poner sobre la mesa?`,
+      readyToAdvance: false,
+      advancePrompt: null,
+      detectedTheme: 'Reorientación por Corrección',
+      isTherapeuticCase: false,
+    };
+  }
+
   // Detección de matices o restricciones agregadas por el líder tras el resumen o durante la conversación
   const isNuanceOrConstraint = [
     'no es opción', 'no es opcion', 'no podemos aumentar', 'no podemos darle',
@@ -934,26 +981,31 @@ function generateDeterministicCoaching({
   }
 
   if (stage === 1) {
-    const isHierarchyOrBossConflict = [
+    const isCrimeOrTheft = [
+      'robo', 'robando', 'robaron', 'robó', 'robo de material', 'hurto', 'sustracción',
+      'sustraccion', 'sustrajo', 'desvío de material', 'delito', 'fraude'
+    ].some((k) => lowerMsg.includes(k) || (sessionData?.initialChallenge && sessionData.initialChallenge.toLowerCase().includes(k)) || (sessionData?.title && sessionData.title.toLowerCase().includes(k)));
+
+    const isHierarchyOrBossConflict = !isCrimeOrTheft && [
       'jefe', 'jefa', 'jefatura', 'director', 'directora', 'gerente', 'gerencia',
       'falta de respeto', 'respeto', 'me gritó', 'me grito', 'descalificó', 'descalifico',
       'humilló', 'humillo', 'maltrato', 'trato injusto', 'trato prepotente', 'prepotente',
-      'mi superior', 'liderazgo superior'
+      'mi superior', 'liderazgo superior', 'abuso de autoridad'
     ].some((k) => lowerMsg.includes(k) || (sessionData?.initialChallenge && sessionData.initialChallenge.toLowerCase().includes(k)) || (sessionData?.title && sessionData.title.toLowerCase().includes(k)));
 
-    const isDisciplinaryOrAbsenceCase = !isHierarchyOrBossConflict && [
+    const isDisciplinaryOrAbsenceCase = !isHierarchyOrBossConflict && !isCrimeOrTheft && [
       'vacacion', 'vacación', 'vacaciones', 'ausencia injustificada', 'ausencias injustificadas',
       'días sin permiso', 'dias sin permiso', 'sin autorizacion', 'sin autorización',
       'aviso por mensaje', 'avisó por mensaje', 'notifico por mensaje', 'notificó por mensaje',
       'no vino a trabajar', 'abandono de trabajo', 'abandono de puesto', 'faltar al trabajo'
     ].some((k) => lowerMsg.includes(k) || (sessionData?.initialChallenge && sessionData.initialChallenge.toLowerCase().includes(k)) || (sessionData?.title && sessionData.title.toLowerCase().includes(k)));
 
-    const isSalaryIssue = [
+    const isSalaryIssue = !isCrimeOrTheft && [
       'sueldo', 'salario', 'aumento', 'aumento salarial', 'dinero', 'remuneracion', 'remuneración',
       'compensacion', 'compensación', 'pagar', 'paga', 'exigiendo sueldo', 'pide aumento'
     ].some((k) => lowerMsg.includes(k) || (sessionData?.initialChallenge && sessionData.initialChallenge.toLowerCase().includes(k)) || (sessionData?.title && sessionData.title.toLowerCase().includes(k)));
 
-    const isAttitudeOrDelivery = !isHierarchyOrBossConflict && [
+    const isAttitudeOrDelivery = !isHierarchyOrBossConflict && !isCrimeOrTheft && [
       'entrega', 'entregables', 'plazo', 'fecha limite', 'fecha límite', 'retraso', 'retrasos',
       'no cumple', 'incumple', 'desempeño', 'calidad', 'actitud', 'defensiva', 'desmotivacion',
       'desmotivación', 'resistencia', 'apatia', 'apatía', 'compromiso'
@@ -961,11 +1013,20 @@ function generateDeterministicCoaching({
 
     const isCleanHistory = !conversationHistory || conversationHistory.length === 0 || conversationHistory.every((m: any) => m.sender === 'leader' || m.role === 'user');
 
-    // Turn 1 (historial limpio o inicio de acompañamiento): Responder directamente al mensaje del usuario sin plantillas ajenas
+    // Turn 1 (historial limpio o inicio de acompañamiento): Responder directamente al mensaje del usuario sin plantillas ajenas ni eco robótico
     if (isCleanHistory) {
+      if (isCrimeOrTheft) {
+        return {
+          replyText: `Una situación que involucra robo de material o faltas a la integridad y legalidad en la empresa es un hecho de máxima gravedad que trasciende el manejo habitual de equipo, ${leaderName}.\n\nPara evaluar los hechos con rigor y evitar pasos en falso: ¿cuáles son las evidencias concretas con las que se cuenta hasta ahora, qué protocolos existen en la empresa con Recursos Humanos o Seguridad, y la persona involucrada ya fue confrontada directamente?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Falta Grave y Protocolos Internos/Seguridad',
+        };
+      }
+
       if (isHierarchyOrBossConflict) {
         return {
-          replyText: `Que ocurra una falta de respeto o una situación de tensión en el trato con tu jefatura o dirección es un reto sumamente delicado y desgastante para cualquier líder, ${leaderName}.\n\nPara comprender con exactitud los hechos y el contexto sin emitir juicios anticipados: ¿qué ocurrió concretamente en esa interacción y de qué manera está impactando en tu tranquilidad, en tu toma de decisiones y en tu equipo?`,
+          replyText: `Que ocurra un abuso de autoridad o una falta de respeto de tu jefatura en público frente a otros colaboradores es una situación inaceptable que vulnera tu liderazgo y genera un desgaste severo, ${leaderName}.\n\nPara enfocar la situación con claridad estratégica: ¿cuál era el contexto de la junta o reunión cuando esto ocurrió, hubo alguna reacción de tu parte o del equipo en ese instante, y se trata de un comportamiento repetitivo del jefe o de un hecho aislado?`,
           readyToAdvance: false,
           advancePrompt: null,
           detectedTheme: 'Falta de Respeto y Relación con Jefatura',
@@ -999,10 +1060,8 @@ function generateDeterministicCoaching({
         };
       }
 
-      const rawSnippet = (cleanMsg || sessionData?.initialChallenge || sessionData?.title || '').trim();
-      const snippet = rawSnippet.slice(0, 80);
       return {
-        replyText: `Entiendo con total claridad el reto que me planteas sobre "${snippet}${rawSnippet.length > 80 ? '...' : ''}", ${leaderName}.\n\nPara comprender la situación a fondo desde los hechos observables y sin suposiciones: ¿quiénes están directamente involucrados y qué resultado o cambio concreto buscas obtener en este momento?`,
+        replyText: `Comprendo la complejidad de la situación que estás enfrentando en tu área y el impacto que esto genera en tu liderazgo, ${leaderName}.\n\nPara profundizar en los hechos concretos y evitar suposiciones: ¿cómo se originó esta situación y qué hechos observables han ocurrido recientemente entre las personas involucradas?`,
         readyToAdvance: false,
         advancePrompt: null,
         detectedTheme: 'Mapeo de Hechos',
@@ -1013,22 +1072,42 @@ function generateDeterministicCoaching({
       t.includes('impacto operativo') || t.includes('políticas') || t.includes('politicas') || t.includes('precedentes')
     );
     const askedAgreementsOrPriorTalk = prevLidactaTexts.some((t: string) =>
-      t.includes('acuerdos específicos') || t.includes('conversación previa') || t.includes('conversacion previa') || t.includes('compromisos pactados')
+      t.includes('acuerdos específicos') || t.includes('conversación previa') || t.includes('conversacion previa') || t.includes('compromisos pactados') || t.includes('en privado con tu jefe')
     );
 
-    // 0. Caso de Jerarquía o Respeto con Jefatura
-    if (isHierarchyOrBossConflict) {
-      if (!askedAgreementsOrPriorTalk) {
+    // 0. Caso Delito / Robo de material en turnos posteriores
+    if (isCrimeOrTheft) {
+      if (!askedImpactOrPolicies) {
         return {
-          replyText: `Comprendo la complejidad de gestionar esta tensión con tu jefatura, ${leaderName}. Para enfocar la mejor estrategia: ¿qué conversación previa o qué límites has podido plantear hasta ahora respecto a este trato, y qué consecuencias inmediatas ves si no se aclara la situación?`,
+          replyText: `Comprendo la gravedad de este hecho sobre los bienes de la empresa, ${leaderName}. Para dimensionar la situación con rigor: ¿qué impacto operativo o de seguridad inmediata ha tenido el faltante, y qué protocolos formales existen con Recursos Humanos o Seguridad Patrimonial para proceder?`,
           readyToAdvance: false,
           advancePrompt: null,
-          detectedTheme: 'Conversación Difícil con Jefatura',
+          detectedTheme: 'Protocolos de Seguridad Patrimonial',
+        };
+      }
+      if (!askedAgreementsOrPriorTalk) {
+        return {
+          replyText: `Teniendo claro el protocolo, ${leaderName}: ¿la persona involucrada ya fue confrontada directamente, o qué evidencias documentales o testimoniales respaldan el señalamiento?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Evidencias y Confrontación Directa',
         };
       }
     }
 
-    // 1. Caso Disciplinario o Normativo (ej. ausencias, vacaciones no autorizadas, faltas graves)
+    // 1. Caso de Jerarquía o Respeto con Jefatura
+    else if (isHierarchyOrBossConflict) {
+      if (!askedAgreementsOrPriorTalk) {
+        return {
+          replyText: `Comprendo el impacto que tiene este trato o abuso de autoridad de la jefatura, ${leaderName}. Para enfocar cómo abordarlo: ¿has tenido la oportunidad de conversar en privado con tu jefe sobre este hecho específico, o cómo ha sido la dinámica de comunicación entre ustedes antes de esta situación?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Relación con Jefatura',
+        };
+      }
+    }
+
+    // 2. Caso Disciplinario o Normativo (ej. ausencias, vacaciones no autorizadas, faltas graves)
     else if (isDisciplinaryOrAbsenceCase) {
       if (!askedImpactOrPolicies) {
         return {
@@ -1049,7 +1128,7 @@ function generateDeterministicCoaching({
       }
     }
 
-    // 2. Caso de Actitud o Entregas / Tareas
+    // 3. Caso de Actitud o Entregas / Tareas
     else if (isAttitudeOrDelivery) {
       if (!askedAgreementsOrPriorTalk) {
         return {
@@ -1070,7 +1149,7 @@ function generateDeterministicCoaching({
       }
     }
 
-    // 3. Caso Salarial / Compensación
+    // 4. Caso Salarial / Compensación
     else if (isSalaryIssue) {
       if (!askedImpactOrPolicies) {
         return {
@@ -1091,18 +1170,45 @@ function generateDeterministicCoaching({
       }
     }
 
-    // 4. Caso General
+    // 5. Caso General
     else {
       if (!askedAgreementsOrPriorTalk) {
-        const rawSnippet = (cleanMsg || sessionData?.initialChallenge || sessionData?.title || '').trim();
-        const snippet = rawSnippet.slice(0, 80);
         return {
-          replyText: `Entiendo con total claridad el reto que me planteas sobre "${snippet}${rawSnippet.length > 80 ? '...' : ''}", ${leaderName}. Para enfocar los hechos observables: ¿cuáles han sido los acuerdos específicos previos entre ustedes sobre este tema y cuál ha sido la conducta directa de las personas involucradas?`,
+          replyText: `Comprendo la situación que describes en tu equipo, ${leaderName}. Para enfocar los hechos observables y evitar interpretaciones: ¿cuáles han sido los acuerdos específicos previos entre ustedes sobre este tema y cuál ha sido la conducta directa de las personas involucradas?`,
           readyToAdvance: false,
           advancePrompt: null,
           detectedTheme: 'Mapeo de Hechos',
         };
       }
+    }
+
+    // Regla de profundización obligatoria: Mínimo 2-3 turnos de escucha antes de desplegar el resumen final
+    const leaderTurnsCount = (conversationHistory || []).filter((m: any) => m.sender === 'leader' || m.role === 'user').length;
+    if (leaderTurnsCount < 2) {
+      if (isCrimeOrTheft) {
+        return {
+          replyText: `Tomo nota de este antecedente, ${leaderName}. Para asegurar que cualquier paso cuente con el debido respaldo interno y legal: ¿quién más en la gerencia o dirección tiene conocimiento de esto y qué medidas provisionales se han tomado para resguardar la operación?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Investigación y Medidas Internas',
+        };
+      }
+
+      if (isHierarchyOrBossConflict) {
+        return {
+          replyText: `Comprendo el impacto que este trato tiene en tu posición, ${leaderName}. Para valorar las alternativas con objetividad: ¿qué margen de conversación privada ves posible con tu jefe para delimitar acuerdos profesionales, o consideras necesario involucrar a un tercero como Recursos Humanos o una dirección superior?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Delimitación de Límites Jerárquicos',
+        };
+      }
+
+      return {
+        replyText: `Te escucho con atención, ${leaderName}. Para terminar de mapear el impacto real antes de sintetizar: ¿de qué manera específica está afectando esta situación el clima de trabajo, los resultados del área o tu propia tranquilidad en el día a día?`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        detectedTheme: 'Profundización de Impacto',
+      };
     }
 
     // Cierre mediante Resumen de Validación

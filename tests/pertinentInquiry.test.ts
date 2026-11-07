@@ -115,4 +115,122 @@ describe('Reglas Estrictas de Apertura, Indagación y Calidad (Etapa 1)', () => 
       );
     }
   });
+
+  it('9. Verificación de las 4 Reglas Estrictas de Interacción de la Etapa 1 en systemPrompt', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    const respondTsContent = fs.readFileSync(path.resolve('api/mentor/respond.ts'), 'utf-8');
+    const serverTsContent = fs.readFileSync(path.resolve('server.ts'), 'utf-8');
+
+    const requiredRuleSnippets = [
+      '1. PROHIBICIÓN DE ECO ROBÓTICO:',
+      '2. REGLA DE PROFUNDIZACIÓN OBLIGATORIA (MÍNIMO 2-3 TURNOS DE ESCUCHA):',
+      '3. ADAPTACIÓN DE PREGUNTAS A LA NATURALEZA DEL PROBLEMA:',
+      '4. REACCIÓN DIRECTA ANTE CORRECCIONES DEL USUARIO:',
+      'robo de material',
+      'abuso de autoridad del jefe en público',
+    ];
+
+    for (const snippet of requiredRuleSnippets) {
+      assert.ok(
+        respondTsContent.includes(snippet),
+        `api/mentor/respond.ts debe incluir en systemPrompt "${snippet}"`
+      );
+      assert.ok(
+        serverTsContent.includes(snippet),
+        `server.ts debe incluir en systemPrompt "${snippet}"`
+      );
+    }
+  });
+
+  it('10. Prohibición de Eco Robótico: Ningún archivo genera "Entiendo con total claridad el reto que me planteas sobre"', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    const respondTsContent = fs.readFileSync(path.resolve('api/mentor/respond.ts'), 'utf-8');
+    const serverTsContent = fs.readFileSync(path.resolve('server.ts'), 'utf-8');
+
+    // Comprobar que la frase robótica no se genera activamente en respuestas
+    assert.ok(!respondTsContent.includes('replyText: `Entiendo con total claridad el reto que me planteas sobre'));
+    assert.ok(!serverTsContent.includes('replyText: `Entiendo con total claridad el reto que me planteas sobre'));
+  });
+
+  it('11. Adaptación de Preguntas: Delito o robo de material indaga evidencias, protocolos y confrontación (sin preguntas genéricas)', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    const respondTsContent = fs.readFileSync(path.resolve('api/mentor/respond.ts'), 'utf-8');
+    const serverTsContent = fs.readFileSync(path.resolve('server.ts'), 'utf-8');
+
+    // Validar indagación de evidencias, protocolos y confrontación
+    const crimeInquirySnippets = [
+      'evidencias concretas',
+      'Recursos Humanos o Seguridad',
+      'confrontada directamente',
+    ];
+
+    for (const snippet of crimeInquirySnippets) {
+      assert.ok(respondTsContent.includes(snippet));
+      assert.ok(serverTsContent.includes(snippet));
+    }
+
+    // Verificar que en caso de robo se prohíben preguntas genéricas como "¿qué cambio concreto buscas obtener?"
+    assert.ok(respondTsContent.includes('Prohibido terminantemente hacer preguntas genéricas como "¿qué cambio concreto buscas obtener?"'));
+    assert.ok(serverTsContent.includes('Prohibido terminantemente hacer preguntas genéricas como "¿qué cambio concreto buscas obtener?"'));
+  });
+
+  it('12. Adaptación de Preguntas: Conflicto jerárquico (abuso de autoridad en público) indaga contexto, reacción y recurrencia', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    const respondTsContent = fs.readFileSync(path.resolve('api/mentor/respond.ts'), 'utf-8');
+    const serverTsContent = fs.readFileSync(path.resolve('server.ts'), 'utf-8');
+
+    const bossInquirySnippets = [
+      'contexto de la junta o reunión',
+      'reacción de tu parte o del equipo',
+      'comportamiento repetitivo del jefe o de un hecho aislado',
+    ];
+
+    for (const snippet of bossInquirySnippets) {
+      assert.ok(respondTsContent.includes(snippet));
+      assert.ok(serverTsContent.includes(snippet));
+    }
+  });
+
+  it('13. Reacción Directa ante Correcciones del Usuario: Disculpa en 1 frase y reorientación sin resumen sintético', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    const respondTsContent = fs.readFileSync(path.resolve('api/mentor/respond.ts'), 'utf-8');
+    const serverTsContent = fs.readFileSync(path.resolve('server.ts'), 'utf-8');
+
+    // Detección de correcciones
+    const correctionKeywords = ['te confundiste', 'eso no es lo que me preocupa'];
+    for (const kw of correctionKeywords) {
+      assert.ok(respondTsContent.includes(`'${kw}'`));
+      assert.ok(serverTsContent.includes(`'${kw}'`));
+    }
+
+    // Disculpa en 1 frase y pregunta reorientadora
+    assert.ok(respondTsContent.includes('Una disculpa por la confusión'));
+    assert.ok(serverTsContent.includes('Una disculpa por la confusión'));
+    assert.ok(respondTsContent.includes('detectedTheme: \'Reorientación por Corrección\''));
+    assert.ok(serverTsContent.includes('detectedTheme: \'Reorientación por Corrección\''));
+  });
+
+  it('14. Regla de Profundización Obligatoria: Mínimo 2-3 turnos de escucha antes de desplegar el resumen final', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    const respondTsContent = fs.readFileSync(path.resolve('api/mentor/respond.ts'), 'utf-8');
+    const serverTsContent = fs.readFileSync(path.resolve('server.ts'), 'utf-8');
+
+    assert.ok(respondTsContent.includes('leaderTurnsCount < 2'));
+    assert.ok(serverTsContent.includes('leaderTurnsCount < 2'));
+    assert.ok(respondTsContent.includes('Profundización de Impacto'));
+    assert.ok(serverTsContent.includes('Profundización de Impacto'));
+  });
 });
+
