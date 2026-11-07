@@ -40,28 +40,36 @@ function extractDiagnosticVariables(
     'no esta contemplado'
   ].some((k) => lower.includes(k));
 
-  // 0. EJE INAMOVIBLE: Detect disciplinary / unauthorized vacation / absence breach as primary anchor
+  // 0. Detect hierarchy / boss / disrespect friction
+  const isHierarchyOrBossConflict = [
+    'jefe', 'jefa', 'jefatura', 'director', 'directora', 'gerente', 'gerencia',
+    'falta de respeto', 'respeto', 'me gritó', 'me grito', 'descalificó', 'descalifico',
+    'humilló', 'humillo', 'maltrato', 'trato injusto', 'trato prepotente', 'prepotente',
+    'mi superior', 'liderazgo superior'
+  ].some((k) => lower.includes(k) || (sessionContext?.initialChallenge && sessionContext.initialChallenge.toLowerCase().includes(k)) || (sessionContext?.title && sessionContext.title.toLowerCase().includes(k)));
+
+  // 1. EJE INAMOVIBLE: Detect disciplinary / unauthorized vacation / absence breach as primary anchor
+  // ONLY if not a hierarchy / boss conflict and explicitly involves unexcused absence or vacations
   const anchorText = [
     sessionContext?.initialChallenge,
     sessionContext?.title,
     (history && history.length > 0 ? (history[0]?.text || history[0]?.content) : ''),
   ].filter(Boolean).join(' ').toLowerCase();
 
-  const isDisciplinaryOrAbsenceCase = [
-    'vacacion', 'vacación', 'vacaciones', 'ausencia', 'ausencias', 'falta', 'faltó', 'falto',
-    'faltas', 'no vino', 'no se presento', 'no se presentó', 'abandono', 'abandonó', 'sin permiso',
-    'sin autorizacion', 'sin autorización', 'aviso por mensaje', 'avisó por mensaje', 'por whatsapp',
-    'notifico por mensaje', 'notificó por mensaje', 'desacato', 'insubordinacion', 'insubordinación',
-    'disciplina', 'disciplinaria', 'sancion', 'sanción', 'sancionar'
+  const isDisciplinaryOrAbsenceCase = !isHierarchyOrBossConflict && [
+    'vacacion', 'vacación', 'vacaciones', 'ausencia injustificada', 'ausencias injustificadas',
+    'días sin permiso', 'dias sin permiso', 'sin autorizacion', 'sin autorización',
+    'aviso por mensaje', 'avisó por mensaje', 'por whatsapp', 'notifico por mensaje', 'notificó por mensaje',
+    'no vino a trabajar', 'abandono de trabajo', 'abandono de puesto', 'faltar al trabajo'
   ].some((k) => anchorText.includes(k) || lower.includes(k));
 
-  const concernsSanctionOrReturn = [
+  const concernsSanctionOrReturn = !isHierarchyOrBossConflict && [
     'sancion', 'sanción', 'sancionar', 'regrese', 'vuelva', 'reincorpore', 'cuando llegue',
     'cómo hablar', 'como hablar', 'consecuencia', 'amonestacion', 'amonestación', 'acta administrativa',
     'despido', 'baja', 'castigo', 'proceder', 'medida', 'regreso'
   ].some((k) => lower.includes(k));
 
-  // 1. Detect salary / compensation / money / raise / counteroffer
+  // 2. Detect salary / compensation / money / raise / counteroffer
   const isSalaryCase = [
     'sueldo', 'salario', 'aumento', 'aumento de sueldo', 'aumento salarial', 'pagar', 'paga',
     'remuneracion', 'remuneración', 'compensacion', 'compensación', 'tabulador', 'dinero',
@@ -69,38 +77,40 @@ function extractDiagnosticVariables(
     'ganar mas', 'ganar más', 'exige aumento', 'exigiendo sueldo', 'pide aumento'
   ].some((k) => lower.includes(k));
 
-  // 2. Detect shift handoff / logs / veteran resistance
+  // 3. Detect shift handoff / logs / veteran resistance
   const isShiftLogCase = [
     'bitacora', 'bitácora', 'cambio de turno', 'relevo de turno', 'supervisor veterano',
     'prensas', 'celda robótica', 'ernesto'
   ].some((k) => lower.includes(k));
 
-  // 3. Detect delegation / audit / micromanagement
+  // 4. Detect delegation / audit / micromanagement
   const isDelegationCase = [
     'delegar', 'delegación', 'delegacion', 'auditoría', 'auditoria', 'iatf', 'absorber',
     'novato', 'novatos', 'revisar todo', 'cuello de botella', 'supervisores novatos'
   ].some((k) => lower.includes(k));
 
-  // 4. Detect customer / client conflict (ONLY if actually mentioned in case!)
+  // 5. Detect customer / client conflict (ONLY if actually mentioned in case!)
   const isClientCase = [
     'cliente', 'queja de cliente', 'entrega al cliente', 'pedido del cliente', 'proveedor'
   ].some((k) => lower.includes(k));
 
-  // 5. Detect performance / task non-compliance
-  const isTaskNonComplianceCase = [
+  // 6. Detect performance / task non-compliance
+  const isTaskNonComplianceCase = !isHierarchyOrBossConflict && [
     'entrega', 'entregable', 'plazo', 'fecha límite', 'fecha limite', 'no cumple', 'incumple',
     'retraso', 'desempeño', 'desempeno', 'resultados', 'metas'
   ].some((k) => lower.includes(k));
 
-  // 6. Detect interpersonal friction / attitude / resistance
-  const isAttitudeCase = [
+  // 7. Detect interpersonal friction / attitude / resistance
+  const isAttitudeCase = !isHierarchyOrBossConflict && [
     'actitud', 'defensiva', 'desmotivacion', 'desmotivación', 'apatía', 'apatia', 'resistencia',
     'conflicto', 'roce', 'desacuerdo', 'quejas'
   ].some((k) => lower.includes(k));
 
   // Formulate 1: Hechos y situación (Lo que está pasando objetivamente con el colaborador y las tareas)
   let factsAndSituation = '';
-  if (isDisciplinaryOrAbsenceCase) {
+  if (isHierarchyOrBossConflict) {
+    factsAndSituation = 'La situación de tensión y falta de respeto experimentada en la relación o interacción con la jefatura.';
+  } else if (isDisciplinaryOrAbsenceCase) {
     factsAndSituation = 'La ausencia injustificada del colaborador al tomarse días de descanso o vacaciones sin previa autorización, limitándose a avisar por mensaje.';
   } else if (isSalaryCase) {
     if (raiseNotAnOption) {
@@ -119,14 +129,16 @@ function extractDiagnosticVariables(
   } else if (isAttitudeCase) {
     factsAndSituation = 'La postura a la defensiva y la resistencia para alinearse a las tareas y acuerdos cotidianos de trabajo.';
   } else {
-    const rawSnippet = (sessionContext?.initialChallenge || sessionContext?.title || currentMsg || '').replace(/\s+/g, ' ').trim();
+    const rawSnippet = (currentMsg || sessionContext?.initialChallenge || sessionContext?.title || '').replace(/\s+/g, ' ').trim();
     const snippet = rawSnippet ? rawSnippet.slice(0, 95) : 'la situación operativa y los acuerdos de trabajo';
     factsAndSituation = `La situación observada en tu equipo sobre: "${snippet}${rawSnippet.length > 95 ? '...' : ''}".`;
   }
 
   // Formulate 2: Dilema del líder (La encrucijada concreta del líder)
   let leaderDilemma = '';
-  if (isDisciplinaryOrAbsenceCase) {
+  if (isHierarchyOrBossConflict) {
+    leaderDilemma = 'Hacer valer tus límites profesionales y defender tu dignidad y autonomía laboral con asertividad y temple, sin poner en riesgo la relación jerárquica ni la estabilidad de tu posición o la de tu equipo.';
+  } else if (isDisciplinaryOrAbsenceCase) {
     if (concernsSanctionOrReturn) {
       leaderDilemma = 'Definir con Recursos Humanos la sanción o consecuencia disciplinaria correcta conforme a reglamento y sostener una conversación asertiva y firme al momento de su regreso, sin actuar desde la molestia pero sin mostrar permisividad.';
     } else {
@@ -156,7 +168,9 @@ function extractDiagnosticVariables(
   // Formulate 3: Impacto y reto principal (Efecto en el equipo y objetivo clave a resolver)
   let impactAndMainChallenge = '';
   const expressesFatigue = ['cansad', 'agota', 'harto', 'frustra', 'estres', 'estrés', 'abrumad', 'desgaste'].some((k) => lower.includes(k));
-  if (isDisciplinaryOrAbsenceCase) {
+  if (isHierarchyOrBossConflict) {
+    impactAndMainChallenge = 'Frenar el desgaste emocional, recuperar la claridad estratégica y definir el mejor canal o momento para sostener una conversación asertiva y firme que restablezca el respeto mutuo.';
+  } else if (isDisciplinaryOrAbsenceCase) {
     impactAndMainChallenge = 'Restablecer la disciplina y el respeto a las normas del equipo, evitando sentar un precedente negativo de permisividad o afectación a la equidad entre los demás colaboradores.';
   } else if (isSalaryCase) {
     impactAndMainChallenge = expressesFatigue
@@ -335,12 +349,18 @@ function generateContextualCoachReply(
   }
 
   if (stage === 1) {
-    const isDisciplinaryOrNormative = [
-      'vacacion', 'vacación', 'vacaciones', 'falta', 'faltó', 'falto', 'faltas', 'ausencia', 'ausencias',
-      'no vino', 'no se presento', 'no se presentó', 'abandono', 'abandonó', 'sin permiso',
-      'sin autorizacion', 'sin autorización', 'aviso por mensaje', 'avisó por mensaje', 'por whatsapp',
-      'notifico por mensaje', 'notificó por mensaje', 'desacato', 'insubordinacion', 'insubordinación',
-      'disciplina', 'disciplinaria', 'reglamento', 'normativa', 'normas'
+    const isHierarchyOrBossConflict = [
+      'jefe', 'jefa', 'jefatura', 'director', 'directora', 'gerente', 'gerencia',
+      'falta de respeto', 'respeto', 'me gritó', 'me grito', 'descalificó', 'descalifico',
+      'humilló', 'humillo', 'maltrato', 'trato injusto', 'trato prepotente', 'prepotente',
+      'mi superior', 'liderazgo superior'
+    ].some((k) => lowerMsg.includes(k) || (sessionContext?.initialChallenge && sessionContext.initialChallenge.toLowerCase().includes(k)) || (sessionContext?.title && sessionContext.title.toLowerCase().includes(k)));
+
+    const isDisciplinaryOrAbsenceCase = !isHierarchyOrBossConflict && [
+      'vacacion', 'vacación', 'vacaciones', 'ausencia injustificada', 'ausencias injustificadas',
+      'días sin permiso', 'dias sin permiso', 'sin autorizacion', 'sin autorización',
+      'aviso por mensaje', 'avisó por mensaje', 'notifico por mensaje', 'notificó por mensaje',
+      'no vino a trabajar', 'abandono de trabajo', 'abandono de puesto', 'faltar al trabajo'
     ].some((k) => lowerMsg.includes(k) || (sessionContext?.initialChallenge && sessionContext.initialChallenge.toLowerCase().includes(k)) || (sessionContext?.title && sessionContext.title.toLowerCase().includes(k)));
 
     const isSalaryIssue = [
@@ -348,29 +368,92 @@ function generateContextualCoachReply(
       'compensacion', 'compensación', 'pagar', 'paga', 'exigiendo sueldo', 'pide aumento'
     ].some((k) => lowerMsg.includes(k) || (sessionContext?.initialChallenge && sessionContext.initialChallenge.toLowerCase().includes(k)) || (sessionContext?.title && sessionContext.title.toLowerCase().includes(k)));
 
-    const isAttitudeOrDelivery = [
+    const isAttitudeOrDelivery = !isHierarchyOrBossConflict && [
       'entrega', 'entregables', 'plazo', 'fecha limite', 'fecha límite', 'retraso', 'retrasos',
       'no cumple', 'incumple', 'desempeño', 'calidad', 'actitud', 'defensiva', 'desmotivacion',
-      'desmotivación', 'resistencia', 'apatia', 'apatía', 'compromiso', 'tarea', 'tareas'
+      'desmotivación', 'resistencia', 'apatia', 'apatía', 'compromiso'
     ].some((k) => lowerMsg.includes(k) || (sessionContext?.initialChallenge && sessionContext.initialChallenge.toLowerCase().includes(k)) || (sessionContext?.title && sessionContext.title.toLowerCase().includes(k)));
+
+    const isCleanHistory = !history || history.length === 0 || history.every((m: any) => m.sender === 'leader' || m.role === 'user');
+
+    // Turn 1 (historial limpio o inicio de acompañamiento): Responder directamente al mensaje del usuario sin plantillas ajenas
+    if (isCleanHistory) {
+      if (isHierarchyOrBossConflict) {
+        return {
+          replyText: `Que ocurra una falta de respeto o una situación de tensión en el trato con tu jefatura o dirección es un reto sumamente delicado y desgastante para cualquier líder, ${leaderName}.\n\nPara comprender con exactitud los hechos y el contexto sin emitir juicios anticipados: ¿qué ocurrió concretamente en esa interacción y de qué manera está impactando en tu tranquilidad, en tu toma de decisiones y en tu equipo?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Falta de Respeto y Relación con Jefatura',
+          isTherapeuticCase: false,
+        };
+      }
+
+      if (isDisciplinaryOrAbsenceCase) {
+        return {
+          replyText: `Que un colaborador se tome días sin autorización previa y solo lo notifique por mensaje es una falta grave a los acuerdos del equipo y a la disciplina operativa, ${leaderName}.\n\nPara dimensionar la gravedad y actuar con la firmeza debida: ¿qué impacto operativo inmediato está teniendo esto en la continuidad de las tareas del equipo, y existen políticas, precedentes o procesos disciplinarios claros en la empresa para atender un caso así?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Falta Disciplinaria y Normativa',
+          isTherapeuticCase: false,
+        };
+      }
+
+      if (isSalaryIssue) {
+        return {
+          replyText: `Que un colaborador condicione su permanencia o actitud exigiendo un incremento de sueldo inmediato genera una presión delicada sobre tu liderazgo y sobre la equidad interna del equipo, ${leaderName}.\n\nPara dimensionar el escenario completo: ¿qué expectativas puntuales ha puesto sobre la mesa, y qué políticas o márgenes de tabulador existen en la empresa para una revisión de este tipo?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Exigencia Salarial y Equidad',
+          isTherapeuticCase: false,
+        };
+      }
+
+      if (isAttitudeOrDelivery) {
+        return {
+          replyText: `Que existan fallas recurrentes en las entregas y una postura a la defensiva desgasta la dinámica del equipo y compromete los resultados que debes entregar, ${leaderName}.\n\nPara basarnos en hechos concretos y verificables: ¿cuáles fueron los acuerdos y plazos específicos que pactaron para esa tarea, y qué conversación previa directa has tenido con la persona sobre este incumplimiento?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Acuerdos de Entrega y Desempeño',
+          isTherapeuticCase: false,
+        };
+      }
+
+      const rawSnippet = (cleanMsg || sessionContext?.initialChallenge || sessionContext?.title || '').trim();
+      const snippet = rawSnippet.slice(0, 80);
+      return {
+        replyText: `Entiendo con total claridad el reto que me planteas sobre "${snippet}${rawSnippet.length > 80 ? '...' : ''}", ${leaderName}.\n\nPara comprender la situación a fondo desde los hechos observables y sin suposiciones: ¿quiénes están directamente involucrados y qué resultado o cambio concreto buscas obtener en este momento?`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        detectedTheme: 'Mapeo de Hechos',
+        isTherapeuticCase: false,
+      };
+    }
 
     const askedImpactOrPolicies = prevLidactaTexts.some((t: string) =>
       t.includes('impacto operativo') || t.includes('políticas') || t.includes('politicas') || t.includes('precedentes')
     );
     const askedAgreementsOrPriorTalk = prevLidactaTexts.some((t: string) =>
-      t.includes('acuerdos específicos') || t.includes('conversación previa') || t.includes('conversacion previa') || t.includes('compromisos pactados')
+      t.includes('acuerdos específicos') || t.includes('conversación previa') || t.includes('conversacion previa') || t.includes('compromisos pactados') || t.includes('en privado con tu jefe')
     );
 
-    // 1. Caso Disciplinario o Normativo (ej. ausencias, vacaciones no autorizadas, faltas graves)
-    if (isDisciplinaryOrNormative) {
-      if (!askedImpactOrPolicies) {
-        const isVacationOrAbsence = lowerMsg.includes('vacacion') || lowerMsg.includes('ausencia') || lowerMsg.includes('falta') || lowerMsg.includes('permiso') || lowerMsg.includes('mensaje');
-        const mirrorSentence = isVacationOrAbsence
-          ? `Que un colaborador se tome días sin autorización previa y solo lo notifique por mensaje es una falta grave a los acuerdos del equipo y a la disciplina operativa, ${leaderName}.`
-          : `Que ocurra una falta a las normas y acuerdos de trabajo sin autorización previa es una situación seria que impacta directamente la disciplina y la equidad en el equipo, ${leaderName}.`;
-
+    // 0. Caso Jefatura en turnos posteriores
+    if (isHierarchyOrBossConflict) {
+      if (!askedAgreementsOrPriorTalk) {
         return {
-          replyText: `${mirrorSentence} Para dimensionar la gravedad y actuar con la firmeza debida: ¿qué impacto operativo inmediato está teniendo esto en la continuidad de las tareas del equipo, y existen políticas, precedentes o procesos disciplinarios claros en la empresa para atender un caso así?`,
+          replyText: `Comprendo el impacto que tiene este roce con la jefatura, ${leaderName}. Para enfocar cómo abordarlo: ¿has tenido la oportunidad de conversar en privado con tu jefe sobre este hecho específico, o cómo ha sido la dinámica de comunicación entre ustedes antes de esta situación?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Relación con Jefatura',
+          isTherapeuticCase: false,
+        };
+      }
+    }
+
+    // 1. Caso Disciplinario o Normativo (ej. ausencias, vacaciones no autorizadas)
+    else if (isDisciplinaryOrAbsenceCase) {
+      if (!askedImpactOrPolicies) {
+        return {
+          replyText: `Que un colaborador se tome días sin autorización previa y solo lo notifique por mensaje es una falta grave a los acuerdos del equipo y a la disciplina operativa, ${leaderName}.\n\nPara dimensionar la gravedad y actuar con la firmeza debida: ¿qué impacto operativo inmediato está teniendo esto en la continuidad de las tareas del equipo, y existen políticas, precedentes o procesos disciplinarios claros en la empresa para atender un caso así?`,
           readyToAdvance: false,
           advancePrompt: null,
           detectedTheme: 'Falta Disciplinaria y Normativa',
@@ -580,14 +663,41 @@ export default async function handler(req: any, res: any) {
 
     // STRICT CASE ISOLATION:
     // Only accept messages that belong to the active caseId / mentorshipId
-    const resolvedHistory = rawHistory.filter((m: any) => {
+    let resolvedHistory = rawHistory.filter((m: any) => {
       if (!m || typeof m !== 'object') return false;
       const mCase = m.caseId || m.mentorshipId;
-      if (targetCaseId && mCase && mCase !== targetCaseId) {
-        return false;
+      if (targetCaseId) {
+        return mCase === targetCaseId;
       }
       return true;
     });
+
+    // If it is a new accompaniment, background message history MUST be strictly empty []
+    const isNewAccompaniment =
+      Boolean(body?.isNewCase) ||
+      (currentStageNum === 1 && (resolvedHistory.length <= 1 && resolvedHistory.every((m: any) => (m.sender === 'leader' || m.role === 'user'))));
+
+    if (isNewAccompaniment) {
+      resolvedHistory = [];
+    } else {
+      // If the last message in resolvedHistory is identical to the current userMessage, pop it to avoid duplication
+      if (
+        resolvedHistory.length > 0 &&
+        (resolvedHistory[resolvedHistory.length - 1].sender === 'leader' || resolvedHistory[resolvedHistory.length - 1].role === 'user') &&
+        (resolvedHistory[resolvedHistory.length - 1].text || resolvedHistory[resolvedHistory.length - 1].content || '').trim() === resolvedUserMessage
+      ) {
+        resolvedHistory = resolvedHistory.slice(0, -1);
+      }
+    }
+
+    const activeCaseTitle = (sessionData?.id === targetCaseId ? sessionData?.title : '') || resolvedUserMessage.slice(0, 60);
+    const activeCaseChallenge = (sessionData?.id === targetCaseId ? sessionData?.initialChallenge : '') || resolvedUserMessage;
+    const safeSessionContext = {
+      id: targetCaseId,
+      title: activeCaseTitle,
+      initialChallenge: activeCaseChallenge,
+      currentStage: currentStageNum,
+    };
 
     const apiKey =
       process.env.GEMINI_API_KEY ||
@@ -601,7 +711,7 @@ export default async function handler(req: any, res: any) {
         leaderFirstName,
         resolvedUserMessage,
         resolvedHistory,
-        sessionData
+        safeSessionContext
       );
       return res.status(200).json({
         success: true,
@@ -621,8 +731,8 @@ AISLAMIENTO ESTRICTO POR CASO Y CONTEXTO EXCLUSIVO (CRÍTICO)
 ======================================================================
 1. AISLAMIENTO TOTAL POR CASO:
    - Toda tu intervención, desglose diagnóstico, preguntas y síntesis DEBEN basarse ÚNICA Y EXCLUSIVAMENTE en los hechos, personas, conductas y problemática expuestos en ESTE caso particular:
-     * Caso actual: "${sessionData?.title || 'Caso actual'}"
-     * Reto inicial planteado: "${sessionData?.initialChallenge || resolvedUserMessage || ''}"
+     * Caso actual: "${activeCaseTitle || 'Caso actual'}"
+     * Reto inicial planteado: "${activeCaseChallenge || resolvedUserMessage || ''}"
    - ESTÁ TERMINANTEMENTE PROHIBIDO mezclar, inventar o arrastrar información de otros casos o pruebas previas (como conflictos con clientes, entregas de bitácoras de piso o auditorías IATF, A MENOS que el líder los haya mencionado expresamente en ESTA conversación).
    - Si el líder plantea una situación con un colaborador que exige un aumento de sueldo ("exigiendo sueldo"), tu análisis, desglose y preguntas DEBEN versar estrictamente sobre la exigencia salarial, la retención de talento, las expectativas de remuneración y la conversación difícil con ese colaborador. NUNCA introduzcas clientes ni temas ajenos.
 
@@ -717,8 +827,8 @@ Contexto de la sesión:
 - Empresa: ${companyContext?.name || 'Empresa'}
 - Líder: ${leaderProfile?.name || 'Líder'} (${leaderProfile?.position || 'Líder'})
 - Etapa actual: Etapa ${currentStageNum} - ${STAGE_NAMES[currentStageNum] || ''}
-- Caso / Reto actual: ${sessionData?.title || 'Caso actual'}
-- Reto inicial: ${sessionData?.initialChallenge || resolvedUserMessage || ''}
+- Caso / Reto actual: ${activeCaseTitle || 'Caso actual'}
+- Reto inicial: ${activeCaseChallenge || resolvedUserMessage || ''}
 
 Responde SIEMPRE en JSON estricto con esta estructura:
 {
@@ -820,7 +930,8 @@ Responde SIEMPRE en JSON estricto con esta estructura:
         currentStageNum,
         leaderFirstName,
         resolvedUserMessage,
-        resolvedHistory
+        resolvedHistory,
+        safeSessionContext
       );
       return res.status(200).json({
         success: true,
