@@ -768,25 +768,17 @@ export default async function handler(req: any, res: any) {
     const apiKey =
       process.env.GEMINI_API_KEY ||
       process.env.API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.VITE_GEMINI_API_KEY ||
       process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
     if (!apiKey) {
-      console.warn('GEMINI_API_KEY not configured. Generating contextual coaching reply.');
-      const contextual = generateContextualCoachReply(
-        currentStageNum,
-        leaderFirstName,
-        resolvedUserMessage,
-        resolvedHistory,
-        safeSessionContext
-      );
+      console.error('ERROR: No se detectó ninguna GEMINI_API_KEY en process.env');
       return res.status(200).json({
-        success: true,
-        reply: contextual.replyText,
-        text: contextual.replyText,
-        data: {
-          ...contextual,
-          reply: contextual.replyText,
-        },
+        success: false,
+        reply: 'ERROR DE SERVIDOR: No se detectó ninguna GEMINI_API_KEY en process.env',
+        text: 'ERROR DE SERVIDOR: No se detectó ninguna GEMINI_API_KEY en process.env',
+        error: 'No se detectó ninguna GEMINI_API_KEY en process.env',
       });
     }
 
@@ -913,10 +905,12 @@ Responde SIEMPRE en JSON estricto con esta estructura:
     ];
     let data: any = null;
     let ok = false;
+    let lastStatus = 0;
+    let lastErrorText = '';
 
     for (const modelName of modelsToTry) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
         const response = await fetch(url, {
@@ -935,6 +929,7 @@ Responde SIEMPRE en JSON estricto con esta estructura:
           }),
         });
         clearTimeout(timeoutId);
+        lastStatus = response.status;
 
         if (response.ok) {
           data = await response.json();
@@ -942,30 +937,22 @@ Responde SIEMPRE en JSON estricto con esta estructura:
           break;
         }
 
-        const errText = await response.text();
-        console.warn(`Gemini API (${modelName}) returned status ${response.status}:`, errText);
+        lastErrorText = await response.text();
+        console.warn(`Gemini API (${modelName}) returned status ${response.status}:`, lastErrorText);
       } catch (fetchErr: any) {
         clearTimeout(timeoutId);
-        console.warn(`Fetch error with ${modelName}:`, fetchErr?.message || fetchErr);
+        lastErrorText = fetchErr?.message || String(fetchErr);
+        console.warn(`Fetch error with ${modelName}:`, lastErrorText);
       }
     }
 
     if (!ok || !data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-      const contextual = generateContextualCoachReply(
-        currentStageNum,
-        leaderFirstName,
-        resolvedUserMessage,
-        resolvedHistory,
-        safeSessionContext
-      );
+      const errorMsg = lastErrorText || 'No se recibió respuesta válida de los candidatos de la API de Gemini.';
       return res.status(200).json({
-        success: true,
-        reply: contextual.replyText,
-        text: contextual.replyText,
-        data: {
-          ...contextual,
-          reply: contextual.replyText,
-        },
+        success: false,
+        reply: `ERROR DE SERVIDOR (Gemini API ${lastStatus || 'Error'}): ${errorMsg}`,
+        text: `ERROR DE SERVIDOR: ${errorMsg}`,
+        error: errorMsg,
       });
     }
 
@@ -983,7 +970,7 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       parsed = null;
     }
 
-    const responseText = parsed?.replyText || rawText || candidatePartText;
+    const responseText = parsed?.replyText || parsed?.reply || rawText || candidatePartText;
 
     return res.status(200).json({
       success: true,
@@ -995,20 +982,11 @@ Responde SIEMPRE en JSON estricto con esta estructura:
     });
   } catch (error: any) {
     console.error('Error en mentor respond:', error);
-    const contextual = generateContextualCoachReply(
-      currentStageNum,
-      leaderFirstName,
-      '',
-      []
-    );
     return res.status(200).json({
-      success: true,
-      reply: contextual.replyText,
-      text: contextual.replyText,
-      data: {
-        ...contextual,
-        reply: contextual.replyText,
-      },
+      success: false,
+      reply: `ERROR DE SERVIDOR: ${error?.message || JSON.stringify(error)}`,
+      text: `ERROR DE SERVIDOR: ${error?.message || JSON.stringify(error)}`,
+      error: error?.message || 'Error en servidor',
     });
   }
 }
