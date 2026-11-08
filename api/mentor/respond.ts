@@ -925,7 +925,7 @@ Responde SIEMPRE en JSON estricto con esta estructura:
             },
           }),
         });
-        clearTimeout(timeoutId);
+        
         lastStatus = response.status;
 
         if (response.ok) {
