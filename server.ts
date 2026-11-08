@@ -832,11 +832,7 @@ function extractDiagnosticVariablesServer(
   } else if (isAttitudeCase) {
     factsAndSituation = 'La postura a la defensiva y la resistencia para alinearse a las tareas y acuerdos cotidianos de trabajo.';
   } else {
-    // Pick the most substantive snippet available from history or challenge, NEVER from a meta message
-    const substantiveSnippet = allUserTexts.filter((t) => isSubstantiveMessage(t)).pop() || '';
-    const rawSnippet = (sessionContext?.initialChallenge || sessionContext?.title || substantiveSnippet).replace(/\s+/g, ' ').trim();
-    const snippet = rawSnippet ? rawSnippet.slice(0, 95) : 'la situación operativa y los acuerdos de trabajo';
-    factsAndSituation = `La situación observada en tu equipo sobre: "${snippet}${rawSnippet.length > 95 ? '...' : ''}".`;
+    factsAndSituation = 'La dinámica y los desacuerdos observados en el equipo respecto a los compromisos de trabajo cotidianos.';
   }
 
   // Formulate 2: Dilema del líder (La encrucijada concreta del líder)
@@ -1295,16 +1291,13 @@ function generateDeterministicCoaching({
       }
     }
 
-    // SUSPENSIÓN DE RESUMEN AUTOMÁTICO POR NÚMERO DE TURNO:
-    // Contar únicamente turnos del líder que sean sustanciales (no meta-conversaciones ni monosílabos)
-    const substantiveLeaderTurns = (conversationHistory || [])
-      .filter((m: any) => (m.sender === 'leader' || m.role === 'user') && isSubstantiveMessage(m.text || m.content || ''))
-      .length;
-    const isCurrentSubstantive = isSubstantiveMessage(cleanMsg);
+    const hasExploredInitialPilar = prevLidactaTexts.some((t: string) =>
+      t.includes('evidencias concretas') || t.includes('contexto de la junta') || t.includes('impacto operativo inmediato') ||
+      t.includes('expectativas puntuales') || t.includes('acuerdos y plazos específicos') || t.includes('te cuesta delegar')
+    );
 
-    // Si el turno actual es un intento de aclaración, frase corta o el líder aún no aporta suficientes datos sustanciales:
-    // LIDACTA DEBE CONTINUAR INDAGANDO en lugar de forzar la plantilla de cierre de etapa
-    if (!isCurrentSubstantive || substantiveLeaderTurns < 2) {
+    // Si aún no se indaga sobre el impacto o antecedentes, continuar la conversación narrativa
+    if (!hasExploredInitialPilar) {
       if (isCrimeOrTheft) {
         return {
           replyText: `Tomo nota de este antecedente, ${leaderName}. Para asegurar que cualquier paso cuente con el debido respaldo interno y legal: ¿quién más en la gerencia o dirección tiene conocimiento de esto y qué medidas provisionales se han tomado para resguardar la operación?`,
