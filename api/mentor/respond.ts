@@ -948,49 +948,26 @@ Responde SIEMPRE en JSON estricto con esta estructura:
         console.warn(`Fetch error with ${modelName}:`, lastErrorText);
       }
     }
-
-    if (!ok || !data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-      const errorMsg = `[Status ${lastStatus}] ${lastErrorText || 'No se recibió respuesta válida de los candidatos de la API de Gemini.'}`;
-return res.status(200).json({
-  success: false,
-  reply: `ERROR DE SERVIDOR: ${errorMsg}`,
-  text: `ERROR DE SERVIDOR: ${errorMsg}`,
-        error: errorMsg,
+if (!ok || !data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+      const errorMsg = `[Status ${lastStatus}] ${lastErrorText || 'No se recibió respuesta válida de la API de Gemini.'}`;
+      return res.status(200).json({
+        success: false,
+        reply: `ERROR DE SERVIDOR: ${errorMsg}`,
+        text: `ERROR DE SERVIDOR: ${errorMsg}`,
+        error: errorMsg
       });
     }
 
     const candidatePartText = data.candidates[0].content.parts[0].text || '';
-    const rawText = candidatePartText
-      .trim()
-      .replace(/^```json\s*/i, '')
-      .replace(/```$/i, '')
-      .trim();
-
-    let parsed: any = null;
-    try {
-      parsed = JSON.parse(rawText || '{}');
-    } catch {
-      parsed = null;
-    }
-
-    const responseText = parsed?.replyText || parsed?.reply || rawText || candidatePartText;
-
     return res.status(200).json({
       success: true,
-      reply: responseText,
-      text: responseText,
-      data: parsed
-        ? { ...parsed, reply: responseText, replyText: responseText }
-        : { reply: responseText, replyText: responseText },
+      reply: candidatePartText,
+      text: candidatePartText
     });
-  } catch (error: any) {
-  console.error('Error en mentor respond:', error);
-  const userFriendlyMsg = 'El mentor está experimentando alta demanda en este momento. Por favor, intenta enviar tu mensaje de nuevo en unos segundos.';
-  return res.status(200).json({
-    success: true,
-    reply: userFriendlyMsg,
-    text: userFriendlyMsg,
-    response: userFriendlyMsg,
-    error: error?.message || 'Error en servidor',
-  });
+  } catch (globalErr: any) {
+    return res.status(500).json({
+      success: false,
+      error: globalErr?.message || 'Error interno del servidor'
+    });
+  }
 }
