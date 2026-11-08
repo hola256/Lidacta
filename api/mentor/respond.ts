@@ -899,8 +899,7 @@ Responde SIEMPRE en JSON estricto con esta estructura:
 
     const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
     const modelsToTry = [
-      MODEL_NAME,
-      'gemini-1.5-flash-latest',
+      'gemini-2.0-flash',
     ];
     let data: any = null;
     let ok = false;
