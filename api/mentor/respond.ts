@@ -1,3 +1,4 @@
+export const maxDuration = 60;
 const STAGE_NAMES: Record<number, string> = {
   1: 'Detectar qué sucede',
   2: 'Analizar perspectivas y habilidades',
@@ -908,7 +909,7 @@ Responde SIEMPRE en JSON estricto con esta estructura:
     for (let i = 0; i < modelsToTry.length; i++) {
       const modelName = modelsToTry[i];
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos de timeout
+      const timeoutId = setTimeout(() => controller.abort(), 9000); // 30 segundos de timeout
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
         const response = await fetch(url, {
