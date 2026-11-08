@@ -897,9 +897,9 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       pushTurn('user', `Hola Lidacta, estoy en la Etapa ${currentStageNum}.`);
     }
 
-    const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+    const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
     const modelsToTry = [
-      'gemini-2.0-flash',
+      'gemini-3.8-flash',
     ];
     let data: any = null;
     let ok = false;
