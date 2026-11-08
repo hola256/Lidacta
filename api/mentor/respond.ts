@@ -909,7 +909,7 @@ Responde SIEMPRE en JSON estricto con esta estructura:
     for (let i = 0; i < modelsToTry.length; i++) {
       const modelName = modelsToTry[i];
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 segundos de timeout
+     const timeoutId = setTimeout(() => controller.abort(), 50000); // 50 segundos de timeout
       try {
        const fullModel = modelName.startsWith('models/') ? modelName : `models/${modelName}`;
 const url = `https://generativelanguage.googleapis.com/v1/${fullModel}:generateContent?key=${apiKey}`;
