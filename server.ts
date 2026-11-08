@@ -568,7 +568,7 @@ REGLA CRÍTICA ANTI-CICLADO:
 Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSON estricto.`;
 
         const geminiCall = ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+          model: 'gemini-2.0-flash',
           contents: prompt,
           config: {
             systemInstruction: systemPrompt,
