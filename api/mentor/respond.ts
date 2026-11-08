@@ -900,15 +900,18 @@ Responde SIEMPRE en JSON estricto con esta estructura:
     }
 
     const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+    const FALLBACK_MODEL = 'gemini-2.5-flash';
     const modelsToTry = [
-      'gemini-3.8-flash',
+      MODEL_NAME,
+      ...(MODEL_NAME !== FALLBACK_MODEL ? [FALLBACK_MODEL] : []),
     ];
     let data: any = null;
     let ok = false;
     let lastStatus = 0;
     let lastErrorText = '';
 
-    for (const modelName of modelsToTry) {
+    for (let i = 0; i < modelsToTry.length; i++) {
+      const modelName = modelsToTry[i];
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos de timeout
       try {
@@ -939,6 +942,12 @@ Responde SIEMPRE en JSON estricto con esta estructura:
 
         lastErrorText = await response.text();
         console.warn(`Gemini API (${modelName}) returned status ${response.status}:`, lastErrorText);
+
+        // Si devuelve 503 (saturación) o 429 (límite de tasa), hacemos fallback automático al siguiente modelo
+        if (response.status === 503 || response.status === 429) {
+          console.warn(`Saturación/límite de tasa detectado (${response.status}) en ${modelName}. Procediendo con fallback automático...`);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
       } catch (fetchErr: any) {
         clearTimeout(timeoutId);
         lastErrorText = fetchErr?.message || String(fetchErr);

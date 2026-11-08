@@ -568,21 +568,46 @@ REGLA CRÍTICA ANTI-CICLADO:
 Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSON estricto.`;
 
         const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-        const geminiCall = ai.models.generateContent({
-          model: MODEL_NAME,
-          contents: prompt,
-          config: {
-            systemInstruction: systemPrompt,
-            responseMimeType: 'application/json',
-            temperature: 0.7,
-          },
-        });
+        const FALLBACK_MODEL = 'gemini-2.5-flash';
+        let response: any = null;
 
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Gemini API request timeout (fallback activated)')), 30000)
-        );
+        try {
+          const geminiCall = ai.models.generateContent({
+            model: MODEL_NAME,
+            contents: prompt,
+            config: {
+              systemInstruction: systemPrompt,
+              responseMimeType: 'application/json',
+              temperature: 0.7,
+            },
+          });
 
-        const response = await Promise.race([geminiCall, timeoutPromise]);
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Gemini API request timeout (fallback activated)')), 30000)
+          );
+
+          response = await Promise.race([geminiCall, timeoutPromise]);
+        } catch (initialErr: any) {
+          const errStr = String(initialErr?.message || initialErr);
+          if ((errStr.includes('503') || errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('UNAVAILABLE')) && MODEL_NAME !== FALLBACK_MODEL) {
+            console.warn(`Saturación/límite de tasa detectado (${errStr}) en ${MODEL_NAME}. Reintentando con fallback ${FALLBACK_MODEL}...`);
+            const fallbackCall = ai.models.generateContent({
+              model: FALLBACK_MODEL,
+              contents: prompt,
+              config: {
+                systemInstruction: systemPrompt,
+                responseMimeType: 'application/json',
+                temperature: 0.7,
+              },
+            });
+            const timeoutFallback = new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Gemini fallback request timeout')), 30000)
+            );
+            response = await Promise.race([fallbackCall, timeoutFallback]);
+          } else {
+            throw initialErr;
+          }
+        }
 
         const rawText = (response.text || '').trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
         let parsed: any;
