@@ -1,5 +1,7 @@
 import { Resend } from 'resend';
 
+export const maxDuration = 60; // 60 segundos de timeout
+
 // Vercel Serverless Function handler for /api/send
 export default async function handler(req: any, res: any) {
   // CORS Configuration

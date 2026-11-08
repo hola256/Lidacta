@@ -1,8 +1,6 @@
 import { Resend } from 'resend';
 
-export const config = {
-  maxDuration: 15,
-};
+export const maxDuration = 60; // 60 segundos de timeout
 
 // Standalone UserProfile definition to eliminate external module dependencies
 export interface UserProfile {

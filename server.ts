@@ -579,7 +579,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         });
 
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Gemini API request timeout (fallback activated)')), 15000)
+          setTimeout(() => reject(new Error('Gemini API request timeout (fallback activated)')), 30000)
         );
 
         const response = await Promise.race([geminiCall, timeoutPromise]);

@@ -3,9 +3,7 @@ import { Resend } from 'resend';
 // Vercel Serverless Function for /api/users
 // Supports Vercel KV (Upstash Redis), Supabase, and central serverless persistence.
 
-export const config = {
-  maxDuration: 15,
-};
+export const maxDuration = 60; // 60 segundos de timeout
 
 export interface UserProfile {
   id: string;

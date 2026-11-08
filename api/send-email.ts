@@ -1,8 +1,6 @@
 import { Resend } from 'resend';
 
-export const config = {
-  maxDuration: 15,
-};
+export const maxDuration = 60; // 60 segundos de timeout
 
 // Vercel Serverless Function for /api/send-email
 export default async function handler(req: any, res: any) {

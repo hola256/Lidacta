@@ -11,6 +11,8 @@ let adminProfile = {
   updatedAt: new Date().toISOString(),
 };
 
+export const maxDuration = 60; // 60 segundos de timeout
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');

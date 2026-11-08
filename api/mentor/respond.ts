@@ -655,6 +655,8 @@ function generateContextualCoachReply(
   };
 }
 
+export const maxDuration = 60; // 60 segundos de timeout
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -908,7 +910,7 @@ Responde SIEMPRE en JSON estricto con esta estructura:
 
     for (const modelName of modelsToTry) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos de timeout
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
         const response = await fetch(url, {
