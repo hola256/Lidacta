@@ -900,7 +900,7 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       pushTurn('user', `Hola Lidacta, estoy en la Etapa ${currentStageNum}.`);
     }
 
-    const modelsToTry = ['gemini-2.0-flash-exp', 'gemini-1.5-flash-latest', 'gemini-1.5-flash-8b'];
+    const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp'];
     let data: any = null;
     let ok = false;
     let lastStatus = 0;
@@ -911,7 +911,8 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 segundos de timeout
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+       const fullModel = modelName.startsWith('models/') ? modelName : `models/${modelName}`;
+const url = `https://generativelanguage.googleapis.com/v1beta/${fullModel}:generateContent?key=${apiKey}`;
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
