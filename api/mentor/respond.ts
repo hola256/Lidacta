@@ -986,12 +986,13 @@ Responde SIEMPRE en JSON estricto con esta estructura:
         : { reply: responseText, replyText: responseText },
     });
   } catch (error: any) {
-    console.error('Error en mentor respond:', error);
-    return res.status(200).json({
-      success: false,
-      reply: `ERROR DE SERVIDOR: ${error?.message || JSON.stringify(error)}`,
-      text: `ERROR DE SERVIDOR: ${error?.message || JSON.stringify(error)}`,
-      error: error?.message || 'Error en servidor',
-    });
-  }
+  console.error('Error en mentor respond:', error);
+  const userFriendlyMsg = 'El mentor está experimentando alta demanda en este momento. Por favor, intenta enviar tu mensaje de nuevo en unos segundos.';
+  return res.status(200).json({
+    success: true,
+    reply: userFriendlyMsg,
+    text: userFriendlyMsg,
+    response: userFriendlyMsg,
+    error: error?.message || 'Error en servidor',
+  });
 }
