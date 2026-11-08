@@ -943,18 +943,18 @@ Responde SIEMPRE en JSON estricto con esta estructura:
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
       } catch (fetchErr: any) {
-        clearTimeout(timeoutId);
+        
         lastErrorText = fetchErr?.message || String(fetchErr);
         console.warn(`Fetch error with ${modelName}:`, lastErrorText);
       }
     }
 
     if (!ok || !data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-      const errorMsg = lastErrorText || 'No se recibió respuesta válida de los candidatos de la API de Gemini.';
-      return res.status(200).json({
-        success: false,
-        reply: `ERROR DE SERVIDOR (Gemini API ${lastStatus || 'Error'}): ${errorMsg}`,
-        text: `ERROR DE SERVIDOR: ${errorMsg}`,
+      const errorMsg = `[Status ${lastStatus}] ${lastErrorText || 'No se recibió respuesta válida de los candidatos de la API de Gemini.'}`;
+return res.status(200).json({
+  success: false,
+  reply: `ERROR DE SERVIDOR: ${errorMsg}`,
+  text: `ERROR DE SERVIDOR: ${errorMsg}`,
         error: errorMsg,
       });
     }
