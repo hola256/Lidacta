@@ -900,7 +900,7 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       pushTurn('user', `Hola Lidacta, estoy en la Etapa ${currentStageNum}.`);
     }
 
-    const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro'];
+    const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash'];
     let data: any = null;
     let ok = false;
     let lastStatus = 0;
