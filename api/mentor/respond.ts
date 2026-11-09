@@ -924,7 +924,7 @@ Responde SIEMPRE en JSON estricto con esta estructura:
         responseMimeType: "application/json"
       },
       }),
-      signal: AbortSignal.timeout(12000)
+     signal: AbortSignal.timeout(50000)
     });        
         lastStatus = response.status;
 
