@@ -900,7 +900,7 @@ Responde SIEMPRE en JSON estricto con esta estructura:
     }
 
     const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-    const FALLBACK_MODEL = 'gemini-2.5-flash';
+    const FALLBACK_MODEL = 'gemini-3.1-flash-lite';
     const modelsToTry = [
       MODEL_NAME,
       ...(MODEL_NAME !== FALLBACK_MODEL ? [FALLBACK_MODEL] : []),
@@ -939,7 +939,9 @@ Responde SIEMPRE en JSON estricto con esta estructura:
             contents,
             generationConfig: {
               responseMimeType: 'application/json',
-              temperature: 0.7,
+              thinkingConfig: {
+                thinkingLevel: 'LOW',
+              },
             },
           }),
         });
