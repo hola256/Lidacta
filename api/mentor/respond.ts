@@ -912,8 +912,20 @@ Responde SIEMPRE en JSON estricto con esta estructura:
 
     for (let i = 0; i < modelsToTry.length; i++) {
       const modelName = modelsToTry[i];
+      const timerScheduledTime = Date.now();
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 50000); // 50 segundos de timeout
+      const fetchStartTime = Date.now();
+      let headersReceived = false;
+      let headersElapsedMs = 0;
+
+      console.log(
+        `[Lidacta Telemetry] [${modelName}] Iniciando petición a Gemini.\n` +
+        `  - Temporizador programado: ${new Date(timerScheduledTime).toISOString()}\n` +
+        `  - Inicio fetch: ${new Date(fetchStartTime).toISOString()}\n` +
+        `  - Diferencia de arranque: ${fetchStartTime - timerScheduledTime}ms`
+      );
+
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
         const response = await fetch(url, {
@@ -931,18 +943,29 @@ Responde SIEMPRE en JSON estricto con esta estructura:
             },
           }),
         });
+
+        headersReceived = true;
+        headersElapsedMs = Date.now() - fetchStartTime;
         lastStatus = response.status;
+        console.log(`[Lidacta Telemetry] [${modelName}] Encabezados HTTP recibidos en ${headersElapsedMs}ms. Status: ${response.status}`);
 
         if (response.ok) {
+          const bodyReadStartTime = Date.now();
           data = await response.json();
           clearTimeout(timeoutId);
+          const totalElapsedMs = Date.now() - fetchStartTime;
+          const bodyReadElapsedMs = Date.now() - bodyReadStartTime;
+          console.log(`[Lidacta Telemetry] [${modelName}] Cuerpo JSON leído con éxito. Lectura body: ${bodyReadElapsedMs}ms | Tiempo total: ${totalElapsedMs}ms`);
           ok = true;
           break;
         }
 
+        const bodyReadStartTime = Date.now();
         lastErrorText = await response.text();
         clearTimeout(timeoutId);
-        console.warn(`Gemini API (${modelName}) returned status ${response.status}:`, lastErrorText);
+        const totalElapsedMs = Date.now() - fetchStartTime;
+        const bodyReadElapsedMs = Date.now() - bodyReadStartTime;
+        console.warn(`[Lidacta Telemetry] [${modelName}] Error HTTP ${response.status} en ${headersElapsedMs}ms (Lectura body error: ${bodyReadElapsedMs}ms, Total: ${totalElapsedMs}ms)`);
 
         // Si devuelve 503 (saturación) o 429 (límite de tasa), hacemos fallback automático al siguiente modelo
         if (response.status === 503 || response.status === 429) {
@@ -951,12 +974,35 @@ Responde SIEMPRE en JSON estricto con esta estructura:
         }
       } catch (fetchErr: any) {
         clearTimeout(timeoutId);
+        const now = Date.now();
+        const errorElapsedFromFetch = now - fetchStartTime;
+        const errorElapsedFromTimer = now - timerScheduledTime;
+        const wasSignalAborted = controller.signal.aborted;
+        const errorName = fetchErr?.name || 'Error';
         lastErrorText = fetchErr?.message || String(fetchErr);
-        console.warn(`Fetch error with ${modelName}:`, lastErrorText);
+
+        // Clasificación diagnóstica ajustada por prioridad de causa raíz:
+        let errorOrigin = 'Error de red o cancelación externa';
+        if (wasSignalAborted) {
+          errorOrigin = 'Aborto local confirmado (controller.signal.aborted = true)';
+        } else if (headersReceived) {
+          errorOrigin = 'Fallo durante la lectura del cuerpo de la respuesta después de recibir encabezados HTTP';
+        }
+
+        console.warn(
+          `[Lidacta Telemetry] [${modelName}] EXCEPCIÓN DETECTADA:\n` +
+          `  - Origen diagnosticado: ${errorOrigin}\n` +
+          `  - Tiempo desde inicio de fetch: ${errorElapsedFromFetch}ms\n` +
+          `  - Tiempo desde programación del temporizador: ${errorElapsedFromTimer}ms\n` +
+          `  - Encabezados recibidos: ${headersReceived ? `Sí (${headersElapsedMs}ms)` : 'No'}\n` +
+          `  - controller.signal.aborted: ${wasSignalAborted}\n` +
+          `  - Tipo de error (name): ${errorName}\n` +
+          `  - Mensaje original: ${lastErrorText}`
+        );
 
         // Si el fallo fue por timeout/abort, no encadenar el segundo modelo (evita sumar otros 50 segundos)
         const isTimeout =
-          controller.signal.aborted ||
+          wasSignalAborted ||
           fetchErr?.name === 'AbortError' ||
           lastErrorText.toLowerCase().includes('aborted') ||
           lastErrorText.toLowerCase().includes('timeout');
