@@ -956,9 +956,7 @@ if (!ok || !data?.candidates?.[0]?.content?.parts?.[0]?.text) {
         text: `ERROR DE SERVIDOR: ${errorMsg}`,
         error: errorMsg
       });
-    }
-
-    const candidatePartText = data.candidates[0].content.parts[0].text || '';
+        const candidatePartText = data.candidates[0].content.parts[0].text || '';
     return res.status(200).json({
       success: true,
       reply: candidatePartText,
