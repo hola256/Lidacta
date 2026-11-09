@@ -914,7 +914,8 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       const modelName = modelsToTry[i];
       const timerScheduledTime = Date.now();
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 50000); // 50 segundos de timeout
+      const timeoutMs = 22000; // 22 segundos de timeout individual
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       const fetchStartTime = Date.now();
       let headersReceived = false;
       let headersElapsedMs = 0;
@@ -1002,16 +1003,28 @@ Responde SIEMPRE en JSON estricto con esta estructura:
           `  - Mensaje original: ${lastErrorText}`
         );
 
-        // Si el fallo fue por timeout/abort, no encadenar el segundo modelo (evita sumar otros 50 segundos)
         const isTimeout =
           wasSignalAborted ||
           fetchErr?.name === 'AbortError' ||
           lastErrorText.toLowerCase().includes('aborted') ||
           lastErrorText.toLowerCase().includes('timeout');
 
+        const hasMoreModels = i < modelsToTry.length - 1;
+
         if (isTimeout) {
-          console.warn(`Petición cancelada por timeout (${modelName}). Se detiene el ciclo para evitar sobrepasar límites.`);
-          break;
+          if (hasMoreModels) {
+            console.warn(
+              `[Lidacta Telemetry] [${modelName}] Timeout alcanzado (${timeoutMs}ms). ` +
+              `Activando automáticamente modelo de respaldo (${modelsToTry[i + 1]})...`
+            );
+            continue;
+          } else {
+            console.warn(
+              `[Lidacta Telemetry] [${modelName}] Timeout alcanzado en el modelo de respaldo. ` +
+              `Se detiene el ciclo para retornar respuesta de error controlada.`
+            );
+            break;
+          }
         }
       }
     }
