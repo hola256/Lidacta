@@ -1,4 +1,3 @@
-export const maxDuration = 60;
 const STAGE_NAMES: Record<number, string> = {
   1: 'Detectar qué sucede',
   2: 'Analizar perspectivas y habilidades',
@@ -656,7 +655,7 @@ function generateContextualCoachReply(
   };
 }
 
-
+export const maxDuration = 60; // 60 segundos de timeout
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -900,7 +899,12 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       pushTurn('user', `Hola Lidacta, estoy en la Etapa ${currentStageNum}.`);
     }
 
-    const modelsToTry = ['gemini-3.8-flash'];
+    const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+    const FALLBACK_MODEL = 'gemini-2.5-flash';
+    const modelsToTry = [
+      MODEL_NAME,
+      ...(MODEL_NAME !== FALLBACK_MODEL ? [FALLBACK_MODEL] : []),
+    ];
     let data: any = null;
     let ok = false;
     let lastStatus = 0;
@@ -908,33 +912,36 @@ Responde SIEMPRE en JSON estricto con esta estructura:
 
     for (let i = 0; i < modelsToTry.length; i++) {
       const modelName = modelsToTry[i];
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 50000); // 50 segundos de timeout
       try {
-  const fullModel = modelName.startsWith('models/') ? modelName : `models/${modelName}`;
-  const url = `https://generativelanguage.googleapis.com/v1/${fullModel}:generateContent?key=${apiKey}`;
-  const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: systemPrompt }]
-        },
-        contents,
-        generationConfig: {
-        temperature: 0.7,
-        responseMimeType: "application/json"
-      },
-      }),
-     signal: AbortSignal.timeout(50000)
-    });        
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            systemInstruction: {
+              parts: [{ text: systemPrompt }],
+            },
+            contents,
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.7,
+            },
+          }),
+        });
         lastStatus = response.status;
 
         if (response.ok) {
           data = await response.json();
+          clearTimeout(timeoutId);
           ok = true;
           break;
         }
 
         lastErrorText = await response.text();
+        clearTimeout(timeoutId);
         console.warn(`Gemini API (${modelName}) returned status ${response.status}:`, lastErrorText);
 
         // Si devuelve 503 (saturación) o 429 (límite de tasa), hacemos fallback automático al siguiente modelo
@@ -943,29 +950,65 @@ Responde SIEMPRE en JSON estricto con esta estructura:
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
       } catch (fetchErr: any) {
-        
+        clearTimeout(timeoutId);
         lastErrorText = fetchErr?.message || String(fetchErr);
         console.warn(`Fetch error with ${modelName}:`, lastErrorText);
+
+        // Si el fallo fue por timeout/abort, no encadenar el segundo modelo (evita sumar otros 50 segundos)
+        const isTimeout =
+          controller.signal.aborted ||
+          fetchErr?.name === 'AbortError' ||
+          lastErrorText.toLowerCase().includes('aborted') ||
+          lastErrorText.toLowerCase().includes('timeout');
+
+        if (isTimeout) {
+          console.warn(`Petición cancelada por timeout (${modelName}). Se detiene el ciclo para evitar sobrepasar límites.`);
+          break;
+        }
       }
     }
-if (!ok || !data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-      const errorMsg = `[Status ${lastStatus}] ${lastErrorText || 'No se recibió respuesta válida de la API de Gemini.'}`;
+
+    if (!ok || !data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+      const errorMsg = lastErrorText || 'No se recibió respuesta válida de los candidatos de la API de Gemini.';
       return res.status(200).json({
         success: false,
-        reply: `ERROR DE SERVIDOR: ${errorMsg}`,
+        reply: `ERROR DE SERVIDOR (Gemini API ${lastStatus || 'Error'}): ${errorMsg}`,
         text: `ERROR DE SERVIDOR: ${errorMsg}`,
-        error: errorMsg
+        error: errorMsg,
       });
-        const candidatePartText = data.candidates[0].content.parts[0].text || '';
+    }
+
+    const candidatePartText = data.candidates[0].content.parts[0].text || '';
+    const rawText = candidatePartText
+      .trim()
+      .replace(/^```json\s*/i, '')
+      .replace(/```$/i, '')
+      .trim();
+
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(rawText || '{}');
+    } catch {
+      parsed = null;
+    }
+
+    const responseText = parsed?.replyText || parsed?.reply || rawText || candidatePartText;
+
     return res.status(200).json({
       success: true,
-      reply: candidatePartText,
-      text: candidatePartText
+      reply: responseText,
+      text: responseText,
+      data: parsed
+        ? { ...parsed, reply: responseText, replyText: responseText }
+        : { reply: responseText, replyText: responseText },
     });
-  } catch (globalErr: any) {
-    return res.status(500).json({
+  } catch (error: any) {
+    console.error('Error en mentor respond:', error);
+    return res.status(200).json({
       success: false,
-      error: globalErr?.message || 'Error interno del servidor'
+      reply: `ERROR DE SERVIDOR: ${error?.message || JSON.stringify(error)}`,
+      text: `ERROR DE SERVIDOR: ${error?.message || JSON.stringify(error)}`,
+      error: error?.message || 'Error en servidor',
     });
   }
 }
