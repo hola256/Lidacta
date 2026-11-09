@@ -912,30 +912,19 @@ Responde SIEMPRE en JSON estricto con esta estructura:
   const fullModel = modelName.startsWith('models/') ? modelName : `models/${modelName}`;
   const url = `https://generativelanguage.googleapis.com/v1/${fullModel}:generateContent?key=${apiKey}`;
   const response = await fetch(url, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    systemInstruction: {
-      parts: [{ text: systemPrompt }],
-    },
-    contents,
-    generationConfig: {
-      temperature: 0.7
-    }
-  }),
-  signal: AbortSignal.timeout(12000)
-});
-            systemInstruction: {
-              parts: [{ text: systemPrompt }],
-            },
-            contents,
-            generationConfig: {
-        temperature: 0.7
-      },
-            },
-          }),
-        });
-        
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: systemPrompt }]
+        },
+        contents,
+        generationConfig: {
+          temperature: 0.7
+        }
+      }),
+      signal: AbortSignal.timeout(12000)
+    });        
         lastStatus = response.status;
 
         if (response.ok) {
