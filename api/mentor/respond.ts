@@ -920,8 +920,9 @@ Responde SIEMPRE en JSON estricto con esta estructura:
         },
         contents,
         generationConfig: {
-          temperature: 0.7
-        }
+        temperature: 0.7,
+        responseMimeType: "application/json"
+      },
       }),
       signal: AbortSignal.timeout(12000)
     });        
