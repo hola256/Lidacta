@@ -628,9 +628,9 @@ function generateContextualCoachReply(
 
   if (stage === 5) {
     return {
-      replyText: `Concretemos tu plan: ¿qué harás exactamente, en qué fecha y hora específica, y con quién?`,
-      readyToAdvance: true,
-      advancePrompt: 'Avanzar a Etapa 6: Aprender y reflexionar',
+      replyText: `Llegamos a la Etapa 5 para concretar tu plan de acción. Te invito a redactar personalmente tus 5 compromisos en el formulario arriba. Recuerda que la decisión y la redacción son 100% tuyas. Si deseas rebotar alguna idea, puedes consultarme aquí abajo.`,
+      readyToAdvance: false,
+      advancePrompt: null,
       detectedTheme: 'Plan de Acción',
       isTherapeuticCase: false,
     };
@@ -849,6 +849,12 @@ Contexto de la sesión:
 - Etapa actual: Etapa ${currentStageNum} - ${STAGE_NAMES[currentStageNum] || ''}
 - Caso / Reto actual: ${activeCaseTitle || 'Caso actual'}
 - Reto inicial: ${activeCaseChallenge || resolvedUserMessage || ''}
+
+CRITERIOS ESTRICTOS PARA EL CAMPO "readyToAdvance":
+- En Etapa 1: Debe ser true ÚNICAMENTE cuando ya se haya entregado previamente la síntesis con las 3 viñetas (**Hechos y situación**, **Dilema del líder**, **Impacto y reto principal**) Y el mensaje actual del líder confirme o valide dicha síntesis (ej. "de acuerdo", "sí", "si estoy lista", "totalmente", "correcto"). Si el líder corrige, pregunta, duda o aporta nuevos datos, DEBE ser false.
+- En Etapa 2: Debe ser true ÚNICAMENTE cuando la habilidad crítica haya sido planteada Y el líder en su mensaje la reconozca o valide como relevante para su reto. Si la rebate o duda, DEBE ser false.
+- En Etapa 3: Debe ser true ÚNICAMENTE cuando se haya planteado al menos una alternativa viable Y el líder la elija o valide para actuar. Si pide más alternativas o tiene dudas, DEBE ser false.
+- En cualquier otro escenario o ante cualquier duda/aclaración: DEBE ser false.
 
 Responde SIEMPRE en JSON estricto con esta estructura:
 {

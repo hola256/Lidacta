@@ -43,6 +43,9 @@ import {
   AlertTriangle,
   Headphones,
   Loader2,
+  Save,
+  MessageSquare,
+  Mail,
 } from 'lucide-react';
 import { NewMentorshipModal } from './NewMentorshipModal';
 import { WhatsAppVoiceRecorder } from './WhatsAppVoiceRecorder';
@@ -127,20 +130,140 @@ export const STAGE_META: Record<
   },
 };
 
+export function isStageGoalMet(session: MentorshipSession | null, stage: StageNumber): boolean {
+  if (!session) return false;
+  if (session.stageReadyToAdvance === stage) return true;
+  if (session.stageReadyToAdvance === null && stage !== 4) return false;
+
+  const stageMessages = (session.messages || [])
+    .filter((m) => (m.stage || 1) === stage)
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  if (stage === 1) {
+    let synthesisIdx = -1;
+    for (let i = 0; i < stageMessages.length; i++) {
+      const msg = stageMessages[i];
+      if (msg.sender === 'lidacta') {
+        const txt = msg.text.toLowerCase();
+        const hasFacts = txt.includes('hecho') || txt.includes('situación') || txt.includes('situacion');
+        const hasDilemma = txt.includes('dilema');
+        const hasImpact = txt.includes('impacto') || txt.includes('reto principal');
+        if (hasFacts && hasDilemma && hasImpact) {
+          synthesisIdx = i;
+          break;
+        }
+      }
+    }
+
+    if (synthesisIdx === -1) return false;
+
+    let leaderAckIdx = -1;
+    for (let j = synthesisIdx + 1; j < stageMessages.length; j++) {
+      const msg = stageMessages[j];
+      if (msg.sender === 'leader') {
+        const leaderTxt = msg.text.toLowerCase().trim();
+        const isCorrection = [
+          'te confundiste', 'te confundes', 'eso no es lo que me preocupa',
+          'no es lo que me preocupa', 'no me preocupa eso', 'no dije eso',
+          'te equivocaste', 'no me entendiste', 'entendiste mal', 'no es por ahí', 'no es por ahi'
+        ].some((t) => leaderTxt.includes(t));
+
+        if (!isCorrection && leaderTxt.length > 0) {
+          leaderAckIdx = j;
+          break;
+        }
+      }
+    }
+
+    if (leaderAckIdx === -1) return false;
+
+    const hasRatification = stageMessages.slice(leaderAckIdx + 1).some((m) => m.sender === 'lidacta');
+    return hasRatification;
+  }
+
+  if (stage === 2) {
+    const hasSkills = Array.isArray(session.identifiedSkills) && session.identifiedSkills.length > 0;
+    if (!hasSkills) return false;
+
+    const lidactaSkillIdx = stageMessages.findIndex(
+      (m) => m.sender === 'lidacta' && (m.text.toLowerCase().includes('habilidad') || m.text.toLowerCase().includes('competencia'))
+    );
+    if (lidactaSkillIdx !== -1) {
+      const nextLeaderMsg = stageMessages.slice(lidactaSkillIdx + 1).find((m) => m.sender === 'leader');
+      if (nextLeaderMsg) {
+        const txt = nextLeaderMsg.text.toLowerCase();
+        const isRejection = ['no creo', 'no considero', 'no es esa', 'te equivocas'].some((t) => txt.includes(t));
+        if (!isRejection && txt.length > 0) return true;
+      }
+    }
+    return false;
+  }
+
+  if (stage === 3) {
+    const hasAlt =
+      (Array.isArray(session.suggestedAlternatives) && session.suggestedAlternatives.length > 0) ||
+      Boolean(session.chosenAlternative) ||
+      stageMessages.some((m) => m.sender === 'lidacta' && (m.text.toLowerCase().includes('alternativa') || m.text.toLowerCase().includes('opción') || m.text.toLowerCase().includes('opcion') || m.text.toLowerCase().includes('camino')));
+
+    if (!hasAlt) return false;
+
+    const lidactaAltIdx = stageMessages.findIndex(
+      (m) => m.sender === 'lidacta' && (m.text.toLowerCase().includes('alternativa') || m.text.toLowerCase().includes('opción') || m.text.toLowerCase().includes('opcion') || m.text.toLowerCase().includes('camino'))
+    );
+    if (lidactaAltIdx !== -1) {
+      const nextLeaderMsg = stageMessages.slice(lidactaAltIdx + 1).find((m) => m.sender === 'leader');
+      if (nextLeaderMsg && nextLeaderMsg.text.trim().length > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  if (stage === 4) {
+    if (session.stageReadyToAdvance === 4) return true;
+    const hasPracticeConclusion = stageMessages.some((m) => {
+      if (m.sender !== 'lidacta') return false;
+      const txt = (m.text || '').toLowerCase();
+      return (
+        txt.includes('etapa 5') ||
+        txt.includes('plan de acción') ||
+        txt.includes('plan de accion') ||
+        txt.includes('paso formal') ||
+        txt.includes('concluir la práctica') ||
+        txt.includes('concluir la practica') ||
+        txt.includes('concluido la práctica') ||
+        txt.includes('concluido la practica') ||
+        txt.includes('retroalimentación') ||
+        txt.includes('retroalimentacion')
+      );
+    });
+    const hasLeaderResponse = stageMessages.some((m) => m.sender === 'leader');
+    if (hasPracticeConclusion && hasLeaderResponse) {
+      return true;
+    }
+    return false;
+  }
+
+  return false;
+}
+
 export const LeaderView: React.FC = () => {
   const {
     currentUser,
+    allUsers,
     mentorships,
     activeMentorship,
     setActiveMentorshipId,
     startNewMentorship,
     sendMessageInActiveSession,
     advanceStage,
+    setStageReadyToAdvance,
     updateActionPlan,
     markActionCompleted,
     saveLearnings,
     isSendingMessage,
     showToast,
+    retrySendFinalReportEmail,
   } = useLidacta();
 
   // Filter mentorships for this leader
@@ -175,6 +298,35 @@ export const LeaderView: React.FC = () => {
   const [actionHow, setActionHow] = useState('');
   const [actionCare, setActionCare] = useState('');
   const [actionShareWithHR, setActionShareWithHR] = useState(false);
+  const [justSavedActionPlan, setJustSavedActionPlan] = useState(false);
+  const [isSavingActionPlan, setIsSavingActionPlan] = useState(false);
+  const [isCommitmentConfirmed, setIsCommitmentConfirmed] = useState(false);
+  const [stage5CommentText, setStage5CommentText] = useState('');
+
+  // Stage 5 validation: requires all 5 fields to have non-empty text (.trim().length > 0)
+  const isActionPlanComplete =
+    actionWhat.trim().length > 0 &&
+    actionWhen.trim().length > 0 &&
+    actionWithWhom.trim().length > 0 &&
+    actionHow.trim().length > 0 &&
+    actionCare.trim().length > 0;
+
+  const completedFieldsCount = [
+    actionWhat.trim().length > 0,
+    actionWhen.trim().length > 0,
+    actionWithWhom.trim().length > 0,
+    actionHow.trim().length > 0,
+    actionCare.trim().length > 0,
+  ].filter(Boolean).length;
+
+  // Check if action plan was previously saved in the session
+  const hasSavedActionPlan = Boolean(
+    activeMentorship?.actionPlan?.what?.trim() &&
+    activeMentorship?.actionPlan?.when?.trim() &&
+    activeMentorship?.actionPlan?.withWhom?.trim() &&
+    activeMentorship?.actionPlan?.how?.trim() &&
+    activeMentorship?.actionPlan?.careReminders?.trim()
+  );
 
   // Stage 6 learnings state form
   const [learningWhatHappened, setLearningWhatHappened] = useState('');
@@ -226,6 +378,18 @@ export const LeaderView: React.FC = () => {
       7: false,
     });
   }, [activeMentorship?.id]);
+
+  const [reopenedStages, setReopenedStages] = useState<Record<number, boolean>>({});
+  const [isAdvancingStage, setIsAdvancingStage] = useState(false);
+
+  useEffect(() => {
+    setReopenedStages({});
+  }, [activeMentorship?.id, activeMentorship?.currentStage]);
+
+  const handleReopenConversation = (st: StageNumber) => {
+    setReopenedStages((prev) => ({ ...prev, [st]: true }));
+    setStageReadyToAdvance(null);
+  };
 
   const toggleStage = (st: StageNumber) => {
     setOpenStages((prev) => ({
@@ -320,43 +484,112 @@ export const LeaderView: React.FC = () => {
     }
   }, []);
 
-  // Sync stage forms with active mentorship
+  const lastLoadedMentorshipIdRef = useRef<string | null>(null);
+
+  // Sync stage forms with active mentorship (only on session change so that dialogue updates do not wipe form edits)
   useEffect(() => {
     if (activeMentorship) {
       setStageInputText('');
-      if (activeMentorship.actionPlan) {
-        setActionWhat(activeMentorship.actionPlan.what || '');
-        setActionWhen(activeMentorship.actionPlan.when || '');
-        setActionWithWhom(activeMentorship.actionPlan.withWhom || '');
-        setActionHow(activeMentorship.actionPlan.how || '');
-        setActionCare(activeMentorship.actionPlan.careReminders || '');
-        setActionShareWithHR(Boolean(activeMentorship.actionPlan.shareWithHR));
-      } else {
-        setActionWhat('');
-        setActionWhen('');
-        setActionWithWhom('');
-        setActionHow('');
-        setActionCare('');
-        setActionShareWithHR(false);
-      }
+      const isNewSession = lastLoadedMentorshipIdRef.current !== activeMentorship.id;
+      lastLoadedMentorshipIdRef.current = activeMentorship.id;
 
-      if (activeMentorship.learnings) {
-        setLearningWhatHappened(activeMentorship.learnings.whatHappened || '');
-        setLearningWhatWorked(activeMentorship.learnings.whatWorked || '');
-        setLearningWhatDidnt(activeMentorship.learnings.whatDidnt || '');
-        setLearningInsights(activeMentorship.learnings.insights || '');
-        setLearningFuture(activeMentorship.learnings.futureAdjustments || '');
-        setLearningShareWithHR(activeMentorship.learnings.sharedLearningWithHR || '');
-      } else {
-        setLearningWhatHappened('');
-        setLearningWhatWorked('');
-        setLearningWhatDidnt('');
-        setLearningInsights('');
-        setLearningFuture('');
-        setLearningShareWithHR('');
+      if (isNewSession) {
+        if (activeMentorship.actionPlan) {
+          setActionWhat(activeMentorship.actionPlan.what || '');
+          setActionWhen(activeMentorship.actionPlan.when || '');
+          setActionWithWhom(activeMentorship.actionPlan.withWhom || '');
+          setActionHow(activeMentorship.actionPlan.how || '');
+          setActionCare(activeMentorship.actionPlan.careReminders || '');
+          setActionShareWithHR(Boolean(activeMentorship.actionPlan.shareWithHR));
+          setIsCommitmentConfirmed(Boolean(
+            activeMentorship.actionPlan.isCommitmentConfirmed ||
+            activeMentorship.actionPlan.isCompleted
+          ));
+        } else {
+          setActionWhat('');
+          setActionWhen('');
+          setActionWithWhom('');
+          setActionHow('');
+          setActionCare('');
+          setActionShareWithHR(false);
+          setIsCommitmentConfirmed(false);
+        }
+        setJustSavedActionPlan(false);
+
+        if (activeMentorship.learnings) {
+          setLearningWhatHappened(activeMentorship.learnings.whatHappened || '');
+          setLearningWhatWorked(activeMentorship.learnings.whatWorked || '');
+          setLearningWhatDidnt(activeMentorship.learnings.whatDidnt || '');
+          setLearningInsights(activeMentorship.learnings.insights || '');
+          setLearningFuture(activeMentorship.learnings.futureAdjustments || '');
+          setLearningShareWithHR(activeMentorship.learnings.sharedLearningWithHR || '');
+        } else {
+          setLearningWhatHappened('');
+          setLearningWhatWorked('');
+          setLearningWhatDidnt('');
+          setLearningInsights('');
+          setLearningFuture('');
+          setLearningShareWithHR('');
+        }
       }
     }
-  }, [activeMentorship]);
+  }, [activeMentorship?.id]);
+
+  // Preserve Stage 5 optional comments draft per mentorship session
+  useEffect(() => {
+    if (activeMentorship?.id) {
+      try {
+        const saved = localStorage.getItem(`lidacta_stage5_comment_${activeMentorship.id}`) || '';
+        setStage5CommentText(saved);
+      } catch {
+        setStage5CommentText('');
+      }
+    } else {
+      setStage5CommentText('');
+    }
+  }, [activeMentorship?.id]);
+
+  const handleStage5CommentChange = (text: string) => {
+    setStage5CommentText(text);
+    if (activeMentorship?.id) {
+      try {
+        if (text) {
+          localStorage.setItem(`lidacta_stage5_comment_${activeMentorship.id}`, text);
+        } else {
+          localStorage.removeItem(`lidacta_stage5_comment_${activeMentorship.id}`);
+        }
+      } catch {
+        // Ignore localStorage errors
+      }
+    }
+  };
+
+  const handleSendStage5Comment = async () => {
+    if (!stage5CommentText.trim() || isSendingMessage) return;
+    const textToSend = stage5CommentText.trim();
+    setStage5CommentText('');
+    if (activeMentorship?.id) {
+      try {
+        localStorage.removeItem(`lidacta_stage5_comment_${activeMentorship.id}`);
+      } catch {
+        // Ignore localStorage errors
+      }
+    }
+    await sendMessageInActiveSession(textToSend, false);
+  };
+
+  const handleSendVoiceDirectStage5 = async (text: string) => {
+    if (!text.trim() || isSendingMessage) return;
+    setStage5CommentText('');
+    if (activeMentorship?.id) {
+      try {
+        localStorage.removeItem(`lidacta_stage5_comment_${activeMentorship.id}`);
+      } catch {
+        // Ignore localStorage errors
+      }
+    }
+    await sendMessageInActiveSession(text.trim(), false);
+  };
 
   // Initial positioning: Ensure screen and containers are strictly positioned at the top on mount and session load
   useEffect(() => {
@@ -419,6 +652,7 @@ export const LeaderView: React.FC = () => {
   const handleSubmitStageMessage = async (st: StageNumber) => {
     if (!stageInputText.trim() || isSendingMessage) return;
     const textToSend = stageInputText.trim();
+    setReopenedStages((prev) => ({ ...prev, [st]: false }));
     setStageInputText('');
     setInputText('');
     if (isListeningMic && speechRecognizer) {
@@ -430,6 +664,7 @@ export const LeaderView: React.FC = () => {
 
   const handleSubmitVoiceDirect = async (st: StageNumber, text: string) => {
     if (!text.trim() || isSendingMessage) return;
+    setReopenedStages((prev) => ({ ...prev, [st]: false }));
     setStageInputText('');
     setInputText('');
     await sendMessageInActiveSession(text.trim(), st === 4);
@@ -501,23 +736,58 @@ export const LeaderView: React.FC = () => {
     return getSharedStageTriggerQuestion(st, mentorship, currentUser?.name);
   };
 
-  const handleSaveActionPlan = (silent: boolean = false) => {
-    if (!activeMentorship) return;
+  const handleSaveActionPlan = (silent: boolean = false): boolean => {
+    if (!activeMentorship) return false;
+    setIsSavingActionPlan(true);
+
     const plan: MentorshipActionPlan = {
-      what: actionWhat.trim() || activeMentorship.actionPlan?.what || 'Conversación de alineación 1 a 1',
-      when: actionWhen.trim() || activeMentorship.actionPlan?.when || 'Próxima jornada laboral',
-      withWhom: actionWithWhom.trim() || activeMentorship.actionPlan?.withWhom || 'Equipo directo',
-      how: actionHow.trim() || activeMentorship.actionPlan?.how || 'Diálogo directo y constructivo',
-      careReminders: actionCare.trim() || activeMentorship.actionPlan?.careReminders || 'Mantener serenidad y acuerdos claros',
+      what: actionWhat.trim(),
+      when: actionWhen.trim(),
+      withWhom: actionWithWhom.trim(),
+      how: actionHow.trim(),
+      careReminders: actionCare.trim(),
+      cleanedAutoGeneratedV1: activeMentorship.actionPlan?.cleanedAutoGeneratedV1,
+      isCommitmentConfirmed: isCommitmentConfirmed,
       shareWithHR: actionShareWithHR,
       shareActionPlanWithHR: actionShareWithHR,
       actionPlanShared: actionShareWithHR,
       isCompleted: activeMentorship.actionPlan?.isCompleted || false,
     };
+
     updateActionPlan(plan);
+    setIsSavingActionPlan(false);
+    setJustSavedActionPlan(true);
+    setTimeout(() => setJustSavedActionPlan(false), 3000);
+
     if (!silent) {
-      showToast('Plan de acción guardado exitosamente.', 'success');
+      if (isActionPlanComplete) {
+        showToast('Plan de acción guardado exitosamente. Marca la casilla de confirmación para habilitar el avance.', 'success');
+      } else {
+        showToast('Borrador guardado. Recuerda completar los 5 campos obligatorios para avanzar a la Etapa 6.', 'info');
+      }
     }
+    return true;
+  };
+
+  const handleAdvanceToStage6 = () => {
+    if (!isActionPlanComplete) {
+      showToast(
+        'Por favor completa los 5 campos obligatorios del Plan de Acción (¿Qué?, ¿Cuándo?, ¿Con quién?, ¿Cómo? y ¿Qué vas a cuidar?) antes de avanzar.',
+        'warning'
+      );
+      return;
+    }
+    if (!isCommitmentConfirmed) {
+      showToast(
+        'Por favor confirma tu compromiso personal marcando la casilla de confirmación antes de avanzar.',
+        'warning'
+      );
+      return;
+    }
+    handleSaveActionPlan(true);
+    markActionCompleted();
+    advanceStage(6);
+    showToast('¡Compromiso registrado! Avanzando a Etapa 6: Aprender y reflexionar.', 'success');
   };
 
   const handleSaveLearnings = () => {
@@ -1285,6 +1555,11 @@ export const LeaderView: React.FC = () => {
                   const isPassed = isCaseCompleted ? true : activeMentorship.currentStage > st;
                   const isCurrent = isCaseCompleted ? false : activeMentorship.currentStage === st;
                   const isPending = isCaseCompleted ? false : activeMentorship.currentStage < st;
+                  const isStageConclusionReady =
+                    isCurrent &&
+                    st <= 4 &&
+                    !reopenedStages[st] &&
+                    isStageGoalMet(activeMentorship, st);
                   const isOpen = !!openStages[st];
                   const meta = STAGE_META[st];
                   const allMessages = [...activeMentorship.messages].filter((m) => (m.stage || 1) === st);
@@ -1460,105 +1735,175 @@ export const LeaderView: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Messages Timeline for this Stage */}
-                          {sortedMessages.length > 0 ? (
-                            <div className="flex flex-col gap-4 w-full">
-                              {sortedMessages.map((msg) => renderSingleMessage(msg))}
-                              {isCurrent && isSendingMessage && (
-                                <div className="flex items-center gap-2.5 p-3.5 bg-[#FFF7EF] border border-[#FFD3BF] rounded-2xl text-xs text-[#2D1B4E] shadow-2xs animate-pulse">
-                                  <div className="w-7 h-7 rounded-xl bg-[#2D1B4E] text-[#F7B538] flex items-center justify-center font-bold text-xs shrink-0">
-                                    L
-                                  </div>
-                                  <span className="font-medium italic text-[#4A3F55]">
-                                    Lidacta está pensando su respuesta...
-                                  </span>
-                                </div>
-                              )}
-                              <div ref={chatEndRef} />
-                            </div>
-                          ) : isPending ? (
-                            <div className="p-4 bg-neutral-50 border border-dashed border-[#493447]/20 rounded-xl text-center space-y-1.5 text-xs text-[#4A3F55]/70">
-                              <Clock className="w-4 h-4 mx-auto text-[#4A3F55]/50" />
-                              <p className="font-medium text-[#2D1B4E]">Esta etapa aún no ha iniciado.</p>
-                              <p className="text-[11px]">Se activará automáticamente conforme avances en las etapas previas del acompañamiento.</p>
-                            </div>
-                          ) : null}
-
-                          {/* Interactive Conversational Input Form for Stage (Etapa 1 to 7) */}
-                          {isCurrent && (
-                            <div className="bg-white border-2 border-[#F7B538] rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5 mt-2">
-                              <div className="flex items-center justify-between">
-                                <label className="text-xs font-heading font-extrabold text-[#2D1B4E] flex items-center gap-2">
-                                  <span className="w-2.5 h-2.5 rounded-full bg-[#BF3A1B] animate-pulse" />
-                                  <span>Tu respuesta para la {meta.name}:</span>
-                                </label>
-                                <span className="text-[11px] text-[#4A3F55]/70 flex items-center gap-1">
-                                  <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
-                                  <span>Escribe o habla por nota de voz</span>
-                                </span>
-                              </div>
-
-                              {/* Área de entrada de texto (Escribir) */}
-                              <textarea
-                                value={stageInputText}
-                                onChange={(e) => {
-                                  setStageInputText(e.target.value);
-                                  setInputText(e.target.value);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handleSubmitStageMessage(st);
-                                  }
-                                }}
-                                placeholder={
-                                  st === 7
-                                    ? 'Escribe tus reflexiones finales o dudas sobre el reporte para Lidacta...'
-                                    : 'Escribe aquí tu respuesta, dudas o reflexiones...'
-                                }
-                                rows={4}
-                                disabled={isSendingMessage}
-                                className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
-                              />
-
-                              {/* Controles de Entrada por Voz estilo WhatsApp y Envío */}
-                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
-                                {/* Opción de entrada por voz (Micrófono estilo WhatsApp) */}
-                                <WhatsAppVoiceRecorder
-                                  stageNumber={st}
-                                  stageName={meta.name}
-                                  mode="stage-card"
-                                  disabled={isSendingMessage}
-                                  isSending={isSendingMessage}
-                                  onTranscript={(text) => {
-                                    setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
-                                    setInputText((prev) => (prev ? `${prev} ${text}` : text));
-                                  }}
-                                  onSendDirect={(text) => handleSubmitVoiceDirect(st, text)}
-                                />
-
-                                {/* Botón de Envío en Ámbar Impulso (#F7B538) */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleSubmitStageMessage(st)}
-                                  disabled={!stageInputText.trim() || isSendingMessage}
-                                  className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
-                                >
-                                  {isSendingMessage ? (
-                                    <span>Guardando avance...</span>
-                                  ) : (
-                                    <>
-                                      <span>{st === 7 ? 'Enviar reflexión final' : 'Enviar avance'}</span>
-                                      <Send className="w-4 h-4 text-[#2D1B4E]" />
-                                    </>
+                          {/* Messages Timeline & Input Card for Stages (except Stage 5) */}
+                          {st !== 5 && (
+                            <>
+                              {sortedMessages.length > 0 ? (
+                                <div className="flex flex-col gap-4 w-full">
+                                  {sortedMessages.map((msg) => renderSingleMessage(msg))}
+                                  {isCurrent && isSendingMessage && (
+                                    <div className="flex items-center gap-2.5 p-3.5 bg-[#FFF7EF] border border-[#FFD3BF] rounded-2xl text-xs text-[#2D1B4E] shadow-2xs animate-pulse">
+                                      <div className="w-7 h-7 rounded-xl bg-[#2D1B4E] text-[#F7B538] flex items-center justify-center font-bold text-xs shrink-0">
+                                        L
+                                      </div>
+                                      <span className="font-medium italic text-[#4A3F55]">
+                                        Lidacta está pensando su respuesta...
+                                      </span>
+                                    </div>
                                   )}
-                                </button>
-                              </div>
-                            </div>
+                                  <div ref={chatEndRef} />
+                                </div>
+                              ) : isPending ? (
+                                <div className="p-4 bg-neutral-50 border border-dashed border-[#493447]/20 rounded-xl text-center space-y-1.5 text-xs text-[#4A3F55]/70">
+                                  <Clock className="w-4 h-4 mx-auto text-[#4A3F55]/50" />
+                                  <p className="font-medium text-[#2D1B4E]">Esta etapa aún no ha iniciado.</p>
+                                  <p className="text-[11px]">Se activará automáticamente conforme avances en las etapas previas del acompañamiento.</p>
+                                </div>
+                              ) : null}
+
+                              {/* Interactive Conversational Input Form or Transition Card for Stage */}
+                              {isCurrent && st !== 6 && (
+                                <>
+                                  {isStageConclusionReady ? (
+                                    <div className="bg-white border-2 border-[#2D1B4E] rounded-2xl p-4 sm:p-5 shadow-sm space-y-4 mt-2 animate-in fade-in duration-200">
+                                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2.5">
+                                          <div className="w-8 h-8 rounded-xl bg-[#2D1B4E] text-[#F7B538] flex items-center justify-center font-bold text-sm shrink-0">
+                                            <Sparkles className="w-4 h-4 text-[#F7B538]" />
+                                          </div>
+                                          <div>
+                                            <h4 className="font-heading font-extrabold text-sm sm:text-base text-[#2D1B4E]">
+                                              Objetivo de la {meta.name} completado
+                                            </h4>
+                                            <p className="text-xs text-[#4A3F55]/85 mt-0.5 leading-relaxed">
+                                              {st === 1 && 'Has clarificado los hechos, el dilema central y el impacto de tu reto con Lidacta. Tienes la base sólida para continuar.'}
+                                              {st === 2 && 'Has analizado las perspectivas e identificado las habilidades clave a desarrollar para este reto.'}
+                                              {st === 3 && 'Has explorado las alternativas y definido el camino de acción para abordar esta situación.'}
+                                              {st === 4 && 'Has concluido la práctica y preparación de tu conversación. Tienes el enfoque listo para definir tu plan de acción.'}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-[#E2F7E1] text-[#246B2A] border border-[#246B2A]/20 shrink-0">
+                                          <CheckCircle2 className="w-3.5 h-3.5" />
+                                          <span>Lista para avanzar</span>
+                                        </span>
+                                      </div>
+
+                                      <div className="p-3 bg-[#FFF7EF] border border-[#F7B538]/30 rounded-xl text-xs text-[#2D1B4E] flex items-center gap-2">
+                                        <Clock className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                                        <span>El avance es exclusivamente manual. Confirma cuando desees dar el siguiente paso en tu acompañamiento.</span>
+                                      </div>
+
+                                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1 border-t border-[#493447]/10">
+                                        <button
+                                          type="button"
+                                          disabled={isAdvancingStage}
+                                          onClick={async () => {
+                                            setIsAdvancingStage(true);
+                                            const next = (st < 7 ? (st + 1) as StageNumber : 7) as StageNumber;
+                                            await advanceStage(next);
+                                            setIsAdvancingStage(false);
+                                            setOpenStages((prev) => ({ ...prev, [st]: false, [next]: true }));
+                                          }}
+                                          className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2666] text-[#F7B538] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                                        >
+                                          {isAdvancingStage ? (
+                                            <span>Avanzando a {STAGE_META[(st + 1) as StageNumber]?.name || 'la siguiente etapa'}...</span>
+                                          ) : (
+                                            <>
+                                              <span>Completar {meta.name} y continuar a {STAGE_META[(st + 1) as StageNumber]?.name}</span>
+                                              <ArrowRight className="w-4 h-4 text-[#F7B538]" />
+                                            </>
+                                          )}
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleReopenConversation(st)}
+                                          className="text-xs text-[#BF3A1B] hover:text-[#9e2f15] font-semibold underline cursor-pointer text-center sm:text-right py-1 transition-colors"
+                                        >
+                                          Deseo agregar información o continuar conversando en esta etapa
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="bg-white border-2 border-[#F7B538] rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5 mt-2">
+                                      <div className="flex items-center justify-between">
+                                        <label className="text-xs font-heading font-extrabold text-[#2D1B4E] flex items-center gap-2">
+                                          <span className="w-2.5 h-2.5 rounded-full bg-[#BF3A1B] animate-pulse" />
+                                          <span>Tu respuesta para la {meta.name}:</span>
+                                        </label>
+                                        <span className="text-[11px] text-[#4A3F55]/70 flex items-center gap-1">
+                                          <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
+                                          <span>Escribe o habla por nota de voz</span>
+                                        </span>
+                                      </div>
+
+                                      {/* Área de entrada de texto (Escribir) */}
+                                      <textarea
+                                        value={stageInputText}
+                                        onChange={(e) => {
+                                          setStageInputText(e.target.value);
+                                          setInputText(e.target.value);
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleSubmitStageMessage(st);
+                                          }
+                                        }}
+                                        placeholder={
+                                          st === 7
+                                            ? 'Escribe tus reflexiones finales o dudas sobre el reporte para Lidacta...'
+                                            : 'Escribe aquí tu respuesta, dudas o reflexiones...'
+                                        }
+                                        rows={4}
+                                        disabled={isSendingMessage}
+                                        className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
+                                      />
+
+                                      {/* Controles de Entrada por Voz estilo WhatsApp y Envío */}
+                                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
+                                        {/* Opción de entrada por voz (Micrófono estilo WhatsApp) */}
+                                        <WhatsAppVoiceRecorder
+                                          stageNumber={st}
+                                          stageName={meta.name}
+                                          mode="stage-card"
+                                          disabled={isSendingMessage}
+                                          isSending={isSendingMessage}
+                                          onTranscript={(text) => {
+                                            setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
+                                            setInputText((prev) => (prev ? `${prev} ${text}` : text));
+                                          }}
+                                          onSendDirect={(text) => handleSubmitVoiceDirect(st, text)}
+                                        />
+
+                                        {/* Botón de Envío en Ámbar Impulso (#F7B538) */}
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSubmitStageMessage(st)}
+                                          disabled={!stageInputText.trim() || isSendingMessage}
+                                          className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+                                        >
+                                          {isSendingMessage ? (
+                                            <span>Guardando avance...</span>
+                                          ) : (
+                                            <>
+                                              <span>{st === 7 ? 'Enviar reflexión final' : 'Enviar avance'}</span>
+                                              <Send className="w-4 h-4 text-[#2D1B4E]" />
+                                            </>
+                                          )}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </>
                           )}
 
                           {/* Stage 4: Roleplay Practice Arena */}
-                          {st === 4 && (
+                          {st === 4 && !isStageConclusionReady && (
                             <div className="p-4 sm:p-5 bg-white border-2 border-[#BF3A1B]/40 rounded-2xl shadow-sm space-y-4">
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                 <div className="flex items-center gap-2">
@@ -1595,7 +1940,10 @@ export const LeaderView: React.FC = () => {
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => advanceStage(5)}
+                                    onClick={() => {
+                                      setStageReadyToAdvance(4);
+                                      setReopenedStages((prev) => ({ ...prev, [4]: false }));
+                                    }}
                                     className="min-h-[44px] text-xs px-3.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#4A3F55] rounded-xl cursor-pointer flex items-center justify-center font-medium active:scale-98"
                                   >
                                     ⏭️ Omitir práctica y pasar a Actuar (Plan de Acción)
@@ -1605,9 +1953,19 @@ export const LeaderView: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Stage 5: Action Plan Editor */}
-                          {st === 5 && (
-                            <div className="p-4 sm:p-5 bg-white border-2 border-[#BF3A1B]/30 rounded-2xl shadow-sm space-y-4">
+                          {/* Stage 5: Pending State Notice (if opened before reaching Stage 5) */}
+                          {st === 5 && isPending && (
+                            <div className="p-4 bg-neutral-50 border border-dashed border-[#493447]/20 rounded-xl text-center space-y-1.5 text-xs text-[#4A3F55]/70">
+                              <Clock className="w-4 h-4 mx-auto text-[#4A3F55]/50" />
+                              <p className="font-medium text-[#2D1B4E]">Esta etapa aún no ha iniciado.</p>
+                              <p className="text-[11px]">Se activará automáticamente conforme avances en las etapas previas del acompañamiento.</p>
+                            </div>
+                          )}
+
+                          {/* Stage 5: Action Plan Editor & Optional Comments */}
+                          {st === 5 && !isPending && (
+                            <>
+                              <div className="p-4 sm:p-5 bg-white border-2 border-[#BF3A1B]/30 rounded-2xl shadow-sm space-y-4">
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                 <div className="flex items-center gap-2">
                                   <Calendar className="w-4 h-4 text-[#BF3A1B] shrink-0" />
@@ -1615,62 +1973,164 @@ export const LeaderView: React.FC = () => {
                                     Etapa 5: Actuar (Plan de Acción)
                                   </h4>
                                 </div>
-                                {activeMentorship.actionPlan?.isCompleted ? (
-                                  <span className="text-xs font-bold text-[#246B2A] bg-[#E2F7E1] px-2.5 py-1 rounded-lg flex items-center gap-1 w-fit">
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                    Acción Realizada
-                                  </span>
-                                ) : (
-                                  <span className="text-xs font-semibold text-[#BF3A1B] bg-[#FFD3BF]/60 px-2 py-0.5 rounded w-fit">
-                                    En Seguimiento
-                                  </span>
-                                )}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {activeMentorship.actionPlan?.isCompleted ? (
+                                    <span className="text-xs font-bold text-[#246B2A] bg-[#E2F7E1] px-2.5 py-1 rounded-lg flex items-center gap-1 w-fit">
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      Acción Realizada
+                                    </span>
+                                  ) : hasSavedActionPlan ? (
+                                    <span className="text-xs font-bold text-[#2D1B4E] bg-[#FFF7EF] border border-[#F7B538] px-2.5 py-1 rounded-lg flex items-center gap-1 w-fit">
+                                      <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
+                                      Compromiso Registrado
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs font-semibold text-[#BF3A1B] bg-[#FFD3BF]/60 px-2.5 py-1 rounded-lg w-fit">
+                                      Plan en Construcción ({completedFieldsCount}/5 campos)
+                                    </span>
+                                  )}
+                                </div>
                               </div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                                <div className="space-y-1">
-                                  <label className="font-bold text-[#2D1B4E]">1. ¿Qué exactamente harás?</label>
+                              <div className="p-3 bg-[#FFF7EF]/80 border border-[#EADBCE] rounded-xl text-xs text-[#4A3F55] leading-relaxed">
+                                <strong className="text-[#2D1B4E] font-bold">Construye tu propio Plan de Acción:</strong> Lidacta te orienta y formula preguntas en el diálogo para ayudarte a madurar tus ideas, pero la decisión y redacción de cada compromiso son exclusivamente tuyas. Escribe tus respuestas en los 5 campos a continuación.
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center justify-between">
+                                    <label className="font-bold text-[#2D1B4E]">1. ¿Qué exactamente harás?</label>
+                                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${actionWhat.trim() ? 'text-[#246B2A] bg-[#E2F7E1]' : 'text-[#BF3A1B] bg-[#FFD3BF]/60'}`}>
+                                      {actionWhat.trim() ? '✓ Listo' : 'Requerido'}
+                                    </span>
+                                  </div>
                                   <input
                                     type="text"
                                     value={actionWhat}
                                     onChange={(e) => setActionWhat(e.target.value)}
                                     onBlur={() => handleSaveActionPlan(true)}
-                                    placeholder="Ej. Conversación 1 a 1 de alineación"
-                                    className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
+                                    placeholder="Describe la acción concreta que realizarás..."
+                                    className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E] focus:outline-none focus:border-[#BF3A1B] transition-colors"
                                   />
                                 </div>
-                                <div className="space-y-1">
-                                  <label className="font-bold text-[#2D1B4E]">2. ¿Cuándo lo harás? (Fecha específica)</label>
+
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center justify-between">
+                                    <label className="font-bold text-[#2D1B4E]">2. ¿Cuándo lo harás? (Fecha u horario específico)</label>
+                                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${actionWhen.trim() ? 'text-[#246B2A] bg-[#E2F7E1]' : 'text-[#BF3A1B] bg-[#FFD3BF]/60'}`}>
+                                      {actionWhen.trim() ? '✓ Listo' : 'Requerido'}
+                                    </span>
+                                  </div>
                                   <input
                                     type="text"
                                     value={actionWhen}
                                     onChange={(e) => setActionWhen(e.target.value)}
                                     onBlur={() => handleSaveActionPlan(true)}
-                                    placeholder="Ej. Jueves 17 a las 15:30 hrs"
-                                    className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
+                                    placeholder="Ej. Jueves 17 a las 15:30 hrs..."
+                                    className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E] focus:outline-none focus:border-[#BF3A1B] transition-colors"
                                   />
                                 </div>
-                                <div className="space-y-1">
-                                  <label className="font-bold text-[#2D1B4E]">3. ¿Con quién lo harás?</label>
+
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center justify-between">
+                                    <label className="font-bold text-[#2D1B4E]">3. ¿Con quién lo harás?</label>
+                                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${actionWithWhom.trim() ? 'text-[#246B2A] bg-[#E2F7E1]' : 'text-[#BF3A1B] bg-[#FFD3BF]/60'}`}>
+                                      {actionWithWhom.trim() ? '✓ Listo' : 'Requerido'}
+                                    </span>
+                                  </div>
                                   <input
                                     type="text"
                                     value={actionWithWhom}
                                     onChange={(e) => setActionWithWhom(e.target.value)}
                                     onBlur={() => handleSaveActionPlan(true)}
-                                    placeholder="Ej. Supervisor de turno"
-                                    className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
+                                    placeholder="Ej. Supervisor de turno, equipo de operaciones..."
+                                    className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E] focus:outline-none focus:border-[#BF3A1B] transition-colors"
                                   />
                                 </div>
-                                <div className="space-y-1">
-                                  <label className="font-bold text-[#2D1B4E]">4. ¿Qué vas a cuidar o recordar?</label>
+
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center justify-between">
+                                    <label className="font-bold text-[#2D1B4E]">4. ¿Cómo lo harás? (Estrategia o pasos)</label>
+                                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${actionHow.trim() ? 'text-[#246B2A] bg-[#E2F7E1]' : 'text-[#BF3A1B] bg-[#FFD3BF]/60'}`}>
+                                      {actionHow.trim() ? '✓ Listo' : 'Requerido'}
+                                    </span>
+                                  </div>
+                                  <input
+                                    type="text"
+                                    value={actionHow}
+                                    onChange={(e) => setActionHow(e.target.value)}
+                                    onBlur={() => handleSaveActionPlan(true)}
+                                    placeholder="Describe los pasos, estrategia o dinámica que seguirás..."
+                                    className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E] focus:outline-none focus:border-[#BF3A1B] transition-colors"
+                                  />
+                                </div>
+
+                                <div className="space-y-1.5 sm:col-span-2">
+                                  <div className="flex items-center justify-between">
+                                    <label className="font-bold text-[#2D1B4E]">5. ¿Qué vas a cuidar o recordar?</label>
+                                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${actionCare.trim() ? 'text-[#246B2A] bg-[#E2F7E1]' : 'text-[#BF3A1B] bg-[#FFD3BF]/60'}`}>
+                                      {actionCare.trim() ? '✓ Listo' : 'Requerido'}
+                                    </span>
+                                  </div>
                                   <input
                                     type="text"
                                     value={actionCare}
                                     onChange={(e) => setActionCare(e.target.value)}
                                     onBlur={() => handleSaveActionPlan(true)}
-                                    placeholder="Ej. Mantener serenidad y escuchar con empatía"
-                                    className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E]"
+                                    placeholder="Ej. Mantener serenidad, escuchar con empatía, basarse en hechos objetivos..."
+                                    className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs text-[#2D1B4E] focus:outline-none focus:border-[#BF3A1B] transition-colors"
                                   />
+                                </div>
+                              </div>
+
+                              {/* Barra de Guardado del Plan de Acción */}
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveActionPlan(false)}
+                                  disabled={isSavingActionPlan}
+                                  className={`min-h-[42px] px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 ${
+                                    justSavedActionPlan
+                                      ? 'bg-[#E2F7E1] text-[#246B2A] border border-[#246B2A]/30'
+                                      : hasSavedActionPlan
+                                      ? 'bg-[#2D1B4E] text-[#FFF7EF] hover:bg-[#3D2568]'
+                                      : 'bg-[#BF3A1B] text-white hover:bg-[#a63014]'
+                                  }`}
+                                >
+                                  {isSavingActionPlan ? (
+                                    <>
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      <span>Guardando...</span>
+                                    </>
+                                  ) : justSavedActionPlan ? (
+                                    <>
+                                      <CheckCircle2 className="w-4 h-4 text-[#246B2A]" />
+                                      <span>Plan Guardado Exitosamente</span>
+                                    </>
+                                  ) : hasSavedActionPlan ? (
+                                    <>
+                                      <Save className="w-3.5 h-3.5" />
+                                      <span>Actualizar Plan de Acción</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Save className="w-3.5 h-3.5" />
+                                      <span>Guardar Plan de Acción</span>
+                                    </>
+                                  )}
+                                </button>
+
+                                <div className="text-xs text-[#4A3F55]/80">
+                                  {isActionPlanComplete ? (
+                                    <span className="text-[#246B2A] font-semibold flex items-center gap-1">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-[#246B2A]" />
+                                      Los 5 campos obligatorios están completos.
+                                    </span>
+                                  ) : (
+                                    <span className="text-[#BF3A1B] font-medium">
+                                      Completa los 5 campos obligatorios ({completedFieldsCount}/5 completados).
+                                    </span>
+                                  )}
                                 </div>
                               </div>
 
@@ -1685,11 +2145,11 @@ export const LeaderView: React.FC = () => {
                                       setActionShareWithHR(checked);
                                       if (activeMentorship) {
                                         updateActionPlan({
-                                          what: actionWhat.trim() || activeMentorship.actionPlan?.what || 'Conversación de alineación 1 a 1',
-                                          when: actionWhen.trim() || activeMentorship.actionPlan?.when || 'Próxima jornada laboral',
-                                          withWhom: actionWithWhom.trim() || activeMentorship.actionPlan?.withWhom || 'Equipo directo',
-                                          how: actionHow.trim() || activeMentorship.actionPlan?.how || 'Diálogo directo y constructivo',
-                                          careReminders: actionCare.trim() || activeMentorship.actionPlan?.careReminders || 'Mantener serenidad y acuerdos claros',
+                                          what: actionWhat.trim(),
+                                          when: actionWhen.trim(),
+                                          withWhom: actionWithWhom.trim(),
+                                          how: actionHow.trim(),
+                                          careReminders: actionCare.trim(),
                                           shareWithHR: checked,
                                           shareActionPlanWithHR: checked,
                                           actionPlanShared: checked,
@@ -1710,32 +2170,156 @@ export const LeaderView: React.FC = () => {
                                 </label>
                               </div>
 
-                              {/* Tarjeta de Acompañamiento Automatizado Lidacta (48h y 5 días) */}
-                              <div className="p-3.5 bg-[#FFF7EF] border border-[#EADBCE] rounded-xl space-y-2 text-xs">
-                                <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#2D1B4E]">
-                                  <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
-                                  <span>Acompañamiento Automatizado Lidacta</span>
-                                </div>
-                                <p className="text-[#4A3F55] leading-relaxed">
-                                  Lidacta te acompaña en tu proceso enviándote 2 correos clave para que no te sientas solo/a al ejecutar tu compromiso, mantente pendiente de tu email.
-                                </p>
+                                {/* Confirmación Explícita del Compromiso (Requisito 5) */}
+                                {isActionPlanComplete && (
+                                  <div className="p-3.5 bg-[#FFF7EF] border-2 border-[#F7B538]/70 rounded-xl space-y-2.5 animate-fadeIn">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <ShieldCheck className="w-4 h-4 text-[#BF3A1B]" />
+                                        <span className="font-bold text-xs text-[#2D1B4E]">
+                                          Confirmación de Compromiso del Líder
+                                        </span>
+                                      </div>
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#246B2A] bg-[#E2F7E1] px-2 py-0.5 rounded">
+                                        Plan Validado
+                                      </span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2.5 bg-white/80 rounded-lg text-[11px] text-[#4A3F55] border border-[#EADBCE]">
+                                      <div><strong className="text-[#2D1B4E]">• Acción:</strong> {actionWhat}</div>
+                                      <div><strong className="text-[#2D1B4E]">• Cuándo:</strong> {actionWhen}</div>
+                                      <div><strong className="text-[#2D1B4E]">• Con quién:</strong> {actionWithWhom}</div>
+                                      <div><strong className="text-[#2D1B4E]">• Cómo:</strong> {actionHow}</div>
+                                      <div className="sm:col-span-2"><strong className="text-[#2D1B4E]">• A cuidar:</strong> {actionCare}</div>
+                                    </div>
+
+                                    <label className="flex items-start gap-2.5 cursor-pointer select-none pt-1">
+                                      <input
+                                        type="checkbox"
+                                        checked={isCommitmentConfirmed}
+                                        onChange={(e) => {
+                                          const confirmed = e.target.checked;
+                                          setIsCommitmentConfirmed(confirmed);
+                                          if (activeMentorship && activeMentorship.actionPlan) {
+                                            updateActionPlan({
+                                              ...activeMentorship.actionPlan,
+                                              what: actionWhat.trim(),
+                                              when: actionWhen.trim(),
+                                              withWhom: actionWithWhom.trim(),
+                                              how: actionHow.trim(),
+                                              careReminders: actionCare.trim(),
+                                              isCommitmentConfirmed: confirmed,
+                                            });
+                                          }
+                                        }}
+                                        className="mt-0.5 w-4 h-4 rounded text-[#BF3A1B] border-[#493447]/30 focus:ring-[#BF3A1B] cursor-pointer shrink-0 accent-[#BF3A1B]"
+                                      />
+                                      <div className="space-y-0.5">
+                                        <span className="font-bold text-xs text-[#2D1B4E]">
+                                          Confirmo mi compromiso personal con este Plan de Acción.
+                                        </span>
+                                        <p className="text-[11px] text-[#4A3F55]/70 leading-normal">
+                                          He definido este compromiso conscientemente y asumo la responsabilidad de ejecutarlo en mi entorno real.
+                                        </p>
+                                      </div>
+                                    </label>
+                                  </div>
+                                )}
                               </div>
 
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2.5 pt-3 border-t border-[#493447]/10">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    handleSaveActionPlan(true);
-                                    markActionCompleted();
-                                    advanceStage(6);
-                                  }}
-                                  className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2568] text-[#F7B538] font-bold text-xs rounded-xl transition-all cursor-pointer shadow-xs active:scale-98"
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  <span>Ya ejecuté la acción → Ir a Etapa 6 (Aprender y reflexionar)</span>
-                                </button>
+                              {/* 5. Comentarios adicionales, dudas o reflexiones sobre tu compromiso */}
+                              {isCurrent && (
+                                <div className="p-4 sm:p-5 bg-white border border-[#493447]/15 rounded-2xl shadow-xs space-y-3.5">
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                                    <div className="flex items-center gap-2">
+                                      <MessageSquare className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                                      <label className="text-xs sm:text-sm font-heading font-extrabold text-[#2D1B4E]">
+                                        Comentarios adicionales, dudas o reflexiones sobre tu compromiso
+                                      </label>
+                                    </div>
+                                    <span className="text-[11px] font-semibold text-[#4A3F55]/70 bg-neutral-100 px-2 py-0.5 rounded-md w-fit">
+                                      Opcional
+                                    </span>
+                                  </div>
+
+                                  <p className="text-xs text-[#4A3F55]/80 leading-relaxed">
+                                    Si lo deseas, comparte aquí cualquier comentario adicional, duda o reflexión sobre la ejecución de tu compromiso para recibir retroalimentación de Lidacta. Este espacio es complementario y no condiciona tu avance a la Etapa 6.
+                                  </p>
+
+                                  <textarea
+                                    value={stage5CommentText}
+                                    onChange={(e) => handleStage5CommentChange(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleSendStage5Comment();
+                                      }
+                                    }}
+                                    placeholder="Escribe aquí tus comentarios adicionales, dudas o reflexiones sobre la ejecución de tu compromiso..."
+                                    rows={3}
+                                    disabled={isSendingMessage}
+                                    className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
+                                  />
+
+                                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
+                                    <WhatsAppVoiceRecorder
+                                      stageNumber={5}
+                                      stageName="Etapa 5: Actuar"
+                                      mode="stage-card"
+                                      disabled={isSendingMessage}
+                                      isSending={isSendingMessage}
+                                      onTranscript={(text) => {
+                                        handleStage5CommentChange(stage5CommentText ? `${stage5CommentText} ${text}` : text);
+                                      }}
+                                      onSendDirect={(text) => handleSendVoiceDirectStage5(text)}
+                                    />
+
+                                    <button
+                                      type="button"
+                                      onClick={handleSendStage5Comment}
+                                      disabled={!stage5CommentText.trim() || isSendingMessage}
+                                      className="min-h-[44px] flex items-center justify-center gap-2 px-5 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+                                    >
+                                      {isSendingMessage ? (
+                                        <span>Enviando comentario...</span>
+                                      ) : (
+                                        <>
+                                          <span>Enviar comentario a Lidacta</span>
+                                          <Send className="w-4 h-4 text-[#2D1B4E]" />
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 6. Botón de Avance a Etapa 6 (Último elemento de Etapa 5) */}
+                              <div className="space-y-2 pt-1">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2.5">
+                                  <button
+                                    type="button"
+                                    onClick={handleAdvanceToStage6}
+                                    disabled={!isActionPlanComplete || !isCommitmentConfirmed}
+                                    className={`w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-5 py-2.5 font-bold text-xs rounded-xl transition-all shadow-xs ${
+                                      isActionPlanComplete && isCommitmentConfirmed
+                                        ? 'bg-[#2D1B4E] hover:bg-[#3D2568] text-[#F7B538] cursor-pointer active:scale-98'
+                                        : 'bg-neutral-200 text-neutral-400 cursor-not-allowed border border-neutral-300'
+                                    }`}
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Ya ejecuté la acción → Ir a Etapa 6 (Aprender y reflexionar)</span>
+                                  </button>
+                                </div>
+
+                                {(!isActionPlanComplete || !isCommitmentConfirmed) && (
+                                  <p className="text-right text-[11px] text-[#BF3A1B] font-medium">
+                                    {!isActionPlanComplete
+                                      ? `⚠️ Completa los 5 campos del Plan de Acción (${completedFieldsCount}/5) para avanzar.`
+                                      : '⚠️ Marca la casilla de confirmación de tu compromiso para habilitar el avance a la Etapa 6.'}
+                                  </p>
+                                )}
                               </div>
-                            </div>
+                            </>
                           )}
 
                           {/* Stage 6: Learnings & Reflections */}
@@ -1822,64 +2406,67 @@ export const LeaderView: React.FC = () => {
                                 </div>
                               </div>
 
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[#493447]/10">
-                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                                  <button
-                                    type="button"
-                                    disabled={!isLearningsValid || isSavingLearnings}
-                                    onClick={handleSaveLearnings}
-                                    className={`w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                                      !isLearningsValid
-                                        ? 'bg-neutral-200 text-[#493447]/40 border border-neutral-300 cursor-not-allowed shadow-none'
-                                        : justSavedLearnings
-                                        ? 'bg-[#E2F7E1] text-[#246B2A] border border-[#246B2A]/30 font-bold'
-                                        : 'bg-[#BF3A1B] hover:bg-[#a63014] text-white shadow-sm hover:shadow active:scale-98 cursor-pointer'
-                                    }`}
-                                  >
-                                    {isSavingLearnings ? (
-                                      <>
-                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                        <span>Guardando...</span>
-                                      </>
-                                    ) : justSavedLearnings ? (
-                                      <>
-                                        <CheckCircle2 className="w-4 h-4 text-[#246B2A]" />
-                                        <span>Reflexión Guardada</span>
-                                      </>
-                                    ) : hasSavedLearnings ? (
-                                      <>
-                                        <CheckCircle2 className="w-3.5 h-3.5" />
-                                        <span>Actualizar Reflexión</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <CheckCircle2 className="w-3.5 h-3.5" />
-                                        <span>Guardar Reflexión</span>
-                                      </>
-                                    )}
-                                  </button>
-                                  {!isLearningsValid ? (
-                                    <span className="text-[11px] text-[#493447]/60 italic">
-                                      Completa los 3 campos de reflexión para habilitar el guardado.
-                                    </span>
-                                  ) : hasSavedLearnings && !justSavedLearnings ? (
-                                    <span className="text-[11px] text-[#246B2A] font-medium flex items-center gap-1">
-                                      <CheckCircle2 className="w-3 h-3 text-[#246B2A]" />
-                                      Reflexión registrada. Puedes editar los campos y actualizarla en cualquier momento.
-                                    </span>
-                                  ) : null}
-                                </div>
-                                {activeMentorship.currentStage === 6 && (
+                              {/* Botón «Guardar Reflexión» debajo del formulario */}
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-3 border-t border-[#493447]/10">
+                                <button
+                                  type="button"
+                                  disabled={!isLearningsValid || isSavingLearnings}
+                                  onClick={handleSaveLearnings}
+                                  className={`w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                                    !isLearningsValid
+                                      ? 'bg-neutral-200 text-[#493447]/40 border border-neutral-300 cursor-not-allowed shadow-none'
+                                      : justSavedLearnings
+                                      ? 'bg-[#E2F7E1] text-[#246B2A] border border-[#246B2A]/30 font-bold'
+                                      : 'bg-[#BF3A1B] hover:bg-[#a63014] text-white shadow-sm hover:shadow active:scale-98 cursor-pointer'
+                                  }`}
+                                >
+                                  {isSavingLearnings ? (
+                                    <>
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      <span>Guardando...</span>
+                                    </>
+                                  ) : justSavedLearnings ? (
+                                    <>
+                                      <CheckCircle2 className="w-4 h-4 text-[#246B2A]" />
+                                      <span>Reflexión Guardada</span>
+                                    </>
+                                  ) : hasSavedLearnings ? (
+                                    <>
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      <span>Actualizar Reflexión</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      <span>Guardar Reflexión</span>
+                                    </>
+                                  )}
+                                </button>
+                                {!isLearningsValid ? (
+                                  <span className="text-[11px] text-[#493447]/60 italic">
+                                    Completa los 3 campos obligatorios de reflexión para habilitar el guardado.
+                                  </span>
+                                ) : hasSavedLearnings && !justSavedLearnings ? (
+                                  <span className="text-[11px] text-[#246B2A] font-medium flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3 text-[#246B2A]" />
+                                    Reflexión registrada. Puedes editar los campos y actualizarla en cualquier momento.
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              {/* Botón «Concluir e ir a Cierre y retroalimentación» al final de la sección, debajo del botón de guardar */}
+                              {activeMentorship.currentStage === 6 && (
+                                <div className="pt-2 border-t border-[#493447]/10 flex flex-col sm:flex-row sm:items-center justify-end gap-2.5">
                                   <button
                                     type="button"
                                     onClick={() => advanceStage(7)}
-                                    className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 bg-[#2D1B4E] text-[#F7B538] font-bold text-xs rounded-xl hover:bg-[#201338] transition-colors cursor-pointer shadow-xs active:scale-98 flex items-center justify-center gap-2"
+                                    className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2568] text-[#F7B538] font-bold text-xs rounded-xl transition-all shadow-xs active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
                                   >
                                     <span>Concluir e ir a Cierre y retroalimentación (Etapa 7)</span>
-                                    <ArrowRight className="w-3.5 h-3.5" />
+                                    <ArrowRight className="w-3.5 h-3.5 text-[#F7B538]" />
                                   </button>
-                                )}
-                              </div>
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -1993,8 +2580,61 @@ export const LeaderView: React.FC = () => {
                                 </ul>
                               </div>
 
-                              <div className="p-3 bg-[#FFF7EF] rounded-xl text-center text-xs text-[#4A3F55]/70">
-                                Este reporte ha sido enviado también a tu correo electrónico registrado ({currentUser.email}).
+                              <div className="p-3 bg-[#FFF7EF] rounded-xl text-center text-xs text-[#4A3F55]/70 space-y-1">
+                                {activeMentorship.finalReportEmailSent ? (
+                                  <div className="text-[#246B2A] font-semibold flex items-center justify-center gap-1.5 flex-wrap">
+                                    <CheckCircle2 className="w-4 h-4 text-[#246B2A] shrink-0" />
+                                    <span>
+                                      Este reporte ha sido enviado exitosamente a tu correo registrado (
+                                      <strong className="text-[#2D1B4E]">
+                                        {allUsers.find((u) => u.id === activeMentorship.leaderId)?.email || currentUser.email}
+                                      </strong>
+                                      ).
+                                    </span>
+                                  </div>
+                                ) : activeMentorship.finalReportEmailStatus === 'simulated' ? (
+                                  <div className="text-[#2D1B4E] font-medium flex items-center justify-center gap-1.5 flex-wrap">
+                                    <Mail className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                                    <span>
+                                      Reporte registrado para tu correo registrado (
+                                      <strong className="text-[#2D1B4E]">
+                                        {allUsers.find((u) => u.id === activeMentorship.leaderId)?.email || currentUser.email}
+                                      </strong>
+                                      ).
+                                    </span>
+                                  </div>
+                                ) : activeMentorship.finalReportEmailStatus === 'failed' ? (
+                                  <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-[#BF3A1B]">
+                                    <span>
+                                      No se pudo entregar el correo a{' '}
+                                      <strong>
+                                        {allUsers.find((u) => u.id === activeMentorship.leaderId)?.email || currentUser.email}
+                                      </strong>
+                                      .
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        showToast('Reintentando envío de reporte por correo...', 'info');
+                                        const res = await retrySendFinalReportEmail(activeMentorship.id);
+                                        if (res.success) {
+                                          showToast('Reporte enviado exitosamente.', 'success');
+                                        } else {
+                                          showToast(res.message || 'Error al reintentar envío.', 'error');
+                                        }
+                                      }}
+                                      className="font-bold underline hover:text-[#2D1B4E] cursor-pointer"
+                                    >
+                                      Reintentar envío
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    Este reporte ha sido enviado también a tu correo electrónico registrado (
+                                    {allUsers.find((u) => u.id === activeMentorship.leaderId)?.email || currentUser.email}
+                                    ).
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}
@@ -2051,57 +2691,61 @@ export const LeaderView: React.FC = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Bar for Message Exchange (WhatsApp Style Across Stages 1 to 7) */}
-            <div className="p-2.5 sm:p-4 bg-white border-t border-[#493447]/10 shrink-0 no-print">
-              <form onSubmit={handleSendMessage} className="w-full max-w-screen-xl mx-auto flex items-center gap-2">
-                <input
-                  type="text"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  placeholder={
-                    activeMentorship.currentStage === 7
-                      ? 'Escribe o habla por voz con Lidacta sobre tu reporte final...'
-                      : activeMentorship.currentStage === 4
-                      ? 'Responde a la práctica o simula...'
-                      : `Escribe tu respuesta para la Etapa ${activeMentorship.currentStage || 1}...`
-                  }
-                  className="min-h-[44px] flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 min-w-0 disabled:bg-neutral-100 disabled:text-[#4A3F55]/60"
-                  disabled={isSendingMessage}
-                />
+            {/* Input Bar for Message Exchange (WhatsApp Style Across Stages 1 to 6 - Hidden in Stage 7 and completed processes) */}
+            {activeMentorship.currentStage !== 7 &&
+              activeMentorship.status !== 'completed' &&
+              (activeMentorship.status as string) !== 'closed' &&
+              (activeMentorship.status as string) !== 'concluido' &&
+              !activeMentorship.completedAt && (
+                <div className="p-2.5 sm:p-4 bg-white border-t border-[#493447]/10 shrink-0 no-print">
+                  <form onSubmit={handleSendMessage} className="w-full max-w-screen-xl mx-auto flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={inputText}
+                      onChange={(e) => setInputText(e.target.value)}
+                      placeholder={
+                        activeMentorship.currentStage === 4
+                          ? 'Responde a la práctica o simula...'
+                          : `Escribe tu respuesta para la Etapa ${activeMentorship.currentStage || 1}...`
+                      }
+                      className="min-h-[44px] flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 min-w-0 disabled:bg-neutral-100 disabled:text-[#4A3F55]/60"
+                      disabled={isSendingMessage}
+                    />
 
-                {/* WhatsApp Voice Recording Button & Dynamic Audio Bar */}
-                <WhatsAppVoiceRecorder
-                  stageNumber={activeMentorship.currentStage || 1}
-                  stageName={STAGE_META[activeMentorship.currentStage || 1]?.name}
-                  mode="bottom-bar"
-                  disabled={isSendingMessage}
-                  isSending={isSendingMessage}
-                  onTranscript={(text) => {
-                    setInputText((prev) => (prev ? `${prev} ${text}` : text));
-                    setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
-                  }}
-                  onSendDirect={async (text) => {
-                    if (!text.trim() || isSendingMessage) return;
-                    setInputText('');
-                    setStageInputText('');
-                    await sendMessageInActiveSession(text.trim(), activeMentorship.currentStage === 4);
-                    setTimeout(() => {
-                      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-                    }, 150);
-                  }}
-                />
+                    {/* WhatsApp Voice Recording Button & Dynamic Audio Bar */}
+                    <WhatsAppVoiceRecorder
+                      stageNumber={activeMentorship.currentStage || 1}
+                      stageName={STAGE_META[activeMentorship.currentStage || 1]?.name}
+                      mode="bottom-bar"
+                      disabled={isSendingMessage}
+                      isSending={isSendingMessage}
+                      onTranscript={(text) => {
+                        setInputText((prev) => (prev ? `${prev} ${text}` : text));
+                        setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
+                      }}
+                      onSendDirect={async (text) => {
+                        if (!text.trim() || isSendingMessage) return;
+                        setInputText('');
+                        setStageInputText('');
+                        await sendMessageInActiveSession(text.trim(), activeMentorship.currentStage === 4);
+                        setTimeout(() => {
+                          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                        }, 150);
+                      }}
+                    />
 
-                {/* Send Button */}
-                <button
-                  type="submit"
-                  disabled={!inputText.trim() || isSendingMessage}
-                  title="Enviar respuesta escrita"
-                  className="min-h-[44px] min-w-[44px] p-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer shrink-0 flex items-center justify-center active:scale-95"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </form>
-            </div>
+                    {/* Send Button */}
+                    <button
+                      type="submit"
+                      disabled={!inputText.trim() || isSendingMessage}
+                      title="Enviar respuesta escrita"
+                      className="min-h-[44px] min-w-[44px] p-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer shrink-0 flex items-center justify-center active:scale-95"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </form>
+                </div>
+            )}
           </div>
         )}
       </main>

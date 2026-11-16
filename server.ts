@@ -16,7 +16,7 @@ const isProd = process.env.NODE_ENV === 'production';
 const PORT = 3000;
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 // Initialize Resend client for real email delivery
 const resendApiKey = process.env.RESEND_API_KEY;
@@ -120,12 +120,21 @@ app.post('/api/mentor/respond', async (req: Request, res: Response) => {
       ? history
       : [];
 
-    // STRICT CASE ISOLATION:
-    // Only accept messages that belong to the active caseId / mentorshipId
+    // STRICT CASE ISOLATION & TECHNICAL ERROR FILTERING:
+    // Only accept messages that belong to the active caseId / mentorshipId and exclude technical error placeholders
     let resolvedHistory = rawHistory.filter((m: any) => {
       if (!m || typeof m !== 'object') return false;
       const mCase = m.caseId || m.mentorshipId;
       if (targetCaseId && mCase && mCase !== targetCaseId) {
+        return false;
+      }
+      const text = (m.text || m.content || '').toLowerCase();
+      if (
+        (m.id && String(m.id).includes('_err')) ||
+        m.isError ||
+        text.includes('no pudo responder en este momento') ||
+        text.includes('por favor reintenta')
+      ) {
         return false;
       }
       return true;
@@ -496,6 +505,12 @@ CONTEXTO DINÁMICO DE ESTA SESIÓN
 - Caso / Reto actual: ${activeCaseTitle || 'Caso actual'}
 - Reto inicial: ${activeCaseChallenge || resolvedUserMessage || ''}
 
+CRITERIOS ESTRICTOS PARA EL CAMPO "readyToAdvance":
+- En Etapa 1: Debe ser true ÚNICAMENTE cuando ya se haya entregado previamente la síntesis con las 3 viñetas (**Hechos y situación**, **Dilema del líder**, **Impacto y reto principal**) Y el mensaje actual del líder confirme o valide dicha síntesis (ej. "de acuerdo", "sí", "si estoy lista", "totalmente", "correcto"). Si el líder corrige, pregunta, duda o aporta nuevos datos, DEBE ser false.
+- En Etapa 2: Debe ser true ÚNICAMENTE cuando la habilidad crítica haya sido planteada Y el líder en su mensaje la reconozca o valide como relevante para su reto. Si la rebate o duda, DEBE ser false.
+- En Etapa 3: Debe ser true ÚNICAMENTE cuando se haya planteado al menos una alternativa viable Y el líder la elija o valide para actuar. Si pide más alternativas o tiene dudas, DEBE ser false.
+- En cualquier otro escenario o ante cualquier duda/aclaración: DEBE ser false.
+
 ======================================================================
 FORMATO ESTRICTO DE RESPUESTA JSON
 ======================================================================
@@ -509,13 +524,6 @@ Debes responder SIEMPRE en formato JSON con la siguiente estructura exacta:
   "isTherapeuticCase": false,
   "therapeuticReason": "Resumen si aplica...",
   "suggestedAlternatives": ["Opción 1", "Opción 2"],
-  "actionPlanDraft": {
-    "what": "...",
-    "when": "...",
-    "withWhom": "...",
-    "how": "...",
-    "careReminders": "..."
-  },
   "learningsSummary": "Resumen de lo reflexionado por el líder",
   "recommendedResources": [
     {
@@ -568,7 +576,7 @@ REGLA CRÍTICA ANTI-CICLADO:
 Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSON estricto.`;
 
         const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-        const FALLBACK_MODEL = 'gemini-2.5-flash';
+        const FALLBACK_MODEL = 'gemini-3.1-flash-lite';
         let response: any = null;
 
         try {
@@ -589,8 +597,19 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
           response = await Promise.race([geminiCall, timeoutPromise]);
         } catch (initialErr: any) {
           const errStr = String(initialErr?.message || initialErr);
-          if ((errStr.includes('503') || errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('UNAVAILABLE')) && MODEL_NAME !== FALLBACK_MODEL) {
-            console.warn(`Saturación/límite de tasa detectado (${errStr}) en ${MODEL_NAME}. Reintentando con fallback ${FALLBACK_MODEL}...`);
+          const isRateOrUnavailable =
+            errStr.includes('503') ||
+            errStr.includes('429') ||
+            errStr.includes('RESOURCE_EXHAUSTED') ||
+            errStr.includes('UNAVAILABLE');
+          const isTimeout =
+            errStr.includes('timeout') ||
+            errStr.includes('Timeout') ||
+            errStr.includes('deadline') ||
+            errStr.includes('DEADLINE_EXCEEDED');
+
+          if ((isRateOrUnavailable || isTimeout) && MODEL_NAME !== FALLBACK_MODEL) {
+            console.warn(`Incidencia detectada en modelo principal (${errStr}) en ${MODEL_NAME}. Reintentando con fallback ${FALLBACK_MODEL}...`);
             const fallbackCall = ai.models.generateContent({
               model: FALLBACK_MODEL,
               contents: prompt,
@@ -609,8 +628,8 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
           }
         }
 
-        const rawText = (response.text || '').trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
-        let parsed: any;
+        const rawText = (response?.text || '').trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
+        let parsed: any = {};
         try {
           parsed = JSON.parse(rawText || '{}');
         } catch {
@@ -623,11 +642,30 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
             isTherapeuticCase: false,
           };
         }
+
+        // Extracción robusta de la respuesta: replyText, reply, text, response, mensaje, content o rawText
+        const extractedReply = (
+          parsed.replyText ||
+          parsed.reply ||
+          parsed.text ||
+          parsed.response ||
+          parsed.mensaje ||
+          parsed.content ||
+          rawText ||
+          ''
+        ).trim();
+
+        const safeReplyText = extractedReply || 'Lidacta está lista para acompañarte. ¿Cómo te gustaría continuar?';
+
         return res.json({
           success: true,
-          reply: parsed.replyText,
-          text: parsed.replyText,
-          data: { ...parsed, reply: parsed.replyText, replyText: parsed.replyText },
+          reply: safeReplyText,
+          text: safeReplyText,
+          data: {
+            ...parsed,
+            reply: safeReplyText,
+            replyText: safeReplyText,
+          },
         });
       } catch (geminiError) {
         console.warn('Gemini API call warning, falling back to deterministic coach engine:', geminiError);
@@ -1496,16 +1534,9 @@ function generateDeterministicCoaching({
 
   if (stage === 5) {
     return {
-      replyText: `Perfecto, ${leaderName}. Para que tu liderazgo se traduzca en acción efectiva y no quede en buenas intenciones, tu plan queda estructurado con estos 5 pilares:\n\n• **Qué harás:** Conversación de alineación individual y establecimiento de compromisos.\n• **Cuándo:** Definido en tu calendario para el momento de mayor enfoque del día.\n• **Con quién:** Con los colaboradores clave involucrados.\n• **Cómo:** Siguiendo la estructura de hechos concretos, escucha activa y acuerdos mutuos.\n• **Qué vas a cuidar:** Mantener la serenidad, cuidar el tono sin juzgar y cerrar con acuerdos por escrito.\n\nTe dejaré un recordatorio activo en Lidacta. En cuanto hayas ejecutado esta acción, regresa aquí para que analicemos juntos qué ocurrió y cerremos tus aprendizajes.`,
-      readyToAdvance: true,
-      advancePrompt: 'Marcar acción como realizada e ir a Etapa 6: Aprender - Ajustar',
-      actionPlanDraft: {
-        what: 'Conversación directa de retroalimentación y alineación de acuerdos operativos',
-        when: 'Próxima jornada laboral (horario convenido)',
-        withWhom: 'Colaboradores involucrados',
-        how: 'Enfoque en hechos observables, preguntas abiertas y acuerdos mutuos',
-        careReminders: 'Escuchar el 70% del tiempo, no emitir juicios y formalizar acuerdos por escrito',
-      },
+      replyText: `Llegamos al momento de aterrizar tu plan de acción, ${leaderName}. Para asegurar que tu liderazgo se traduzca en una práctica concreta y viable, te invito a redactar personalmente tus 5 compromisos en el formulario de arriba:\n\n1. **¿Qué harás?** (La acción concreta)\n2. **¿Cuándo lo harás?** (Fecha y hora específicas)\n3. **¿Con quién lo harás?** (Involucrados directos)\n4. **¿Cómo lo harás?** (La estrategia o pasos que seguirás)\n5. **¿Qué vas a cuidar o recordar?** (Puntos ciegos, serenidad o enfoque)\n\nRecuerda que la decisión y las palabras son exclusivamente tuyas. Si tienes alguna duda o deseas rebotar una idea antes de guardar, puedes escribirme en el cuadro de conversación complementaria abajo.`,
+      readyToAdvance: false,
+      advancePrompt: null,
       recommendedResources: [
         {
           title: 'Plantilla de Acuerdos Operativos y Compromisos Mutuos',

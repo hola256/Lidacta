@@ -1,4 +1,4 @@
-import { UserProfile } from '../types/lidacta';
+import { UserProfile, FinalFeedbackReport } from '../types/lidacta';
 
 export interface EmailServiceOptions {
   to: string;
@@ -20,6 +20,7 @@ export interface EmailServiceResult {
   emailId?: string;
   error?: string;
   realSent?: boolean;
+  simulated?: boolean;
 }
 
 function getEnvVar(key: string, defaultValue: string): string {
@@ -373,6 +374,72 @@ export class EmailService {
       return {
         success: false,
         error: (error as any)?.message || 'Error de red en alerta terapéutica',
+      };
+    }
+  }
+
+  /**
+   * Envía el Reporte de Retroalimentación de Liderazgo y Autonomía (Etapa 7) al Líder vía Resend.
+   */
+  async sendFinalFeedbackReport(params: {
+    leaderEmail: string;
+    leaderName: string;
+    companyName?: string;
+    challengeTitle?: string;
+    report: FinalFeedbackReport;
+  }): Promise<EmailServiceResult> {
+    const cleanEmail = (params.leaderEmail || '').trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return {
+        success: false,
+        error: 'Correo electrónico de destinatario no válido o ausente.',
+      };
+    }
+
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/send-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          to: cleanEmail,
+          email: cleanEmail,
+          leaderEmail: cleanEmail,
+          name: params.leaderName,
+          leaderName: params.leaderName,
+          companyName: params.companyName,
+          challengeTitle: params.challengeTitle,
+          report: params.report,
+          type: 'stage7_final_report',
+          subject: `Tu Reporte de Retroalimentación de Liderazgo y Autonomía - Lidacta: ${params.leaderName}`,
+          replyTo: 'hola@taniapadierna.com',
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.success) {
+        const isSimulated = Boolean(data.simulated);
+        return {
+          success: true,
+          emailId: data.emailId || data.id,
+          realSent: isSimulated ? false : (data.realSent ?? true),
+          simulated: isSimulated,
+          message: data.message || 'Reporte final de Etapa 7 enviado exitosamente vía Resend.',
+        };
+      }
+
+      console.error('Error despachando reporte final Etapa 7:', data.error || data.message);
+      return {
+        success: false,
+        error: data.error || data.message || 'Error al despachar el reporte final por correo',
+      };
+    } catch (error) {
+      console.error('Error de red al entregar reporte final Etapa 7:', error);
+      return {
+        success: false,
+        error: (error as any)?.message || 'Error de red al entregar reporte final',
       };
     }
   }

@@ -69,6 +69,7 @@ export default async function handler(req: any, res: any) {
     const actionWhat = plan.what || body.actionWhat || 'Conversación 1 a 1 de alineación operativa';
     const actionWhen = plan.when || body.actionWhen || 'Esta semana';
     const actionWithWhom = plan.withWhom || body.actionWithWhom || 'Equipo / Colaborador';
+    const actionHow = plan.how || body.actionHow || '';
     const actionCare = plan.careReminders || body.careReminders || 'Escucha activa y foco en hechos observables';
     const lastActiveFormatted = body.lastActiveFormatted || body.lastActiveAt || new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const leaderPosition = body.leaderPosition || 'Líder Operativo';
@@ -76,12 +77,124 @@ export default async function handler(req: any, res: any) {
     const leaderWhatsapp = body.leaderWhatsapp || body.whatsapp || 'No registrado';
     const targetLeaderEmail = body.leaderEmail || targetEmail;
 
+    const reportData = body.report || body.finalFeedbackReport || {};
+    const detectedStrengths: string[] = Array.isArray(reportData.detectedStrengths) ? reportData.detectedStrengths : [];
+    const stageTwoSkills: string[] = Array.isArray(reportData.stageTwoSkills) ? reportData.stageTwoSkills : [];
+    const chosenActions: string[] = Array.isArray(reportData.chosenActions) ? reportData.chosenActions : [];
+    const stageSixLearnings: string[] = Array.isArray(reportData.stageSixLearnings) ? reportData.stageSixLearnings : [];
+    const recommendationsForAutonomy: string[] = Array.isArray(reportData.recommendationsForAutonomy) ? reportData.recommendationsForAutonomy : [];
+
     let defaultHtml: string;
     let defaultText: string;
     let finalSubject: string;
 
+    // 0. CORREO DEL REPORTE FINAL DE RETROALIMENTACIÓN DE LIDERAZGO Y AUTONOMÍA (ETAPA 7)
+    if (type === 'stage7_final_report') {
+      finalSubject = subject || `Tu Reporte de Retroalimentación de Liderazgo y Autonomía - Lidacta: ${recipientName}`;
+
+      const renderList = (items: string[], emptyText: string) => {
+        if (!items || items.length === 0) {
+          return `<p style="font-size: 13px; color: #7A6F85; font-style: italic; margin: 0;">${emptyText}</p>`;
+        }
+        return `<ul style="margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.6; color: #4A3F55;">
+          ${items.map((it) => `<li style="margin-bottom: 6px;">${it}</li>`).join('')}
+        </ul>`;
+      };
+
+      const renderTextList = (items: string[], emptyText: string) => {
+        if (!items || items.length === 0) return `  - ${emptyText}\n`;
+        return items.map((it) => `  • ${it}\n`).join('');
+      };
+
+      defaultHtml = `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><title>${finalSubject}</title></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8F6F4; margin: 0; padding: 24px; color: #2D1B4E;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 640px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(45, 27, 78, 0.08); border: 1px solid #EADBCE;">
+    <tr>
+      <td style="background-color: #2D1B4E; padding: 32px 24px; text-align: center;">
+        <h1 style="color: #FFF7EF; font-size: 24px; margin: 0 0 8px 0; font-weight: 800; letter-spacing: 0.5px;">LIDACTA</h1>
+        <p style="color: #F7B538; font-size: 13px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Reporte de Cierre · Etapa 7: Cierre y Retroalimentación</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 32px 28px;">
+        <span style="display: inline-block; padding: 4px 12px; background-color: #E2F7E1; color: #246B2A; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; margin-bottom: 12px;">✓ Proceso Concluido Exitosamente</span>
+        <h2 style="font-size: 20px; color: #2D1B4E; margin: 0 0 12px 0;">¡Felicidades, ${recipientName}!</h2>
+        <p style="font-size: 14px; line-height: 1.6; color: #4A3F55; margin: 0 0 14px 0;">
+          Has concluido satisfactoriamente las siete etapas de acompañamiento de liderazgo en Lidacta para tu desafío: <strong>"${challengeTitle}"</strong>.
+        </p>
+        <p style="font-size: 13px; line-height: 1.6; color: #4A3F55; margin: 0 0 24px 0;">
+          A continuación tienes el <strong>Reporte de Retroalimentación de Liderazgo y Autonomía</strong> generado a partir de tu proceso, tus reflexiones y las acciones que llevaste a la práctica:
+        </p>
+
+        <!-- 1. Fortalezas detectadas -->
+        <div style="background-color: #FFF7EF; border: 1px solid #EADBCE; border-left: 4px solid #F7B538; padding: 18px 20px; border-radius: 10px; margin: 0 0 18px 0;">
+          <h4 style="font-size: 13px; font-weight: 800; color: #2D1B4E; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px;">🌟 Fortalezas detectadas en el líder</h4>
+          ${renderList(detectedStrengths, 'Disposición para el autoanálisis, escucha intencional y proactividad.')}
+        </div>
+
+        <!-- 2. Habilidades clave puestas en juego (Etapa 2) -->
+        <div style="background-color: #FFF3ED; border: 1px solid #FFD3BF; border-left: 4px solid #BF3A1B; padding: 18px 20px; border-radius: 10px; margin: 0 0 18px 0;">
+          <h4 style="font-size: 13px; font-weight: 800; color: #BF3A1B; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px;">🎯 Habilidades clave puestas en juego (Etapa 2)</h4>
+          ${renderList(stageTwoSkills, 'Comunicación Asertiva, Retroalimentación Basada en Hechos.')}
+        </div>
+
+        <!-- 3. Acciones que eligió el líder (Etapa 5) -->
+        <div style="background-color: #F8F6F4; border: 1px solid #EADBCE; border-left: 4px solid #2D1B4E; padding: 18px 20px; border-radius: 10px; margin: 0 0 18px 0;">
+          <h4 style="font-size: 13px; font-weight: 800; color: #2D1B4E; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px;">⚡ Acciones que eligió el líder (Etapa 5)</h4>
+          ${renderList(chosenActions, 'Plan de acción acordado y ejecutado en el entorno real.')}
+        </div>
+
+        <!-- 4. Aprendizajes y reflexiones (Etapa 6) -->
+        <div style="background-color: #FFF7EF; border: 1px solid #EADBCE; border-left: 4px solid #F7B538; padding: 18px 20px; border-radius: 10px; margin: 0 0 18px 0;">
+          <h4 style="font-size: 13px; font-weight: 800; color: #2D1B4E; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px;">💡 Aprendizajes y reflexiones (Etapa 6)</h4>
+          ${renderList(stageSixLearnings, 'Identificación de aprendizajes clave y ajustes futuros.')}
+        </div>
+
+        <!-- 5. Recomendaciones para el fortalecimiento de la autonomía -->
+        <div style="background-color: #2D1B4E; color: #FFF7EF; padding: 20px; border-radius: 12px; margin: 0 0 24px 0;">
+          <h4 style="font-size: 13px; font-weight: 800; color: #F7B538; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px;">🚀 Recomendaciones para el fortalecimiento de tu autonomía</h4>
+          <ul style="margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.6; color: #FFF7EF;">
+            ${(recommendationsForAutonomy.length > 0 ? recommendationsForAutonomy : ['Practicar la retroalimentación continua basada en hechos.', 'Mantener el hábito de analizar el contexto antes de reaccionar.'])
+              .map((rec) => `<li style="margin-bottom: 6px;">${rec}</li>`)
+              .join('')}
+          </ul>
+        </div>
+
+        <div style="background-color: #F8F6F4; border-left: 4px solid #F7B538; padding: 14px 18px; border-radius: 8px; margin: 0 0 24px 0;">
+          <p style="font-size: 13px; line-height: 1.6; color: #2D1B4E; margin: 0; font-style: italic;">
+            "El liderazgo en acción es un proceso continuo. Cada conversación intencional, acuerdo claro y reflexión honesta fortalece tu autonomía e incrementa el impacto positivo en tu equipo."
+          </p>
+        </div>
+
+        <div style="border-top: 1px solid #EADBCE; padding-top: 16px; margin-top: 20px;">
+          <p style="font-size: 14px; font-weight: 800; color: #2D1B4E; margin: 0 0 4px 0;">Lidacta</p>
+          <p style="font-size: 12px; color: #BF3A1B; margin: 0 0 2px 0; font-weight: 600;">Desarrollo de Liderazgo en Acción · ${compName}</p>
+          <p style="font-size: 11px; color: #4A3F55; margin: 0;">Contacto: <a href="mailto:${replyToEmail}" style="color: #BF3A1B; text-decoration: none;">${replyToEmail}</a></p>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="background-color: #FFF7EF; padding: 18px 24px; text-align: center; border-top: 1px solid #EADBCE;">
+        <p style="font-size: 11px; color: #4A3F55; margin: 0;">🔒 Documento confidencial de desarrollo de liderazgo · Lidacta © ${new Date().getFullYear()}</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+      defaultText = `¡Felicidades, ${recipientName}!\n\nHas concluido satisfactoriamente las siete etapas de acompañamiento en Lidacta para tu desafío: "${challengeTitle}".\n\nA continuación compartimos tu Reporte de Retroalimentación de Liderazgo y Autonomía:\n\n` +
+        `1. FORTALEZAS DETECTADAS EN EL LÍDER:\n${renderTextList(detectedStrengths, 'Disposición para el autoanálisis, escucha intencional y proactividad.')}\n` +
+        `2. HABILIDADES CLAVE PUESTAS EN JUEGO (ETAPA 2):\n${renderTextList(stageTwoSkills, 'Comunicación Asertiva, Retroalimentación Basada en Hechos.')}\n` +
+        `3. ACCIONES QUE ELIGIÓ EL LÍDER (ETAPA 5):\n${renderTextList(chosenActions, 'Plan de acción acordado y ejecutado en el entorno real.')}\n` +
+        `4. APRENDIZAJES Y REFLEXIONES (ETAPA 6):\n${renderTextList(stageSixLearnings, 'Identificación de aprendizajes clave y ajustes futuros.')}\n` +
+        `5. RECOMENDACIONES PARA EL FORTALECIMIENTO DE TU AUTONOMÍA:\n${renderTextList(recommendationsForAutonomy, 'Practicar la retroalimentación continua basada en hechos.')}\n\n` +
+        `"El liderazgo en acción es un proceso continuo. Cada conversación intencional, acuerdo claro y reflexión honesta fortalece tu autonomía e incrementa el impacto positivo en tu equipo."\n\n` +
+        `Lidacta · Desarrollo de Liderazgo en Acción · ${compName}\nResponder a: ${replyToEmail}`;
+
     // 1. CORREO DE ACOMPAÑAMIENTO EN ETAPA 5 (A LAS 48 HORAS)
-    if (type === 'stage5_48h') {
+    } else if (type === 'stage5_48h') {
       finalSubject = subject || 'Apoyo continuo para revisar el primer paso de tu compromiso en Lidacta';
       defaultHtml = `<!DOCTYPE html>
 <html lang="es">
@@ -109,6 +222,7 @@ export default async function handler(req: any, res: any) {
           <p style="font-size: 13px; color: #4A3F55; margin: 0 0 8px 0;">• <strong>¿Qué harás?:</strong> ${actionWhat}</p>
           <p style="font-size: 13px; color: #4A3F55; margin: 0 0 8px 0;">• <strong>¿Cuándo?:</strong> ${actionWhen}</p>
           <p style="font-size: 13px; color: #4A3F55; margin: 0 0 8px 0;">• <strong>¿Con quién?:</strong> ${actionWithWhom}</p>
+          ${actionHow ? `<p style="font-size: 13px; color: #4A3F55; margin: 0 0 8px 0;">• <strong>¿Cómo?:</strong> ${actionHow}</p>` : ''}
           <p style="font-size: 13px; color: #4A3F55; margin: 0;">• <strong>Aspecto clave a cuidar:</strong> ${actionCare}</p>
         </div>
         <div style="background-color: #F8F6F4; border-left: 4px solid #F7B538; padding: 14px 18px; border-radius: 8px; margin: 0 0 24px 0;">
@@ -133,7 +247,7 @@ export default async function handler(req: any, res: any) {
   </table>
 </body>
 </html>`;
-      defaultText = `¡Hola ${recipientName}!\n\nHan transcurrido 48 horas desde que definiste tu plan de acción en Lidacta para tu desafío: "${challengeTitle}".\n\nEste es un recordatorio de apoyo continuo para acompañarte a dar ese primer paso con tranquilidad y enfoque:\n\n• ¿Qué harás?: ${actionWhat}\n• ¿Cuándo?: ${actionWhen}\n• ¿Con quién?: ${actionWithWhom}\n• Qué vas a cuidar: ${actionCare}\n\nRecuerda: El liderazgo se forja en las conversaciones reales del día a día. No busques la perfección, busca una conversación intencional y basada en hechos observables.\n\nEn cuanto ejecutes tu acción, regresa a Lidacta para registrar qué ocurrió en la Etapa 6.\n\nAtentamente,\nEl Equipo de Lidacta\nResponder a: ${replyToEmail}`;
+      defaultText = `¡Hola ${recipientName}!\n\nHan transcurrido 48 horas desde que definiste tu plan de acción en Lidacta para tu desafío: "${challengeTitle}".\n\nEste es un recordatorio de apoyo continuo para acompañarte a dar ese primer paso con tranquilidad y enfoque:\n\n• ¿Qué harás?: ${actionWhat}\n• ¿Cuándo?: ${actionWhen}\n• ¿Con quién?: ${actionWithWhom}\n${actionHow ? `• ¿Cómo?: ${actionHow}\n` : ''}• Qué vas a cuidar: ${actionCare}\n\nRecuerda: El liderazgo se forja en las conversaciones reales del día a día. No busques la perfección, busca una conversación intencional y basada en hechos observables.\n\nEn cuanto ejecutes tu acción, regresa a Lidacta para registrar qué ocurrió en la Etapa 6.\n\nAtentamente,\nEl Equipo de Lidacta\nResponder a: ${replyToEmail}`;
 
     // 2. CORREO DE SEGUIMIENTO EN ETAPA 5 (A LOS 5 DÍAS)
     } else if (type === 'stage5_5d') {
@@ -160,7 +274,9 @@ export default async function handler(req: any, res: any) {
           <p style="font-size: 13px; font-weight: 800; color: #2D1B4E; margin: 0 0 8px 0;">📌 Tu Compromiso Registrado:</p>
           <p style="font-size: 13px; color: #4A3F55; margin: 0 0 6px 0;">• <strong>Acción:</strong> ${actionWhat}</p>
           <p style="font-size: 13px; color: #4A3F55; margin: 0 0 6px 0;">• <strong>Programada para:</strong> ${actionWhen}</p>
-          <p style="font-size: 13px; color: #4A3F55; margin: 0;">• <strong>Con:</strong> ${actionWithWhom}</p>
+          <p style="font-size: 13px; color: #4A3F55; margin: 0 0 6px 0;">• <strong>Con:</strong> ${actionWithWhom}</p>
+          ${actionHow ? `<p style="font-size: 13px; color: #4A3F55; margin: 0 0 6px 0;">• <strong>Cómo:</strong> ${actionHow}</p>` : ''}
+          <p style="font-size: 13px; color: #4A3F55; margin: 0;">• <strong>A cuidar:</strong> ${actionCare}</p>
         </div>
         <p style="font-size: 14px; line-height: 1.6; color: #4A3F55; margin: 0 0 16px 0;">
           Es un excelente momento para hacer una pausa previa: ¿pudiste llevar a cabo la acción acordada?, ¿qué funcionó y qué respuestas observaste en tu colaborador o equipo?
@@ -223,6 +339,7 @@ export default async function handler(req: any, res: any) {
           <p style="font-size: 13px; color: #2D1B4E; margin: 0 0 6px 0;">• <strong>Acción comprometida:</strong> ${actionWhat}</p>
           <p style="font-size: 13px; color: #2D1B4E; margin: 0 0 6px 0;">• <strong>Fecha prevista:</strong> ${actionWhen}</p>
           <p style="font-size: 13px; color: #2D1B4E; margin: 0 0 6px 0;">• <strong>Con quién:</strong> ${actionWithWhom}</p>
+          <p style="font-size: 13px; color: #2D1B4E; margin: 0 0 6px 0;">• <strong>Cómo:</strong> ${actionHow || 'No especificado'}</p>
           <p style="font-size: 13px; color: #2D1B4E; margin: 0;">• <strong>Aspectos a cuidar:</strong> ${actionCare}</p>
         </div>
 
@@ -251,7 +368,7 @@ export default async function handler(req: any, res: any) {
   </table>
 </body>
 </html>`;
-      defaultText = `Estimada Tania:\n\nSe ha detectado inactividad de 8 días calendario tras finalizar la Etapa 5 en Lidacta.\n\n• Nombre del Líder: ${recipientName}\n• Empresa: ${compName}\n• Puesto / Área: ${leaderPosition} (${leaderArea})\n• Fecha del último acceso: ${lastActiveFormatted}\n• Etapa actual: Etapa 5 (Compromiso y Plan de Acción)\n• Desafío en curso: "${challengeTitle}"\n\nResumen breve de su compromiso no finalizado:\n• Acción comprometida: ${actionWhat}\n• Fecha prevista: ${actionWhen}\n• Con quién: ${actionWithWhom}\n• Aspectos a cuidar: ${actionCare}\n\nContacto del líder:\n• Email: ${targetLeaderEmail}\n• WhatsApp: ${leaderWhatsapp}\n\nTe sugerimos contactar al líder vía correo o WhatsApp para verificar cómo le fue con su acción, resolver posibles dudas y animarlo a ingresar a Lidacta para concluir su reflexión en la Etapa 6.\n\nAtentamente,\nSistema Automatizado de Monitoreo Lidacta`;
+      defaultText = `Estimada Tania:\n\nSe ha detectado inactividad de 8 días calendario tras finalizar la Etapa 5 en Lidacta.\n\n• Nombre del Líder: ${recipientName}\n• Empresa: ${compName}\n• Puesto / Área: ${leaderPosition} (${leaderArea})\n• Fecha del último acceso: ${lastActiveFormatted}\n• Etapa actual: Etapa 5 (Compromiso y Plan de Acción)\n• Desafío en curso: "${challengeTitle}"\n\nResumen breve de su compromiso no finalizado:\n• Acción comprometida: ${actionWhat}\n• Fecha prevista: ${actionWhen}\n• Con quién: ${actionWithWhom}\n• Cómo: ${actionHow || 'No especificado'}\n• Aspectos a cuidar: ${actionCare}\n\nContacto del líder:\n• Email: ${targetLeaderEmail}\n• WhatsApp: ${leaderWhatsapp}\n\nTe sugerimos contactar al líder vía correo o WhatsApp para verificar cómo le fue con su acción, resolver posibles dudas y animarlo a ingresar a Lidacta para concluir su reflexión en la Etapa 6.\n\nAtentamente,\nSistema Automatizado de Monitoreo Lidacta`;
 
     // 4. ALERTA DE LÍMITE TERAPÉUTICO (A LA ADMINISTRADORA: hola@taniapadierna.com)
     } else if (type === 'therapeutic_alert') {

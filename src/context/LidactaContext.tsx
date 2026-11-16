@@ -4,6 +4,7 @@ import {
   MentorshipSession,
   MentorshipActionPlan,
   MentorshipLearnings,
+  FinalFeedbackReport,
   NotificationItem,
   StageNumber,
   UserProfile,
@@ -152,6 +153,7 @@ interface LidactaContextType {
   ) => Promise<MentorshipSession>;
   sendMessageInActiveSession: (text: string, isPractice?: boolean) => Promise<void>;
   advanceStage: (targetStage?: StageNumber) => Promise<void>;
+  setStageReadyToAdvance: (stage: StageNumber | null) => void;
   updateActionPlan: (plan: MentorshipSession['actionPlan']) => void;
   markActionCompleted: () => void;
   saveLearnings: (learnings: NonNullable<MentorshipSession['learnings']>) => void;
@@ -191,6 +193,9 @@ interface LidactaContextType {
     sentAdminAlert: number;
   }>;
   triggerStage5FollowUpCheck: () => Promise<void>;
+
+  // Stage 7 Final Feedback Report Email Dispatch
+  retrySendFinalReportEmail: (mentorshipId?: string) => Promise<{ success: boolean; message?: string }>;
 }
 
 const LidactaContext = createContext<LidactaContextType | undefined>(undefined);
@@ -265,6 +270,9 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   sessionUserRef.current = sessionUser;
   const currentUserIdRef = useRef<string>(currentUserId);
   currentUserIdRef.current = currentUserId;
+
+  // Set to prevent duplicate concurrent in-flight email dispatches for Stage 7 final report
+  const inFlightFinalReportEmailRef = useRef<Set<string>>(new Set());
 
   // Inspector Mode / Emulation State (Strictly limited to Administrator sessions)
   const [impersonatedUser, setImpersonatedUser] = useState<UserProfile | null>(() => {
@@ -532,6 +540,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 actionPlan: m.actionPlan
                   ? {
                       ...m.actionPlan,
+                      how: m.actionPlan.how || '',
                       shareWithHR: isShared,
                       shareActionPlanWithHR: isShared,
                       actionPlanShared: isShared,
@@ -546,6 +555,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
                   : m.learnings,
               };
             }
+
             const isShared = Boolean(
               m.shareActionPlanWithHR ??
               m.actionPlanShared ??
@@ -578,6 +588,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
               actionPlan: m.actionPlan
                 ? {
                     ...m.actionPlan,
+                    how: m.actionPlan.how || '',
                     shareWithHR: isShared,
                     shareActionPlanWithHR: isShared,
                     actionPlanShared: isShared,
@@ -1338,10 +1349,22 @@ El Equipo de Lidacta`;
     const currentStage = activeMentorship.currentStage;
     const company = companies.find((c) => c.id === activeMentorship.companyId) || companies[0];
 
-    // Filter strictly to ensure no foreign messages are passed
-    const isolatedExistingMessages = (activeMentorship.messages || []).filter(
-      (m: any) => (!m.caseId || m.caseId === currentCaseId) && (!m.mentorshipId || m.mentorshipId === currentCaseId)
-    );
+    // Filter strictly to ensure no foreign messages or technical error messages are passed to Gemini
+    const isolatedExistingMessages = (activeMentorship.messages || []).filter((m: any) => {
+      if (!m || typeof m !== 'object') return false;
+      const mCase = m.caseId || m.mentorshipId;
+      if (mCase && mCase !== currentCaseId) return false;
+      const text = (m.text || m.content || '').toLowerCase();
+      if (
+        (m.id && String(m.id).includes('_err')) ||
+        m.isError ||
+        text.includes('no pudo responder en este momento') ||
+        text.includes('por favor reintenta')
+      ) {
+        return false;
+      }
+      return true;
+    });
 
     const leaderMsg = {
       id: `msg_${Date.now()}_lead`,
@@ -1354,14 +1377,16 @@ El Equipo de Lidacta`;
       isLeaderVoiceQuote: text.length < 140, // Format short insights nicely
     };
 
-    const updatedMessages = [...isolatedExistingMessages, leaderMsg];
+    // UI state: preserve all accumulated messages (including technical error notifications and retries) in chronological order
+    const updatedUiMessages = [...(activeMentorship.messages || []), leaderMsg];
 
     setMentorships((prev) =>
       prev.map((m) =>
         m.id === currentCaseId
           ? {
               ...m,
-              messages: updatedMessages,
+              stageReadyToAdvance: null,
+              messages: updatedUiMessages,
               lastActiveAt: new Date().toISOString(),
             }
           : m
@@ -1388,7 +1413,7 @@ El Equipo de Lidacta`;
           currentMessage: text,
           sessionData: {
             ...activeMentorship,
-            messages: updatedMessages,
+            messages: [...isolatedExistingMessages, leaderMsg],
           },
           isPracticeMode: isPractice,
         }),
@@ -1403,6 +1428,11 @@ El Equipo de Lidacta`;
         data.data?.replyText;
       if (response.ok && resolvedReply) {
         const coachReply = data.data || {};
+        const isReadyToAdvance = Boolean(coachReply.readyToAdvance || data.readyToAdvance);
+        const stageAdvanceSignal =
+          isReadyToAdvance && currentStage >= 1 && currentStage <= 4
+            ? (currentStage as StageNumber)
+            : null;
 
         const lidactaMsg = {
           id: `msg_${Date.now()}_lid`,
@@ -1422,10 +1452,9 @@ El Equipo de Lidacta`;
               ? Array.from(new Set([...(m.identifiedSkills || []), ...coachReply.identifiedSkills]))
               : m.identifiedSkills;
 
-            const newActionPlan = coachReply.actionPlanDraft
-              ? { ...(m.actionPlan || { what: '', when: '', withWhom: '', how: '', careReminders: '' }), ...coachReply.actionPlanDraft }
-              : m.actionPlan;
-
+            // In Stage 5, the leader personally writes and owns their Action Plan.
+            // Any suggestions or drafts provided by Lidacta in the conversation remain in the chat only
+            // and are NEVER automatically populated into m.actionPlan.
             const newFinalFeedback = coachReply.finalFeedback
               ? {
                   ...coachReply.finalFeedback,
@@ -1435,16 +1464,35 @@ El Equipo de Lidacta`;
 
             return {
               ...m,
+              stageReadyToAdvance: stageAdvanceSignal !== null ? stageAdvanceSignal : m.stageReadyToAdvance,
               messages: [...m.messages, lidactaMsg],
               theme: coachReply.detectedTheme || m.theme,
               identifiedSkills: newSkills,
               suggestedAlternatives: coachReply.suggestedAlternatives || m.suggestedAlternatives,
-              actionPlan: newActionPlan,
+              actionPlan: m.actionPlan,
               finalFeedbackReport: newFinalFeedback,
               lastActiveAt: new Date().toISOString(),
             };
           })
         );
+
+        // Despacho automático de correo para Etapa 7 al generarse o actualizarse el reporte final
+        const generatedStage7Report: FinalFeedbackReport | undefined = coachReply.finalFeedback
+          ? { ...coachReply.finalFeedback, deliveredAt: new Date().toISOString() }
+          : undefined;
+
+        if (currentStage === 7) {
+          const reportToSend = generatedStage7Report || activeMentorship.finalFeedbackReport;
+          if (reportToSend && !activeMentorship.finalReportEmailSent) {
+            const sessionSnapshot: MentorshipSession = {
+              ...activeMentorship,
+              finalFeedbackReport: reportToSend,
+            };
+            dispatchFinalFeedbackReportEmail(sessionSnapshot, reportToSend).catch((e) =>
+              console.error('[LIDACTA 📧] Error no bloqueante al despachar reporte final por email:', e)
+            );
+          }
+        }
 
         // Silent and automatic resource tracking in background (100% invisible for leader)
         if (coachReply.recommendedResources && Array.isArray(coachReply.recommendedResources) && coachReply.recommendedResources.length > 0) {
@@ -1495,10 +1543,13 @@ El Equipo de Lidacta`;
       } else {
         const errMsg = {
           id: `msg_${Date.now()}_err`,
+          caseId: currentCaseId,
+          mentorshipId: currentCaseId,
           sender: 'lidacta' as const,
           text: 'Lidacta no pudo responder en este momento. Por favor reintenta.',
           timestamp: new Date().toISOString(),
           stage: currentStage,
+          isError: true,
         };
         setMentorships((prev) =>
           prev.map((m) =>
@@ -1512,10 +1563,13 @@ El Equipo de Lidacta`;
       console.error('Error detallado del chat:', error);
       const errMsg = {
         id: `msg_${Date.now()}_err`,
+        caseId: currentCaseId,
+        mentorshipId: currentCaseId,
         sender: 'lidacta' as const,
         text: 'Lidacta no pudo responder en este momento. Por favor reintenta.',
         timestamp: new Date().toISOString(),
         stage: currentStage,
+        isError: true,
       };
       setMentorships((prev) =>
         prev.map((m) =>
@@ -1529,11 +1583,152 @@ El Equipo de Lidacta`;
     }
   };
 
+  /**
+   * Despacho automático y protegido del Reporte Final de Etapa 7 al correo registrado del Líder vía Resend.
+   * Evita duplicados, no bloquea el cierre del caso y maneja contingencias de red/Resend.
+   */
+  const dispatchFinalFeedbackReportEmail = async (
+    targetMentorship: MentorshipSession,
+    report: FinalFeedbackReport
+  ): Promise<{ success: boolean; message?: string; emailId?: string }> => {
+    if (!targetMentorship || !report) {
+      return { success: false, message: 'Faltan datos de mentoría o reporte.' };
+    }
+    const caseId = targetMentorship.id;
+
+    // 1. PROTECCIÓN CONTRA DUPLICADOS:
+    // Si ya fue enviado previamente o está en curso de envío (in-flight), NO enviar nuevamente.
+    if (targetMentorship.finalReportEmailSent) {
+      return { success: true, message: 'El reporte final ya fue enviado previamente por correo.' };
+    }
+    if (inFlightFinalReportEmailRef.current.has(caseId)) {
+      return { success: false, message: 'El envío del reporte ya se encuentra en proceso.' };
+    }
+
+    // 2. OBTENCIÓN DEL DESTINATARIO REAL DEL LÍDER:
+    // Resolver el correo del líder registrado en allUsers o en la sesión activa, nunca Recursos Humanos
+    const leaderUser =
+      allUsers.find((u) => u.id === targetMentorship.leaderId) ||
+      (currentUser.id === targetMentorship.leaderId ? currentUser : null);
+
+    const leaderEmail = (leaderUser?.email || (targetMentorship as any).leaderEmail || '').trim().toLowerCase();
+
+    if (!leaderEmail || !leaderEmail.includes('@')) {
+      const errMsg = 'No se encontró correo electrónico válido registrado para el líder.';
+      console.warn(`[LIDACTA 📧] No se pudo enviar reporte final (caso ${caseId}): ${errMsg}`);
+      setMentorships((prev) =>
+        prev.map((m) =>
+          m.id === caseId
+            ? {
+                ...m,
+                finalReportEmailSent: false,
+                finalReportEmailStatus: 'failed',
+                finalReportEmailError: errMsg,
+              }
+            : m
+        )
+      );
+      return { success: false, message: errMsg };
+    }
+
+    const leaderName = leaderUser?.name || targetMentorship.leaderName || 'Líder';
+    const companyName = targetMentorship.companyName || leaderUser?.companyName || 'Empresa';
+    const challengeTitle = targetMentorship.title || 'Desafío de Liderazgo';
+
+    inFlightFinalReportEmailRef.current.add(caseId);
+
+    try {
+      const result = await emailService.sendFinalFeedbackReport({
+        leaderEmail,
+        leaderName,
+        companyName,
+        challengeTitle,
+        report,
+      });
+
+      if (result.success) {
+        setMentorships((prev) =>
+          prev.map((m) =>
+            m.id === caseId
+              ? {
+                  ...m,
+                  finalReportEmailSent: true,
+                  finalReportEmailSentAt: new Date().toISOString(),
+                  finalReportEmailId: result.emailId,
+                  finalReportEmailStatus: result.realSent ? 'sent' : 'simulated',
+                  finalReportEmailError: undefined,
+                }
+              : m
+          )
+        );
+        return {
+          success: true,
+          emailId: result.emailId,
+          message: result.message || 'Reporte final enviado exitosamente al correo del líder.',
+        };
+      } else {
+        const errorMsg = result.error || 'Error al despachar el correo con Resend.';
+        console.warn(`[LIDACTA 📧] Envío fallido de reporte final (caso ${caseId}):`, errorMsg);
+        setMentorships((prev) =>
+          prev.map((m) =>
+            m.id === caseId
+              ? {
+                  ...m,
+                  finalReportEmailSent: false,
+                  finalReportEmailStatus: 'failed',
+                  finalReportEmailError: errorMsg,
+                }
+              : m
+          )
+        );
+        return { success: false, message: errorMsg };
+      }
+    } catch (err: any) {
+      const errorMsg = err?.message || 'Error de red inesperado al entregar correo.';
+      console.error(`[LIDACTA 📧] Excepción en envío de reporte final (caso ${caseId}):`, err);
+      setMentorships((prev) =>
+        prev.map((m) =>
+          m.id === caseId
+            ? {
+                ...m,
+                finalReportEmailSent: false,
+                finalReportEmailStatus: 'failed',
+                finalReportEmailError: errorMsg,
+              }
+            : m
+        )
+      );
+      return { success: false, message: errorMsg };
+    } finally {
+      inFlightFinalReportEmailRef.current.delete(caseId);
+    }
+  };
+
+  /**
+   * Reintento controlado y seguro para reenviar el reporte final si un intento previo falló.
+   */
+  const retrySendFinalReportEmail = async (mentorshipId?: string): Promise<{ success: boolean; message?: string }> => {
+    const target = mentorshipId
+      ? mentorships.find((m) => m.id === mentorshipId)
+      : activeMentorship;
+    if (!target) {
+      return { success: false, message: 'No se encontró la mentoría objetivo.' };
+    }
+    if (!target.finalFeedbackReport) {
+      return { success: false, message: 'La mentoría aún no cuenta con un reporte final generado.' };
+    }
+    if (target.finalReportEmailSent) {
+      return { success: true, message: 'El reporte ya fue enviado exitosamente con anterioridad.' };
+    }
+    return dispatchFinalFeedbackReportEmail(target, target.finalFeedbackReport);
+  };
+
   const advanceStage = async (targetStage?: StageNumber) => {
     if (!activeMentorship) return;
 
     const current = activeMentorship.currentStage;
     const nextStage = (targetStage || (current < 7 ? (current + 1 as StageNumber) : 7)) as StageNumber;
+    const currentCaseId = activeMentorship.id;
 
     const now = new Date().toISOString();
 
@@ -1578,6 +1773,7 @@ El Equipo de Lidacta`;
           ? {
               ...m,
               currentStage: nextStage,
+              stageReadyToAdvance: null,
               status: newStatus,
               stageHistory: updatedHistory,
               completedAt: isCompletion ? now : m.completedAt,
@@ -1610,10 +1806,21 @@ El Equipo de Lidacta`;
     }
 
     // Trigger mentor introduction for new stage with case isolation
-    const currentCaseId = activeMentorship.id;
-    const isolatedMessages = (activeMentorship.messages || []).filter(
-      (m: any) => (!m.caseId || m.caseId === currentCaseId) && (!m.mentorshipId || m.mentorshipId === currentCaseId)
-    );
+    const isolatedMessages = (activeMentorship.messages || []).filter((m: any) => {
+      if (!m || typeof m !== 'object') return false;
+      const mCase = m.caseId || m.mentorshipId;
+      if (mCase && mCase !== currentCaseId) return false;
+      const text = (m.text || m.content || '').toLowerCase();
+      if (
+        (m.id && String(m.id).includes('_err')) ||
+        m.isError ||
+        text.includes('no pudo responder en este momento') ||
+        text.includes('por favor reintenta')
+      ) {
+        return false;
+      }
+      return true;
+    });
 
     const company = companies.find((c) => c.id === activeMentorship.companyId) || companies[0];
     setIsSendingMessage(true);
@@ -1656,20 +1863,38 @@ El Equipo de Lidacta`;
           stage: nextStage,
         };
 
+        const generatedReport: FinalFeedbackReport | undefined = coachReply.finalFeedback
+          ? { ...coachReply.finalFeedback, deliveredAt: new Date().toISOString() }
+          : undefined;
+
         setMentorships((prev) =>
           prev.map((m) =>
             m.id === currentCaseId
               ? {
                   ...m,
                   messages: [...m.messages, introMsg],
-                  finalFeedbackReport: coachReply.finalFeedback
-                    ? { ...coachReply.finalFeedback, deliveredAt: new Date().toISOString() }
-                    : m.finalFeedbackReport,
+                  finalFeedbackReport: generatedReport || m.finalFeedbackReport,
                   lastActiveAt: new Date().toISOString(),
                 }
               : m
           )
         );
+
+        // Despacho automático de correo para Etapa 7 al generarse el reporte final
+        if (nextStage === 7) {
+          const reportToSend = generatedReport || activeMentorship.finalFeedbackReport;
+          if (reportToSend) {
+            const sessionSnapshot: MentorshipSession = {
+              ...activeMentorship,
+              currentStage: 7,
+              status: 'completed',
+              finalFeedbackReport: reportToSend,
+            };
+            dispatchFinalFeedbackReportEmail(sessionSnapshot, reportToSend).catch((e) =>
+              console.error('[LIDACTA 📧] Error no bloqueante al despachar reporte final por email:', e)
+            );
+          }
+        }
 
         // Silent and automatic resource tracking in background upon advancing stage
         if (coachReply.recommendedResources && Array.isArray(coachReply.recommendedResources) && coachReply.recommendedResources.length > 0) {
@@ -1703,6 +1928,21 @@ El Equipo de Lidacta`;
     }
   };
 
+  const setStageReadyToAdvance = (stage: StageNumber | null) => {
+    if (!activeMentorship) return;
+    setMentorships((prev) =>
+      prev.map((m) =>
+        m.id === activeMentorship.id
+          ? {
+              ...m,
+              stageReadyToAdvance: stage,
+              lastActiveAt: new Date().toISOString(),
+            }
+          : m
+      )
+    );
+  };
+
   const updateActionPlan = (plan: MentorshipSession['actionPlan']) => {
     if (!activeMentorship || !plan) return;
     const now = new Date().toISOString();
@@ -1712,6 +1952,7 @@ El Equipo de Lidacta`;
     );
     const updatedPlan: MentorshipActionPlan = {
       ...plan,
+      cleanedAutoGeneratedV1: plan.cleanedAutoGeneratedV1 ?? activeMentorship.actionPlan?.cleanedAutoGeneratedV1,
       shareWithHR: isShared,
       shareActionPlanWithHR: isShared,
       actionPlanShared: isShared,
@@ -1853,7 +2094,7 @@ El Equipo de Lidacta`;
                 to: leaderEmail,
                 replyTo: 'hola@taniapadierna.com',
                 subject: 'Apoyo continuo para revisar el primer paso de tu compromiso en Lidacta',
-                bodyText: `¡Hola ${session.leaderName}!\n\nHan transcurrido 48 horas desde que definiste tu plan de acción en Lidacta para tu desafío: "${session.title}".\n\n• ¿Qué harás?: ${session.actionPlan?.what || 'Conversación 1 a 1'}\n• ¿Cuándo?: ${session.actionPlan?.when || 'Esta semana'}\n• ¿Con quién?: ${session.actionPlan?.withWhom || 'Equipo'}\n• Qué vas a cuidar: ${session.actionPlan?.careReminders || 'Escucha activa'}\n\nRecuerda: El liderazgo se forja en las conversaciones reales del día a día.`,
+                bodyText: `¡Hola ${session.leaderName}!\n\nHan transcurrido 48 horas desde que definiste tu plan de acción en Lidacta para tu desafío: "${session.title}".\n\n• ¿Qué harás?: ${session.actionPlan?.what || 'Conversación 1 a 1'}\n• ¿Cuándo?: ${session.actionPlan?.when || 'Esta semana'}\n• ¿Con quién?: ${session.actionPlan?.withWhom || 'Equipo'}\n• ¿Cómo?: ${session.actionPlan?.how || 'Diálogo directo y constructivo'}\n• Qué vas a cuidar: ${session.actionPlan?.careReminders || 'Escucha activa'}\n\nRecuerda: El liderazgo se forja en las conversaciones reales del día a día.`,
                 realEmailSent: true,
               },
             });
@@ -1960,7 +2201,7 @@ El Equipo de Lidacta`;
                 to: 'hola@taniapadierna.com',
                 replyTo: leaderEmail,
                 subject: `🚨 Alerta de Inactividad (Día 8): ${session.leaderName} (${session.companyName}) sin avances en Etapa 5`,
-                bodyText: `Estimada Tania,\n\nEl sistema de monitoreo de Lidacta ha detectado que han transcurrido 8 días calendario desde que ${session.leaderName} definió su compromiso en la Etapa 5 sin que haya ingresado a la plataforma ni registrado avances hacia la Etapa 6.\n\n📋 DATOS DEL LÍDER E INACTIVIDAD:\n• Nombre del Líder: ${session.leaderName}\n• Empresa: ${session.companyName}\n• Puesto / Área: ${leaderPosition} (Área: ${leaderArea})\n• Fecha del último acceso: ${lastActiveFormatted}\n• Etapa actual: Etapa 5 (Compromiso y Plan de Acción)\n• Desafío en curso: "${session.title}"\n\n⚠️ RESUMEN BREVE DE SU COMPROMISO NO FINALIZADO:\n• Acción comprometida: ${session.actionPlan?.what || 'Conversación de liderazgo'}\n• Fecha prevista: ${session.actionPlan?.when || 'No especificada'}\n• Con quién: ${session.actionPlan?.withWhom || 'Equipo'}\n• Aspectos a cuidar: ${session.actionPlan?.careReminders || 'Foco en hechos objetivos'}\n\n📞 DATOS DE CONTACTO DIRECTO:\n• Correo electrónico: ${leaderEmail}\n• WhatsApp: ${leaderWhatsapp}\n\nRecomendación de intervención: Te sugerimos contactar al líder para apoyarlo a resolver posibles dudas, indagar si enfrentó algún obstáculo no previsto e invitarlo a retomar su proceso en la Etapa 6 de Lidacta.`,
+                bodyText: `Estimada Tania,\n\nEl sistema de monitoreo de Lidacta ha detectado que han transcurrido 8 días calendario desde que ${session.leaderName} definió su compromiso en la Etapa 5 sin que haya ingresado a la plataforma ni registrado avances hacia la Etapa 6.\n\n📋 DATOS DEL LÍDER E INACTIVIDAD:\n• Nombre del Líder: ${session.leaderName}\n• Empresa: ${session.companyName}\n• Puesto / Área: ${leaderPosition} (Área: ${leaderArea})\n• Fecha del último acceso: ${lastActiveFormatted}\n• Etapa actual: Etapa 5 (Compromiso y Plan de Acción)\n• Desafío en curso: "${session.title}"\n\n⚠️ RESUMEN BREVE DE SU COMPROMISO NO FINALIZADO:\n• Acción comprometida: ${session.actionPlan?.what || 'Conversación de liderazgo'}\n• Fecha prevista: ${session.actionPlan?.when || 'No especificada'}\n• Con quién: ${session.actionPlan?.withWhom || 'Equipo'}\n• Cómo: ${session.actionPlan?.how || 'Diálogo constructivo'}\n• Aspectos a cuidar: ${session.actionPlan?.careReminders || 'Foco en hechos objetivos'}\n\n📞 DATOS DE CONTACTO DIRECTO:\n• Correo electrónico: ${leaderEmail}\n• WhatsApp: ${leaderWhatsapp}\n\nRecomendación de intervención: Te sugerimos contactar al líder para apoyarlo a resolver posibles dudas, indagar si enfrentó algún obstáculo no previsto e invitarlo a retomar su proceso en la Etapa 6 de Lidacta.`,
                 realEmailSent: true,
               },
             });
@@ -3270,6 +3511,7 @@ El Equipo de Lidacta`;
         startNewMentorship,
         sendMessageInActiveSession,
         advanceStage,
+        setStageReadyToAdvance,
         updateActionPlan,
         markActionCompleted,
         saveLearnings,
@@ -3291,6 +3533,7 @@ El Equipo de Lidacta`;
         triggerTherapeuticAlert,
         checkAndProcessStage5FollowUps,
         triggerStage5FollowUpCheck,
+        retrySendFinalReportEmail,
       }}
     >
       {children}
