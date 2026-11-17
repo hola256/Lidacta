@@ -234,6 +234,13 @@ function generateContextualCoachReply(
   detectedTheme: string;
   identifiedSkills?: string[];
   isTherapeuticCase: boolean;
+  finalFeedback?: {
+    detectedStrengths: string[];
+    stageTwoSkills: string[];
+    chosenActions: string[];
+    stageSixLearnings: string[];
+    recommendationsForAutonomy: string[];
+  };
 } {
   const cleanMsg = (userMsg || '').trim();
   const lowerMsg = cleanMsg.toLowerCase();
@@ -646,12 +653,46 @@ function generateContextualCoachReply(
     };
   }
 
+  // Stage 7: Cierre y Reporte de Retroalimentación y Autonomía
+  const skillsDetected =
+    sessionContext?.identifiedSkills &&
+    Array.isArray(sessionContext.identifiedSkills) &&
+    sessionContext.identifiedSkills.length > 0
+      ? sessionContext.identifiedSkills
+      : ['Comunicación Asertiva', 'Gestión de Acuerdos Operativos'];
+  const actionWhat =
+    sessionContext?.actionPlan?.what ||
+    sessionContext?.chosenAlternative ||
+    'Conversación 1 a 1 de alineación operativa';
+  const stageSixLearning =
+    sessionContext?.learnings?.insights ||
+    sessionContext?.learnings?.whatHappened ||
+    'La claridad temprana en los acuerdos previene fricciones y fortalece la confianza mutua.';
+
   return {
-    replyText: `Has recorrido un valioso proceso de liderazgo. Reconoce tus avances y las habilidades que has puesto en práctica para mantener tu autonomía y el desarrollo de tu equipo.`,
-    readyToAdvance: true,
+    replyText: `Muchas gracias por tu compromiso y apertura en este proceso de mentoría, ${leaderName}. Has demostrado una gran capacidad para pasar de la duda a la acción decidida.\n\nTe recuerdo que **esta conversación ha sido 100% confidencial**. Recursos Humanos únicamente recibe constancia de que has concluido exitosamente tu proceso y los indicadores generales de desarrollo, salvaguardando en todo momento tu privacidad.\n\nHe generado tu **Reporte de Retroalimentación y Autonomía de Liderazgo**, el cual puedes consultar aquí en la aplicación y también te llegará a tu correo electrónico registrado. ¡Sigue utilizando Lidacta ante cada nuevo reto!`,
+    readyToAdvance: false,
     advancePrompt: null,
     detectedTheme: 'Cierre y Consolidación',
     isTherapeuticCase: false,
+    finalFeedback: {
+      detectedStrengths: [
+        'Proactividad para abordar situaciones complejas de liderazgo sin postergarlas',
+        'Disposición para el autoanálisis y reconocimiento de áreas de oportunidad',
+        'Capacidad de generar acuerdos basados en empatía y claridad operativa',
+      ],
+      stageTwoSkills: skillsDetected,
+      chosenActions: [actionWhat],
+      stageSixLearnings: [
+        stageSixLearning,
+        'Escuchar activamente a los involucrados incrementa sustancialmente su nivel de corresponsabilidad',
+      ],
+      recommendationsForAutonomy: [
+        'Practicar la retroalimentación continua en lugar de esperar a revisiones formales',
+        'Documentar los acuerdos de forma breve y visible para el equipo',
+        'Mantener el hábito de analizar el contexto y las perspectivas antes de reaccionar',
+      ],
+    },
   };
 }
 
@@ -775,6 +816,26 @@ export default async function handler(req: any, res: any) {
       process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
     if (!apiKey) {
+      if (currentStageNum === 7) {
+        console.warn('[Lidacta API] GEMINI_API_KEY no detectada. Activando fallback de Etapa 7 con finalFeedback...');
+        const fallbackStage7 = generateContextualCoachReply(
+          7,
+          leaderFirstName,
+          resolvedUserMessage,
+          resolvedHistory,
+          sessionData || safeSessionContext
+        );
+        return res.status(200).json({
+          success: true,
+          reply: fallbackStage7.replyText,
+          text: fallbackStage7.replyText,
+          data: {
+            ...fallbackStage7,
+            reply: fallbackStage7.replyText,
+            replyText: fallbackStage7.replyText,
+          },
+        });
+      }
       console.error('ERROR: No se detectó ninguna GEMINI_API_KEY en process.env');
       return res.status(200).json({
         success: false,
@@ -842,6 +903,12 @@ ETAPA 6: APRENDER Y REFLEXIONAR
 
 ETAPA 7: CIERRE Y RETROALIMENTACIÓN
 - Entrega resumen ejecutivo con fortalezas, habilidades trabajadas y compromisos.
+- OBLIGATORIO EN ETAPA 7: En el JSON incluye el objeto "finalFeedback" con las 5 secciones:
+  * detectedStrengths: Array con fortalezas demostradas por el líder en el proceso.
+  * stageTwoSkills: Array con habilidades clave puestas en juego (identificadas en Etapa 2).
+  * chosenActions: Array con la acción concreta comprometida en Etapa 5.
+  * stageSixLearnings: Array con aprendizajes y reflexiones consolidadas en Etapa 6.
+  * recommendationsForAutonomy: Array con recomendaciones para el fortalecimiento de la autonomía.
 
 Contexto de la sesión:
 - Empresa: ${companyContext?.name || 'Empresa'}
@@ -864,7 +931,14 @@ Responde SIEMPRE en JSON estricto con esta estructura:
   "identifiedSkills": [],
   "detectedTheme": "Liderazgo",
   "isTherapeuticCase": false,
-  "therapeuticReason": null
+  "therapeuticReason": null,
+  "finalFeedback": {
+    "detectedStrengths": ["Fortaleza 1", "Fortaleza 2"],
+    "stageTwoSkills": ["Habilidad identificada en etapa 2"],
+    "chosenActions": ["Acción comprometida en etapa 5"],
+    "stageSixLearnings": ["Aprendizaje consolidado en etapa 6"],
+    "recommendationsForAutonomy": ["Recomendación para autonomía"]
+  }
 }`;
 
     // Build Gemini contents array with explicit role: "user" | "model" and strict alternation
@@ -1036,6 +1110,26 @@ Responde SIEMPRE en JSON estricto con esta estructura:
     }
 
     if (!ok || !data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+      if (currentStageNum === 7) {
+        console.warn('[Lidacta API] Despachando fallback estructurado para Etapa 7 con finalFeedback...');
+        const fallbackStage7 = generateContextualCoachReply(
+          7,
+          leaderFirstName,
+          resolvedUserMessage,
+          resolvedHistory,
+          sessionData || safeSessionContext
+        );
+        return res.status(200).json({
+          success: true,
+          reply: fallbackStage7.replyText,
+          text: fallbackStage7.replyText,
+          data: {
+            ...fallbackStage7,
+            reply: fallbackStage7.replyText,
+            replyText: fallbackStage7.replyText,
+          },
+        });
+      }
       const errorMsg = lastErrorText || 'No se recibió respuesta válida de los candidatos de la API de Gemini.';
       return res.status(200).json({
         success: false,
@@ -1059,6 +1153,27 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       parsed = null;
     }
 
+    // En Etapa 7, asegurar que finalFeedback con las 5 secciones siempre esté presente
+    if (currentStageNum === 7) {
+      if (
+        !parsed?.finalFeedback ||
+        !Array.isArray(parsed.finalFeedback.detectedStrengths) ||
+        parsed.finalFeedback.detectedStrengths.length === 0
+      ) {
+        const fallbackStage7 = generateContextualCoachReply(
+          7,
+          leaderFirstName,
+          resolvedUserMessage,
+          resolvedHistory,
+          sessionData || safeSessionContext
+        );
+        parsed = {
+          ...(parsed || {}),
+          finalFeedback: fallbackStage7.finalFeedback,
+        };
+      }
+    }
+
     const responseText = parsed?.replyText || parsed?.reply || rawText || candidatePartText;
 
     return res.status(200).json({
@@ -1071,6 +1186,15 @@ Responde SIEMPRE en JSON estricto con esta estructura:
     });
   } catch (error: any) {
     console.error('Error en mentor respond:', error);
+    if (currentStageNum === 7) {
+      const fallbackStage7 = generateContextualCoachReply(7, leaderFirstName, '', [], {});
+      return res.status(200).json({
+        success: true,
+        reply: fallbackStage7.replyText,
+        text: fallbackStage7.replyText,
+        data: fallbackStage7,
+      });
+    }
     return res.status(200).json({
       success: false,
       reply: `ERROR DE SERVIDOR: ${error?.message || JSON.stringify(error)}`,

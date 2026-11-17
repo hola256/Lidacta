@@ -2581,7 +2581,7 @@ export const LeaderView: React.FC = () => {
                               </div>
 
                               <div className="p-3 bg-[#FFF7EF] rounded-xl text-center text-xs text-[#4A3F55]/70 space-y-1">
-                                {activeMentorship.finalReportEmailSent ? (
+                                {activeMentorship.finalReportEmailStatus === 'sent' ? (
                                   <div className="text-[#246B2A] font-semibold flex items-center justify-center gap-1.5 flex-wrap">
                                     <CheckCircle2 className="w-4 h-4 text-[#246B2A] shrink-0" />
                                     <span>
@@ -2596,7 +2596,7 @@ export const LeaderView: React.FC = () => {
                                   <div className="text-[#2D1B4E] font-medium flex items-center justify-center gap-1.5 flex-wrap">
                                     <Mail className="w-4 h-4 text-[#BF3A1B] shrink-0" />
                                     <span>
-                                      Reporte registrado para tu correo registrado (
+                                      Reporte registrado en modo simulado para tu correo registrado (
                                       <strong className="text-[#2D1B4E]">
                                         {allUsers.find((u) => u.id === activeMentorship.leaderId)?.email || currentUser.email}
                                       </strong>
@@ -2610,7 +2610,7 @@ export const LeaderView: React.FC = () => {
                                       <strong>
                                         {allUsers.find((u) => u.id === activeMentorship.leaderId)?.email || currentUser.email}
                                       </strong>
-                                      .
+                                      {activeMentorship.finalReportEmailError ? `: ${activeMentorship.finalReportEmailError}` : '.'}
                                     </span>
                                     <button
                                       type="button"
@@ -2629,10 +2629,15 @@ export const LeaderView: React.FC = () => {
                                     </button>
                                   </div>
                                 ) : (
-                                  <div>
-                                    Este reporte ha sido enviado también a tu correo electrónico registrado (
-                                    {allUsers.find((u) => u.id === activeMentorship.leaderId)?.email || currentUser.email}
-                                    ).
+                                  <div className="text-[#4A3F55] font-medium flex items-center justify-center gap-1.5 flex-wrap">
+                                    <Clock className="w-4 h-4 text-[#F7B538] shrink-0" />
+                                    <span>
+                                      Preparando el envío del reporte a tu correo registrado (
+                                      <strong className="text-[#2D1B4E]">
+                                        {allUsers.find((u) => u.id === activeMentorship.leaderId)?.email || currentUser.email}
+                                      </strong>
+                                      )...
+                                    </span>
                                   </div>
                                 )}
                               </div>

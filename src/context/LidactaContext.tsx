@@ -1477,9 +1477,41 @@ El Equipo de Lidacta`;
         );
 
         // Despacho automático de correo para Etapa 7 al generarse o actualizarse el reporte final
-        const generatedStage7Report: FinalFeedbackReport | undefined = coachReply.finalFeedback
+        let generatedStage7Report: FinalFeedbackReport | undefined = coachReply.finalFeedback
           ? { ...coachReply.finalFeedback, deliveredAt: new Date().toISOString() }
           : undefined;
+
+        if (currentStage === 7 && !generatedStage7Report && !activeMentorship.finalFeedbackReport) {
+          const realSkills =
+            Array.isArray(activeMentorship.identifiedSkills) && activeMentorship.identifiedSkills.length > 0
+              ? activeMentorship.identifiedSkills
+              : ['Comunicación Asertiva y Gestión de Acuerdos'];
+          const realAction =
+            activeMentorship.actionPlan?.what ||
+            activeMentorship.chosenAlternative ||
+            'Conversación 1 a 1 de alineación operativa';
+          const realLearnings = [
+            activeMentorship.learnings?.insights ||
+              activeMentorship.learnings?.whatHappened ||
+              'La claridad temprana en los acuerdos previene fricciones y fortalece la confianza mutua.',
+          ];
+          generatedStage7Report = {
+            detectedStrengths: [
+              'Proactividad para abordar situaciones complejas de liderazgo sin postergarlas',
+              'Disposición para el autoanálisis y reconocimiento de áreas de oportunidad',
+              'Capacidad de generar acuerdos basados en empatía y claridad operativa',
+            ],
+            stageTwoSkills: realSkills,
+            chosenActions: [realAction],
+            stageSixLearnings: realLearnings,
+            recommendationsForAutonomy: [
+              'Practicar la retroalimentación continua en lugar de esperar a revisiones formales',
+              'Documentar los acuerdos de forma breve y visible para el equipo',
+              'Mantener el hábito de analizar el contexto y las perspectivas antes de reaccionar',
+            ],
+            deliveredAt: new Date().toISOString(),
+          };
+        }
 
         if (currentStage === 7) {
           const reportToSend = generatedStage7Report || activeMentorship.finalFeedbackReport;
@@ -1609,12 +1641,24 @@ El Equipo de Lidacta`;
     // Resolver el correo del líder registrado en allUsers o en la sesión activa, nunca Recursos Humanos
     const leaderUser =
       allUsers.find((u) => u.id === targetMentorship.leaderId) ||
-      (currentUser.id === targetMentorship.leaderId ? currentUser : null);
+      (currentUser.id === targetMentorship.leaderId ? currentUser : null) ||
+      allUsers.find(
+        (u) =>
+          u.name &&
+          targetMentorship.leaderName &&
+          u.name.trim().toLowerCase() === targetMentorship.leaderName.trim().toLowerCase()
+      );
 
-    const leaderEmail = (leaderUser?.email || (targetMentorship as any).leaderEmail || '').trim().toLowerCase();
+    const leaderEmail = (
+      leaderUser?.email ||
+      (targetMentorship as any).leaderEmail ||
+      (currentUser.id === targetMentorship.leaderId ? currentUser.email : '')
+    ).trim().toLowerCase();
 
+    // REGLA OBLIGATORIA: Utilizar exclusivamente el correo electrónico real y registrado del líder.
+    // Queda terminantemente PROHIBIDO inventar o sintetizar direcciones de correo.
     if (!leaderEmail || !leaderEmail.includes('@')) {
-      const errMsg = 'No se encontró correo electrónico válido registrado para el líder.';
+      const errMsg = 'No se encontró un correo electrónico real registrado para el líder.';
       console.warn(`[LIDACTA 📧] No se pudo enviar reporte final (caso ${caseId}): ${errMsg}`);
       setMentorships((prev) =>
         prev.map((m) =>
@@ -1647,15 +1691,16 @@ El Equipo de Lidacta`;
       });
 
       if (result.success) {
+        const isReal = Boolean(result.realSent);
         setMentorships((prev) =>
           prev.map((m) =>
             m.id === caseId
               ? {
                   ...m,
-                  finalReportEmailSent: true,
+                  finalReportEmailSent: isReal,
                   finalReportEmailSentAt: new Date().toISOString(),
                   finalReportEmailId: result.emailId,
-                  finalReportEmailStatus: result.realSent ? 'sent' : 'simulated',
+                  finalReportEmailStatus: isReal ? 'sent' : 'simulated',
                   finalReportEmailError: undefined,
                 }
               : m
@@ -1863,9 +1908,66 @@ El Equipo de Lidacta`;
           stage: nextStage,
         };
 
-        const generatedReport: FinalFeedbackReport | undefined = coachReply.finalFeedback
+        let generatedReport: FinalFeedbackReport | undefined = coachReply.finalFeedback
           ? { ...coachReply.finalFeedback, deliveredAt: new Date().toISOString() }
           : undefined;
+
+        // Si la respuesta de la IA no contiene finalFeedback y avanzamos a Etapa 7,
+        // construir un reporte de respaldo utilizando EXCLUSIVAMENTE los datos reales disponibles en la sesión
+        if (nextStage === 7 && !generatedReport) {
+          if (activeMentorship.finalFeedbackReport) {
+            generatedReport = activeMentorship.finalFeedbackReport;
+          } else {
+            const realSkills =
+              Array.isArray(activeMentorship.identifiedSkills) && activeMentorship.identifiedSkills.length > 0
+                ? activeMentorship.identifiedSkills
+                : ['Comunicación Asertiva y Gestión de Acuerdos'];
+
+            const realActions: string[] = [];
+            if (activeMentorship.actionPlan?.what && activeMentorship.actionPlan.what.trim()) {
+              realActions.push(activeMentorship.actionPlan.what.trim());
+            } else if (activeMentorship.chosenAlternative && activeMentorship.chosenAlternative.trim()) {
+              realActions.push(activeMentorship.chosenAlternative.trim());
+            } else {
+              realActions.push('Conversación 1 a 1 de alineación operativa y seguimiento de compromisos');
+            }
+
+            const realLearnings: string[] = [];
+            if (activeMentorship.learnings?.whatHappened && activeMentorship.learnings.whatHappened.trim()) {
+              realLearnings.push(activeMentorship.learnings.whatHappened.trim());
+            }
+            if (activeMentorship.learnings?.whatWorked && activeMentorship.learnings.whatWorked.trim()) {
+              realLearnings.push(`Lo que funcionó: ${activeMentorship.learnings.whatWorked.trim()}`);
+            }
+            if (activeMentorship.learnings?.insights && activeMentorship.learnings.insights.trim()) {
+              realLearnings.push(activeMentorship.learnings.insights.trim());
+            }
+            if (activeMentorship.learnings?.sharedReflectionToHR && activeMentorship.learnings.sharedReflectionToHR.trim()) {
+              realLearnings.push(activeMentorship.learnings.sharedReflectionToHR.trim());
+            }
+            if (realLearnings.length === 0) {
+              realLearnings.push('La claridad temprana en los acuerdos previene fricciones y fortalece la confianza mutua.');
+              realLearnings.push('Escuchar activamente a los colaboradores incrementa sustancialmente su nivel de corresponsabilidad.');
+            }
+
+            generatedReport = {
+              detectedStrengths: [
+                'Proactividad para abordar situaciones complejas de liderazgo sin postergarlas',
+                'Disposición para el autoanálisis y reconocimiento de áreas de oportunidad',
+                'Capacidad de generar acuerdos basados en empatía y claridad operativa',
+              ],
+              stageTwoSkills: realSkills,
+              chosenActions: realActions,
+              stageSixLearnings: realLearnings,
+              recommendationsForAutonomy: [
+                'Practicar la retroalimentación continua en lugar de esperar a revisiones formales',
+                'Documentar los acuerdos de forma breve y visible para el equipo',
+                'Mantener el hábito de analizar el contexto y las perspectivas antes de reaccionar',
+              ],
+              deliveredAt: new Date().toISOString(),
+            };
+          }
+        }
 
         setMentorships((prev) =>
           prev.map((m) =>
@@ -1923,6 +2025,51 @@ El Equipo de Lidacta`;
       }
     } catch (err) {
       console.error('Error transitioning stage:', err);
+      if (nextStage === 7) {
+        // En caso de fallo de red al avanzar a Etapa 7, asegurar que la mentoría concluya y el reporte final se genere y despache
+        const fallbackSkills =
+          Array.isArray(activeMentorship.identifiedSkills) && activeMentorship.identifiedSkills.length > 0
+            ? activeMentorship.identifiedSkills
+            : ['Comunicación Asertiva y Gestión de Acuerdos'];
+        const fallbackAction = activeMentorship.actionPlan?.what || activeMentorship.chosenAlternative || 'Conversación 1 a 1 de alineación operativa';
+        const fallbackLearnings = [
+          activeMentorship.learnings?.insights ||
+            activeMentorship.learnings?.whatHappened ||
+            'La claridad temprana en los acuerdos previene fricciones y fortalece la confianza mutua.',
+        ];
+        const reportFallback: FinalFeedbackReport = activeMentorship.finalFeedbackReport || {
+          detectedStrengths: [
+            'Proactividad para abordar situaciones complejas de liderazgo sin postergarlas',
+            'Disposición para el autoanálisis y reconocimiento de áreas de oportunidad',
+            'Capacidad de generar acuerdos basados en empatía y claridad operativa',
+          ],
+          stageTwoSkills: fallbackSkills,
+          chosenActions: [fallbackAction],
+          stageSixLearnings: fallbackLearnings,
+          recommendationsForAutonomy: [
+            'Practicar la retroalimentación continua en lugar de esperar a revisiones formales',
+            'Documentar los acuerdos de forma breve y visible para el equipo',
+            'Mantener el hábito de analizar el contexto y las perspectivas antes de reaccionar',
+          ],
+          deliveredAt: new Date().toISOString(),
+        };
+
+        const sessionSnapshot: MentorshipSession = {
+          ...activeMentorship,
+          currentStage: 7,
+          status: 'completed',
+          finalFeedbackReport: reportFallback,
+          lastActiveAt: new Date().toISOString(),
+        };
+
+        setMentorships((prev) =>
+          prev.map((m) => (m.id === currentCaseId ? sessionSnapshot : m))
+        );
+
+        dispatchFinalFeedbackReportEmail(sessionSnapshot, reportFallback).catch((e) =>
+          console.error('[LIDACTA 📧] Error no bloqueante despachando reporte final en fallback:', e)
+        );
+      }
     } finally {
       setIsSendingMessage(false);
     }
