@@ -225,16 +225,18 @@ export function isStageGoalMet(session: MentorshipSession | null, stage: StageNu
       if (m.sender !== 'lidacta') return false;
       const txt = (m.text || '').toLowerCase();
       return (
-        txt.includes('etapa 5') ||
-        txt.includes('plan de acción') ||
-        txt.includes('plan de accion') ||
-        txt.includes('paso formal') ||
         txt.includes('concluir la práctica') ||
         txt.includes('concluir la practica') ||
         txt.includes('concluido la práctica') ||
         txt.includes('concluido la practica') ||
-        txt.includes('retroalimentación') ||
-        txt.includes('retroalimentacion')
+        txt.includes('concluimos la práctica') ||
+        txt.includes('concluimos la practica') ||
+        txt.includes('concluimos la simulación') ||
+        txt.includes('concluimos la simulacion') ||
+        txt.includes('etapa 5') ||
+        txt.includes('plan de acción') ||
+        txt.includes('plan de accion') ||
+        txt.includes('paso formal')
       );
     });
     const hasLeaderResponse = stageMessages.some((m) => m.sender === 'leader');
@@ -381,9 +383,11 @@ export const LeaderView: React.FC = () => {
 
   const [reopenedStages, setReopenedStages] = useState<Record<number, boolean>>({});
   const [isAdvancingStage, setIsAdvancingStage] = useState(false);
+  const [isPracticingStage4, setIsPracticingStage4] = useState(false);
 
   useEffect(() => {
     setReopenedStages({});
+    setIsPracticingStage4(false);
   }, [activeMentorship?.id, activeMentorship?.currentStage]);
 
   const handleReopenConversation = (st: StageNumber) => {
@@ -1715,26 +1719,6 @@ export const LeaderView: React.FC = () => {
                       {isOpen && (
                         <div className="border-t border-[#493447]/10 p-3.5 sm:p-5 space-y-4 bg-white animate-in fade-in duration-200">
 
-                          {/* Stage 2: Identified Skills Highlight */}
-                          {st === 2 && activeMentorship.identifiedSkills && activeMentorship.identifiedSkills.length > 0 && (
-                            <div className="p-4 bg-white border border-[#493447]/15 rounded-2xl space-y-2.5 shadow-xs">
-                              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#BF3A1B]">
-                                <Target className="w-4 h-4 shrink-0" />
-                                <span>Habilidades clave identificadas en Etapa 2:</span>
-                              </div>
-                              <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                                {activeMentorship.identifiedSkills.map((sk, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="px-2.5 py-1 bg-[#FFF7EF] border border-[#BF3A1B]/30 text-[#2D1B4E] font-semibold text-xs rounded-lg"
-                                  >
-                                    {sk}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
                           {/* Messages Timeline & Input Card for Stages (except Stage 5) */}
                           {st !== 5 && (
                             <>
@@ -1761,11 +1745,12 @@ export const LeaderView: React.FC = () => {
                                 </div>
                               ) : null}
 
-                              {/* Interactive Conversational Input Form or Transition Card for Stage */}
-                              {isCurrent && st !== 6 && (
-                                <>
-                                  {isStageConclusionReady ? (
-                                    <div className="bg-white border-2 border-[#2D1B4E] rounded-2xl p-4 sm:p-5 shadow-sm space-y-4 mt-2 animate-in fade-in duration-200">
+                              {/* Etapas 1, 2 y 3: Conversación siempre disponible + Tarjeta de avance complementaria */}
+                              {isCurrent && st <= 3 && (
+                                <div className="space-y-4 mt-2">
+                                  {/* Tarjeta de avance complementaria cuando se alcanza el objetivo de la etapa */}
+                                  {isStageGoalMet(activeMentorship, st) && (
+                                    <div className="bg-white border-2 border-[#2D1B4E] rounded-2xl p-4 sm:p-5 shadow-sm space-y-4 animate-in fade-in duration-200">
                                       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                         <div className="flex items-center gap-2.5">
                                           <div className="w-8 h-8 rounded-xl bg-[#2D1B4E] text-[#F7B538] flex items-center justify-center font-bold text-sm shrink-0">
@@ -1779,7 +1764,6 @@ export const LeaderView: React.FC = () => {
                                               {st === 1 && 'Has clarificado los hechos, el dilema central y el impacto de tu reto con Lidacta. Tienes la base sólida para continuar.'}
                                               {st === 2 && 'Has analizado las perspectivas e identificado las habilidades clave a desarrollar para este reto.'}
                                               {st === 3 && 'Has explorado las alternativas y definido el camino de acción para abordar esta situación.'}
-                                              {st === 4 && 'Has concluido la práctica y preparación de tu conversación. Tienes el enfoque listo para definir tu plan de acción.'}
                                             </p>
                                           </div>
                                         </div>
@@ -1791,10 +1775,10 @@ export const LeaderView: React.FC = () => {
 
                                       <div className="p-3 bg-[#FFF7EF] border border-[#F7B538]/30 rounded-xl text-xs text-[#2D1B4E] flex items-center gap-2">
                                         <Clock className="w-4 h-4 text-[#BF3A1B] shrink-0" />
-                                        <span>El avance es exclusivamente manual. Confirma cuando desees dar el siguiente paso en tu acompañamiento.</span>
+                                        <span>El avance es exclusivamente manual. Confirma cuando desees dar el siguiente paso o continúa conversando abajo si deseas aportar más información.</span>
                                       </div>
 
-                                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1 border-t border-[#493447]/10">
+                                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-start gap-3 pt-1 border-t border-[#493447]/10">
                                         <button
                                           type="button"
                                           disabled={isAdvancingStage}
@@ -1816,141 +1800,316 @@ export const LeaderView: React.FC = () => {
                                             </>
                                           )}
                                         </button>
-
-                                        <button
-                                          type="button"
-                                          onClick={() => handleReopenConversation(st)}
-                                          className="text-xs text-[#BF3A1B] hover:text-[#9e2f15] font-semibold underline cursor-pointer text-center sm:text-right py-1 transition-colors"
-                                        >
-                                          Deseo agregar información o continuar conversando en esta etapa
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="bg-white border-2 border-[#F7B538] rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5 mt-2">
-                                      <div className="flex items-center justify-between">
-                                        <label className="text-xs font-heading font-extrabold text-[#2D1B4E] flex items-center gap-2">
-                                          <span className="w-2.5 h-2.5 rounded-full bg-[#BF3A1B] animate-pulse" />
-                                          <span>Tu respuesta para la {meta.name}:</span>
-                                        </label>
-                                        <span className="text-[11px] text-[#4A3F55]/70 flex items-center gap-1">
-                                          <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
-                                          <span>Escribe o habla por nota de voz</span>
-                                        </span>
-                                      </div>
-
-                                      {/* Área de entrada de texto (Escribir) */}
-                                      <textarea
-                                        value={stageInputText}
-                                        onChange={(e) => {
-                                          setStageInputText(e.target.value);
-                                          setInputText(e.target.value);
-                                        }}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter' && !e.shiftKey) {
-                                            e.preventDefault();
-                                            handleSubmitStageMessage(st);
-                                          }
-                                        }}
-                                        placeholder={
-                                          st === 7
-                                            ? 'Escribe tus reflexiones finales o dudas sobre el reporte para Lidacta...'
-                                            : 'Escribe aquí tu respuesta, dudas o reflexiones...'
-                                        }
-                                        rows={4}
-                                        disabled={isSendingMessage}
-                                        className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
-                                      />
-
-                                      {/* Controles de Entrada por Voz estilo WhatsApp y Envío */}
-                                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
-                                        {/* Opción de entrada por voz (Micrófono estilo WhatsApp) */}
-                                        <WhatsAppVoiceRecorder
-                                          stageNumber={st}
-                                          stageName={meta.name}
-                                          mode="stage-card"
-                                          disabled={isSendingMessage}
-                                          isSending={isSendingMessage}
-                                          onTranscript={(text) => {
-                                            setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
-                                            setInputText((prev) => (prev ? `${prev} ${text}` : text));
-                                          }}
-                                          onSendDirect={(text) => handleSubmitVoiceDirect(st, text)}
-                                        />
-
-                                        {/* Botón de Envío en Ámbar Impulso (#F7B538) */}
-                                        <button
-                                          type="button"
-                                          onClick={() => handleSubmitStageMessage(st)}
-                                          disabled={!stageInputText.trim() || isSendingMessage}
-                                          className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
-                                        >
-                                          {isSendingMessage ? (
-                                            <span>Guardando avance...</span>
-                                          ) : (
-                                            <>
-                                              <span>{st === 7 ? 'Enviar reflexión final' : 'Enviar avance'}</span>
-                                              <Send className="w-4 h-4 text-[#2D1B4E]" />
-                                            </>
-                                          )}
-                                        </button>
                                       </div>
                                     </div>
                                   )}
-                                </>
-                              )}
-                            </>
-                          )}
 
-                          {/* Stage 4: Roleplay Practice Arena */}
-                          {st === 4 && !isStageConclusionReady && (
-                            <div className="p-4 sm:p-5 bg-white border-2 border-[#BF3A1B]/40 rounded-2xl shadow-sm space-y-4">
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-7 h-7 rounded-lg bg-[#FFD3BF] text-[#BF3A1B] flex items-center justify-center font-bold shrink-0">
-                                    <Sparkles className="w-4 h-4" />
+                                  {/* Espacio de conversación siempre visible y disponible */}
+                                  <div className="bg-white border-2 border-[#F7B538] rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
+                                    <div className="flex items-center justify-between">
+                                      <label className="text-xs font-heading font-extrabold text-[#2D1B4E] flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#BF3A1B] animate-pulse" />
+                                        <span>Tu respuesta para la {meta.name}:</span>
+                                      </label>
+                                      <span className="text-[11px] text-[#4A3F55]/70 flex items-center gap-1">
+                                        <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
+                                        <span>Escribe o habla por nota de voz</span>
+                                      </span>
+                                    </div>
+
+                                    {/* Área de entrada de texto (Escribir) */}
+                                    <textarea
+                                      value={stageInputText}
+                                      onChange={(e) => {
+                                        setStageInputText(e.target.value);
+                                        setInputText(e.target.value);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                          e.preventDefault();
+                                          handleSubmitStageMessage(st);
+                                        }
+                                      }}
+                                      placeholder="Escribe aquí tu respuesta, dudas o reflexiones..."
+                                      rows={4}
+                                      disabled={isSendingMessage}
+                                      className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
+                                    />
+
+                                    {/* Controles de Entrada por Voz estilo WhatsApp y Envío */}
+                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
+                                      {/* Opción de entrada por voz (Micrófono estilo WhatsApp) */}
+                                      <WhatsAppVoiceRecorder
+                                        stageNumber={st}
+                                        stageName={meta.name}
+                                        mode="stage-card"
+                                        disabled={isSendingMessage}
+                                        isSending={isSendingMessage}
+                                        onTranscript={(text) => {
+                                          setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
+                                          setInputText((prev) => (prev ? `${prev} ${text}` : text));
+                                        }}
+                                        onSendDirect={(text) => handleSubmitVoiceDirect(st, text)}
+                                      />
+
+                                      {/* Botón de Envío en Ámbar Impulso (#F7B538) */}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSubmitStageMessage(st)}
+                                        disabled={!stageInputText.trim() || isSendingMessage}
+                                        className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+                                      >
+                                        {isSendingMessage ? (
+                                          <span>Guardando avance...</span>
+                                        ) : (
+                                          <>
+                                            <span>Enviar avance</span>
+                                            <Send className="w-4 h-4 text-[#2D1B4E]" />
+                                          </>
+                                        )}
+                                      </button>
+                                    </div>
                                   </div>
-                                  <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
-                                    Etapa 4: Practicar antes de actuar
-                                  </h4>
                                 </div>
-                                <span className="text-[11px] font-semibold text-[#BF3A1B] bg-[#FFD3BF]/40 px-2 py-0.5 rounded w-fit">
-                                  Práctica con voz o texto
-                                </span>
-                              </div>
+                              )}
 
-                              <p className="text-xs sm:text-sm text-[#4A3F55] leading-relaxed">
-                                Practica aquí la conversación o diálogo que tendrás. Lidacta asumirá el rol del colaborador o involucrado y te dará retroalimentación instantánea de lo que debes cuidar o mejorar.
-                              </p>
+                              {/* Etapa 4: Practicar y ensayar con tres estados mutuamente excluyentes */}
+                              {isCurrent && st === 4 && (() => {
+                                const hasExplicitConclusion = activeMentorship.stageReadyToAdvance === 4;
+                                const isGoalMet = isStageGoalMet(activeMentorship, 4);
+                                const isStage4Concluded = (hasExplicitConclusion || isGoalMet) && !isPracticingStage4;
 
-                              <div className="p-3 bg-[#FFF7EF] border border-[#493447]/10 rounded-xl space-y-2">
-                                <span className="text-xs font-bold text-[#2D1B4E]">Opciones de práctica:</span>
-                                <div className="flex flex-col sm:flex-row gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      sendMessageInActiveSession(
-                                        'Lidacta, quiero simular que tú eres mi colaborador y yo te cito a solas para darte retroalimentación.',
-                                        true
-                                      )
-                                    }
-                                    className="min-h-[44px] text-xs px-3.5 py-2 bg-white border border-[#493447]/15 rounded-xl hover:border-[#BF3A1B] font-semibold text-[#2D1B4E] cursor-pointer flex items-center justify-center gap-1.5 shadow-xs active:scale-98"
-                                  >
-                                    🎭 Iniciar simulación de diálogo
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setStageReadyToAdvance(4);
-                                      setReopenedStages((prev) => ({ ...prev, [4]: false }));
-                                    }}
-                                    className="min-h-[44px] text-xs px-3.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#4A3F55] rounded-xl cursor-pointer flex items-center justify-center font-medium active:scale-98"
-                                  >
-                                    ⏭️ Omitir práctica y pasar a Actuar (Plan de Acción)
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
+                                const hasStage4LeaderMessage = sortedMessages.some((m) => m.sender === 'leader' && (m.stage || 1) === 4);
+                                const isStage4Simulating = !isStage4Concluded && (isPracticingStage4 || (hasStage4LeaderMessage && !hasExplicitConclusion));
+
+                                const isStage4Deciding = !isStage4Concluded && !isStage4Simulating;
+
+                                return (
+                                  <div className="space-y-4 mt-2">
+                                    {/* Estado 1: Decisión inicial (prioridad a decidir si practicar u omitir) */}
+                                    {isStage4Deciding && (
+                                      <div className="p-4 sm:p-5 bg-white border-2 border-[#BF3A1B]/40 rounded-2xl shadow-sm space-y-4 animate-in fade-in duration-200">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                          <div className="flex items-center gap-2">
+                                            <div className="w-7 h-7 rounded-lg bg-[#FFD3BF] text-[#BF3A1B] flex items-center justify-center font-bold shrink-0">
+                                              <Sparkles className="w-4 h-4" />
+                                            </div>
+                                            <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
+                                              Etapa 4: Practicar antes de actuar
+                                            </h4>
+                                          </div>
+                                          <span className="text-[11px] font-semibold text-[#BF3A1B] bg-[#FFD3BF]/40 px-2 py-0.5 rounded w-fit">
+                                            Práctica con voz o texto
+                                          </span>
+                                        </div>
+
+                                        <p className="text-xs sm:text-sm text-[#4A3F55] leading-relaxed">
+                                          Practica aquí la conversación o diálogo que tendrás. Lidacta asumirá el rol del colaborador o involucrado y te dará retroalimentación instantánea de lo que debes cuidar o mejorar.
+                                        </p>
+
+                                        <div className="p-3 bg-[#FFF7EF] border border-[#493447]/10 rounded-xl space-y-2">
+                                          <span className="text-xs font-bold text-[#2D1B4E]">Opciones de práctica:</span>
+                                          <div className="flex flex-col sm:flex-row gap-2">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setStageReadyToAdvance(null);
+                                                setIsPracticingStage4(true);
+                                                sendMessageInActiveSession(
+                                                  'Lidacta, quiero simular que tú eres mi colaborador y yo te cito a solas para darte retroalimentación.',
+                                                  true
+                                                );
+                                              }}
+                                              className="min-h-[44px] text-xs px-3.5 py-2 bg-white border border-[#493447]/15 rounded-xl hover:border-[#BF3A1B] font-semibold text-[#2D1B4E] cursor-pointer flex items-center justify-center gap-1.5 shadow-xs active:scale-98"
+                                            >
+                                              🎭 Iniciar simulación de diálogo
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setStageReadyToAdvance(null);
+                                                setIsPracticingStage4(true);
+                                              }}
+                                              className="min-h-[44px] text-xs px-3.5 py-2 bg-white border border-[#493447]/15 rounded-xl hover:border-[#BF3A1B] font-semibold text-[#2D1B4E] cursor-pointer flex items-center justify-center gap-1.5 shadow-xs active:scale-98"
+                                            >
+                                              ✍️ Redactar mi propia simulación
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setStageReadyToAdvance(4);
+                                                setIsPracticingStage4(false);
+                                              }}
+                                              className="min-h-[44px] text-xs px-3.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#4A3F55] rounded-xl cursor-pointer flex items-center justify-center font-medium active:scale-98"
+                                            >
+                                              ⏭️ Omitir práctica y pasar a Actuar (Plan de Acción)
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Estado 2: Simulación activa (exclusivamente banner activo + espacio de diálogo; sin tarjeta de avance ni botón de completar) */}
+                                    {isStage4Simulating && (
+                                      <div className="space-y-3 animate-in fade-in duration-200">
+                                        <div className="p-3.5 sm:p-4 bg-white border border-[#BF3A1B]/30 rounded-2xl shadow-xs space-y-2">
+                                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                              <div className="w-6 h-6 rounded-lg bg-[#FFD3BF] text-[#BF3A1B] flex items-center justify-center font-bold text-xs shrink-0">
+                                                🎭
+                                              </div>
+                                              <h4 className="font-heading font-bold text-xs sm:text-sm text-[#2D1B4E]">
+                                                Simulación de conversación activa
+                                              </h4>
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setStageReadyToAdvance(4);
+                                                setIsPracticingStage4(false);
+                                              }}
+                                              className="text-xs text-[#4A3F55] hover:text-[#BF3A1B] font-medium underline cursor-pointer text-left sm:text-right"
+                                            >
+                                              Concluir práctica y pasar a Actuar (Plan de Acción) →
+                                            </button>
+                                          </div>
+                                          <p className="text-xs text-[#4A3F55]/85 leading-relaxed">
+                                            Responde como si estuvieras conversando con la otra persona. Lidacta te responderá en el rol y te retroalimentará.
+                                          </p>
+                                        </div>
+
+                                        {/* Espacio para desarrollar la simulación (texto y notas de voz) */}
+                                        <div className="bg-white border-2 border-[#BF3A1B]/40 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
+                                          <div className="flex items-center justify-between">
+                                            <label className="text-xs font-heading font-extrabold text-[#2D1B4E] flex items-center gap-2">
+                                              <span className="w-2.5 h-2.5 rounded-full bg-[#BF3A1B] animate-pulse" />
+                                              <span>Tu intervención en la simulación:</span>
+                                            </label>
+                                            <span className="text-[11px] text-[#4A3F55]/70 flex items-center gap-1">
+                                              <Sparkles className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                                              <span>Escribe o habla por nota de voz</span>
+                                            </span>
+                                          </div>
+
+                                          <textarea
+                                            value={stageInputText}
+                                            onChange={(e) => {
+                                              setStageInputText(e.target.value);
+                                              setInputText(e.target.value);
+                                            }}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleSubmitStageMessage(4);
+                                              }
+                                            }}
+                                            placeholder="Escribe lo que le dirías a tu contraparte en esta simulación..."
+                                            rows={4}
+                                            disabled={isSendingMessage}
+                                            className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
+                                          />
+
+                                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
+                                            <WhatsAppVoiceRecorder
+                                              stageNumber={4}
+                                              stageName={meta.name}
+                                              mode="stage-card"
+                                              disabled={isSendingMessage}
+                                              isSending={isSendingMessage}
+                                              onTranscript={(text) => {
+                                                setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
+                                                setInputText((prev) => (prev ? `${prev} ${text}` : text));
+                                              }}
+                                              onSendDirect={(text) => handleSubmitVoiceDirect(4, text)}
+                                            />
+
+                                            <button
+                                              type="button"
+                                              onClick={() => handleSubmitStageMessage(4)}
+                                              disabled={!stageInputText.trim() || isSendingMessage}
+                                              className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+                                            >
+                                              {isSendingMessage ? (
+                                                <span>Enviando diálogo...</span>
+                                              ) : (
+                                                <>
+                                                  <span>Enviar diálogo</span>
+                                                  <Send className="w-4 h-4 text-white" />
+                                                </>
+                                              )}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Estado 3: Práctica concluida u omitida (exclusivamente tarjeta de avance con confirmación manual) */}
+                                    {isStage4Concluded && (
+                                      <div className="bg-white border-2 border-[#2D1B4E] rounded-2xl p-4 sm:p-5 shadow-sm space-y-4 animate-in fade-in duration-200">
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                          <div className="flex items-center gap-2.5">
+                                            <div className="w-8 h-8 rounded-xl bg-[#2D1B4E] text-[#F7B538] flex items-center justify-center font-bold text-sm shrink-0">
+                                              <Sparkles className="w-4 h-4 text-[#F7B538]" />
+                                            </div>
+                                            <div>
+                                              <h4 className="font-heading font-extrabold text-sm sm:text-base text-[#2D1B4E]">
+                                                Objetivo de la {meta.name} completado
+                                              </h4>
+                                              <p className="text-xs text-[#4A3F55]/85 mt-0.5 leading-relaxed">
+                                                Has concluido la preparación de esta etapa. Tienes el camino listo para definir tu plan de acción.
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-[#E2F7E1] text-[#246B2A] border border-[#246B2A]/20 shrink-0">
+                                            <CheckCircle2 className="w-3.5 h-3.5" />
+                                            <span>Lista para avanzar</span>
+                                          </span>
+                                        </div>
+
+                                        <div className="p-3 bg-[#FFF7EF] border border-[#F7B538]/30 rounded-xl text-xs text-[#2D1B4E] flex items-center gap-2">
+                                          <Clock className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                                          <span>El avance es exclusivamente manual. Confirma cuando desees dar el siguiente paso en tu acompañamiento.</span>
+                                        </div>
+
+                                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1 border-t border-[#493447]/10">
+                                          <button
+                                            type="button"
+                                            disabled={isAdvancingStage}
+                                            onClick={async () => {
+                                              setIsAdvancingStage(true);
+                                              await advanceStage(5);
+                                              setIsAdvancingStage(false);
+                                              setOpenStages((prev) => ({ ...prev, 4: false, 5: true }));
+                                            }}
+                                            className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2666] text-[#F7B538] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                                          >
+                                            {isAdvancingStage ? (
+                                              <span>Avanzando a Etapa 5: Actuar...</span>
+                                            ) : (
+                                              <>
+                                                <span>Completar {meta.name} y continuar a {STAGE_META[5]?.name}</span>
+                                                <ArrowRight className="w-4 h-4 text-[#F7B538]" />
+                                              </>
+                                            )}
+                                          </button>
+
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setStageReadyToAdvance(null);
+                                              setIsPracticingStage4(true);
+                                            }}
+                                            className="text-xs text-[#BF3A1B] hover:text-[#9e2f15] font-semibold underline cursor-pointer text-center sm:text-right py-1 transition-colors"
+                                          >
+                                            Deseo realizar una simulación antes de continuar
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </>
                           )}
 
                           {/* Stage 5: Pending State Notice (if opened before reaching Stage 5) */}
@@ -2294,31 +2453,46 @@ export const LeaderView: React.FC = () => {
                               )}
 
                               {/* 6. Botón de Avance a Etapa 6 (Último elemento de Etapa 5) */}
-                              <div className="space-y-2 pt-1">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2.5">
-                                  <button
-                                    type="button"
-                                    onClick={handleAdvanceToStage6}
-                                    disabled={!isActionPlanComplete || !isCommitmentConfirmed}
-                                    className={`w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-5 py-2.5 font-bold text-xs rounded-xl transition-all shadow-xs ${
-                                      isActionPlanComplete && isCommitmentConfirmed
-                                        ? 'bg-[#2D1B4E] hover:bg-[#3D2568] text-[#F7B538] cursor-pointer active:scale-98'
-                                        : 'bg-neutral-200 text-neutral-400 cursor-not-allowed border border-neutral-300'
-                                    }`}
-                                  >
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                    <span>Ya ejecuté la acción → Ir a Etapa 6 (Aprender y reflexionar)</span>
-                                  </button>
-                                </div>
+                              {(!isPassed || isCurrent) && (
+                                <div className="space-y-3 pt-1">
+                                  {/* Leyenda informativa para llevar el plan a la práctica antes de avanzar */}
+                                  <div className="p-3.5 sm:p-4 bg-[#FFF7EF] border border-[#EADBCE] rounded-xl text-left space-y-1.5 shadow-2xs">
+                                    <div className="flex items-center gap-2">
+                                      <Target className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                                      <p className="font-heading font-bold text-xs sm:text-sm text-[#2D1B4E]">
+                                        Tu siguiente paso es llevar este plan a la práctica.
+                                      </p>
+                                    </div>
+                                    <p className="text-xs text-[#4A3F55]/85 leading-relaxed pl-6">
+                                      Ejecuta las acciones que has definido y, cuando hayas tenido oportunidad de ponerlas en marcha, regresa a Lidacta para continuar con la Etapa 6 y reflexionar sobre tu experiencia.
+                                    </p>
+                                  </div>
 
-                                {(!isActionPlanComplete || !isCommitmentConfirmed) && (
-                                  <p className="text-right text-[11px] text-[#BF3A1B] font-medium">
-                                    {!isActionPlanComplete
-                                      ? `⚠️ Completa los 5 campos del Plan de Acción (${completedFieldsCount}/5) para avanzar.`
-                                      : '⚠️ Marca la casilla de confirmación de tu compromiso para habilitar el avance a la Etapa 6.'}
-                                  </p>
-                                )}
-                              </div>
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2.5">
+                                    <button
+                                      type="button"
+                                      onClick={handleAdvanceToStage6}
+                                      disabled={!isActionPlanComplete || !isCommitmentConfirmed}
+                                      className={`w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-5 py-2.5 font-bold text-xs rounded-xl transition-all shadow-xs ${
+                                        isActionPlanComplete && isCommitmentConfirmed
+                                          ? 'bg-[#2D1B4E] hover:bg-[#3D2568] text-[#F7B538] cursor-pointer active:scale-98'
+                                          : 'bg-neutral-200 text-neutral-400 cursor-not-allowed border border-neutral-300'
+                                      }`}
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      <span>Ya ejecuté la acción → Ir a Etapa 6 (Aprender y reflexionar)</span>
+                                    </button>
+                                  </div>
+
+                                  {(!isActionPlanComplete || !isCommitmentConfirmed) && (
+                                    <p className="text-right text-[11px] text-[#BF3A1B] font-medium">
+                                      {!isActionPlanComplete
+                                        ? `⚠️ Completa los 5 campos del Plan de Acción (${completedFieldsCount}/5) para avanzar.`
+                                        : '⚠️ Marca la casilla de confirmación de tu compromiso para habilitar el avance a la Etapa 6.'}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
                             </>
                           )}
 
