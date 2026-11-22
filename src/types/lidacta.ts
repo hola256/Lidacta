@@ -97,6 +97,38 @@ export interface FinalFeedbackReport {
   deliveredAt: string;
 }
 
+export type SkillStatus = 'vigente' | 'precisada' | 'sustituida' | 'descartada';
+
+export type EvidenceSourceType = 'experiencia_relatada' | 'simulacion_practica';
+
+export interface ObservedEvidenceRecord {
+  id: string;
+  stage: 2 | 3 | 4;
+  sourceType: EvidenceSourceType;
+  evidenceText: string;
+  timestamp: string;
+}
+
+export interface SkillReconsiderationRecord {
+  stage: 3 | 4;
+  reconsiderationReason: string;
+  replacesSkill?: string;
+  replacedBySkill?: string;
+  timestamp: string;
+}
+
+export interface LeadershipSkillEntry {
+  skill: string;
+  cluster: string;
+  status: SkillStatus;
+  initialStage: 2 | 3 | 4;
+  evidenceHistory: ObservedEvidenceRecord[];
+  reconsiderationHistory?: SkillReconsiderationRecord[];
+  lastUpdatedStage: 2 | 3 | 4;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MentorshipSession {
   id: string;
   leaderId: string;
@@ -138,6 +170,7 @@ export interface MentorshipSession {
   // Extracted and managed stage data
   clarificationAnswers?: string[];
   identifiedSkills: string[];
+  skillEntries?: LeadershipSkillEntry[];
   risksAndImpact?: string;
   leaderContribution?: string;
   detectedPatterns?: string;

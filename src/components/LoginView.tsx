@@ -16,11 +16,98 @@ import {
   Sparkles,
   ArrowRight,
   ArrowLeft,
+  ArrowDown,
   AlertCircle,
   Building2,
   CheckCircle2,
   UserCheck,
+  Compass,
+  Users,
+  Lightbulb,
+  MessageSquare,
+  Target,
+  Award,
+  Bot,
 } from 'lucide-react';
+
+const TYPICAL_CHALLENGES = [
+  {
+    title: 'Retroalimentación constructiva',
+    icon: MessageSquare,
+  },
+  {
+    title: 'Manejo de conflictos',
+    icon: Users,
+  },
+  {
+    title: 'Delegación y seguimiento',
+    icon: Target,
+  },
+  {
+    title: 'Comunicación con el equipo',
+    icon: Lightbulb,
+  },
+  {
+    title: 'Motivación y alineación',
+    icon: Compass,
+  },
+];
+
+const STAGES_OVERVIEW = [
+  {
+    num: 1,
+    title: 'Detectar qué sucede',
+    desc: 'Comprender el desafío que enfrenta.',
+  },
+  {
+    num: 2,
+    title: 'Analizar perspectivas y habilidades',
+    desc: 'Analizar perspectivas y habilidades de liderazgo involucradas.',
+  },
+  {
+    num: 3,
+    title: 'Diseñar alternativas',
+    desc: 'Explorar alternativas de actuación.',
+  },
+  {
+    num: 4,
+    title: 'Practicar antes de actuar',
+    desc: 'Practicar antes de actuar, cuando sea pertinente.',
+  },
+  {
+    num: 5,
+    title: 'Actuar',
+    desc: 'Construir su propio plan de acción.',
+  },
+  {
+    num: 6,
+    title: 'Aprender y reflexionar',
+    desc: 'Reflexionar sobre su experiencia y aprendizajes.',
+  },
+  {
+    num: 7,
+    title: 'Cierre y retroalimentación',
+    desc: 'Recibir un reporte final que integra su proceso.',
+  },
+];
+
+const KEY_DIFFERENTIATORS = [
+  {
+    title: 'Acompañamiento personalizado',
+    desc: 'Cada proceso parte del contexto, las circunstancias y los involucrados en la situación específica que vive el líder.',
+    icon: UserCheck,
+  },
+  {
+    title: 'Inteligencia artificial aplicada al desarrollo',
+    desc: 'Utiliza modelos de lenguaje guiados por una metodología pedagógica para cuestionar, orientar y facilitar la reflexión, sin sustituir el criterio ni las decisiones del líder.',
+    icon: Bot,
+  },
+  {
+    title: 'Aprendizaje orientado a la acción',
+    desc: 'No se queda en conceptos teóricos; ayuda al líder a definir compromisos concretos, ensayar conversaciones cuando es necesario y reflexionar sobre los resultados obtenidos.',
+    icon: Target,
+  },
+];
 
 export const LoginView: React.FC = () => {
   const { registerOrSetPassword, login, allUsers, companies, showToast } = useLidacta();
@@ -223,6 +310,14 @@ export const LoginView: React.FC = () => {
     setPassword('');
   };
 
+  const scrollToAccess = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    const el = document.getElementById('portal-acceso');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   return (
     <div className="min-h-screen w-full bg-[#2D1B4E] flex flex-col justify-between p-4 sm:p-6 lg:p-8 font-sans text-white relative overflow-x-hidden selection:bg-[#FFD3BF] selection:text-[#2D1B4E]">
       {/* Decorative ambient subtle glow */}
@@ -230,7 +325,7 @@ export const LoginView: React.FC = () => {
       <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-[#BF3A1B]/15 blur-3xl pointer-events-none" />
 
       {/* Top Brand Bar */}
-      <header className="w-full max-w-screen-xl mx-auto min-h-20 md:min-h-24 flex items-center justify-between py-2.5 sm:py-3 shrink-0">
+      <header className="w-full max-w-screen-xl mx-auto min-h-20 md:min-h-24 flex items-center justify-between gap-3 py-2.5 sm:py-3 shrink-0 relative z-10">
         <div className="flex items-center shrink-0">
           <img
             src="/logo.svg"
@@ -239,16 +334,185 @@ export const LoginView: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 border border-white/15 rounded-full text-xs text-[#FFF7EF] shrink-0">
-          <ShieldCheck className="w-4 h-4 text-[#F7B538] shrink-0" />
-          <span className="hidden sm:inline">Acceso Seguro y Confidencial</span>
-          <span className="sm:hidden font-medium">Seguro</span>
+        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={scrollToAccess}
+            className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-[#F7B538] hover:bg-[#e5a62f] text-[#2D1B4E] font-heading font-bold text-xs sm:text-sm rounded-xl shadow-md shadow-[#F7B538]/15 transition-all cursor-pointer active:scale-98"
+          >
+            <span>Acceder a Lidacta</span>
+            <ArrowDown className="w-3.5 h-3.5 shrink-0" />
+          </button>
+
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 border border-white/15 rounded-full text-xs text-[#FFF7EF] shrink-0">
+            <ShieldCheck className="w-4 h-4 text-[#F7B538] shrink-0" />
+            <span className="hidden sm:inline">Acceso Seguro y Confidencial</span>
+            <span className="sm:hidden font-medium">Seguro</span>
+          </div>
         </div>
       </header>
 
-      {/* Main Centered Login / Registration Container */}
-      <main className="w-full max-w-lg mx-auto my-6 sm:my-8 flex-1 flex flex-col justify-center animate-in fade-in zoom-in-95 duration-300">
-        {rememberedUser && !showOtherAccount ? (
+      {/* Public Presentation + Access Portal Container */}
+      <main className="w-full max-w-screen-xl mx-auto flex-1 flex flex-col relative z-10">
+        {/* Sección 1: Presentación principal (Hero) */}
+        <section className="pt-8 pb-12 sm:pt-12 sm:pb-16 lg:pt-16 lg:pb-20 border-b border-white/10">
+          <div className="max-w-4xl mx-auto text-center space-y-6">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#FFF7EF] border border-[#BF3A1B]/30 text-[#2D1B4E] text-xs sm:text-sm font-semibold tracking-wide shadow-sm">
+              <Sparkles className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+              <span>Lidacta · Desarrollo de Liderazgo en Acción</span>
+            </div>
+
+            <h1 className="font-heading font-extrabold text-3xl sm:text-4xl lg:text-5xl text-white tracking-tight leading-tight">
+              Desarrolla tus habilidades de liderazgo mientras resuelves los desafíos humanos de tu trabajo.
+            </h1>
+
+            <div className="max-w-3xl mx-auto space-y-4 text-sm sm:text-base lg:text-lg text-[#FFF7EF]/85 leading-relaxed">
+              <p>
+                Lidacta es una plataforma de mentoría para líderes, impulsada por inteligencia artificial, que acompaña a quienes coordinan personas a comprender y resolver situaciones cotidianas de liderazgo.
+              </p>
+              <p>
+                A través de conversaciones guiadas y un proceso estructurado de siete etapas, transforma los desafíos reales del trabajo en oportunidades de aprendizaje y aplicación práctica.
+              </p>
+            </div>
+
+            <div className="pt-2 flex justify-center">
+              <button
+                type="button"
+                onClick={scrollToAccess}
+                className="inline-flex items-center gap-2.5 px-7 py-3.5 bg-[#F7B538] hover:bg-[#e5a62f] text-[#2D1B4E] font-heading font-extrabold text-sm sm:text-base rounded-xl shadow-lg shadow-[#F7B538]/20 transition-all cursor-pointer active:scale-98"
+              >
+                <span>Acceder a Lidacta</span>
+                <ArrowDown className="w-4 h-4 shrink-0" />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Sección 2: El problema que atendemos */}
+        <section className="py-12 sm:py-16 border-b border-white/10">
+          <div className="max-w-4xl mx-auto space-y-8">
+            <div className="text-center space-y-4">
+              <span className="text-xs font-heading font-bold uppercase tracking-widest text-[#F7B538]">
+                El desafío cotidiano
+              </span>
+              <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-white tracking-tight">
+                Liderar personas también implica enfrentar desafíos cotidianos.
+              </h2>
+              <p className="text-sm sm:text-base text-[#FFF7EF]/80 leading-relaxed max-w-3xl mx-auto">
+                Quienes coordinan equipos toman decisiones constantes sobre retroalimentación, manejo de conflictos, comunicación, delegación y motivación. Sin embargo, el aprendizaje tradicional suele llegar lejos del momento en que ocurre la situación. Lidacta acerca el acompañamiento justo cuando el líder necesita analizar un reto real y decidir cómo actuar.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              {TYPICAL_CHALLENGES.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div
+                    key={item.title}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FFD3BF] border border-[#BF3A1B]/25 text-xs sm:text-sm font-semibold text-[#2D1B4E] shadow-sm"
+                  >
+                    <Icon className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                    <span>{item.title}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* Sección 3: ¿Cómo funciona Lidacta? */}
+        <section className="py-12 sm:py-16 border-b border-white/10">
+          <div className="max-w-5xl mx-auto space-y-10">
+            <div className="text-center space-y-3">
+              <span className="text-xs font-heading font-bold uppercase tracking-widest text-[#F7B538]">
+                ¿Cómo funciona Lidacta?
+              </span>
+              <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-white tracking-tight">
+                Un proceso de acompañamiento en siete etapas.
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {STAGES_OVERVIEW.map((stage, idx) => (
+                <div
+                  key={stage.num}
+                  className={`p-5 rounded-2xl border shadow-md flex items-start gap-4 ${
+                    idx % 2 === 0
+                      ? 'bg-[#FFF7EF] border-[#EADBCB]'
+                      : 'bg-[#EADBCB] border-[#BF3A1B]/20'
+                  } ${
+                    stage.num === 7 ? 'sm:col-span-2 lg:col-span-3 lg:max-w-md lg:mx-auto lg:w-full' : ''
+                  }`}
+                >
+                  <div className="w-9 h-9 rounded-xl bg-[#FFFFFF] border border-[#BF3A1B]/35 text-[#BF3A1B] font-heading font-extrabold text-sm flex items-center justify-center shrink-0 shadow-xs">
+                    {stage.num}
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
+                      {stage.title}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-[#2D1B4E]/80 leading-relaxed">
+                      {stage.desc}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Sección 4: ¿Qué hace diferente a Lidacta? */}
+        <section className="py-12 sm:py-16 border-b border-white/10">
+          <div className="max-w-5xl mx-auto space-y-10">
+            <div className="text-center space-y-3">
+              <span className="text-xs font-heading font-bold uppercase tracking-widest text-[#F7B538]">
+                ¿Qué hace diferente a Lidacta?
+              </span>
+              <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-white tracking-tight">
+                Aprender liderazgo a partir de situaciones reales.
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {KEY_DIFFERENTIATORS.map((diff, idx) => {
+                const Icon = diff.icon;
+                return (
+                  <div
+                    key={diff.title}
+                    className={`p-6 rounded-2xl border shadow-md space-y-3 ${
+                      idx % 2 === 0
+                        ? 'bg-[#FFF7EF] border-[#EADBCB]'
+                        : 'bg-[#EADBCB] border-[#BF3A1B]/20'
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-[#FFFFFF] border border-[#BF3A1B]/35 text-[#BF3A1B] flex items-center justify-center shadow-xs">
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <h3 className="font-heading font-bold text-base sm:text-lg text-[#2D1B4E]">
+                      {diff.title}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-[#2D1B4E]/80 leading-relaxed">
+                      {diff.desc}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* Sección 5: Acceso a Lidacta (Portal de Acceso existente intacto) */}
+        <section id="portal-acceso" className="w-full max-w-lg mx-auto py-12 sm:py-16 scroll-mt-6 flex flex-col justify-center animate-in fade-in zoom-in-95 duration-300">
+          <div className="text-center space-y-1.5 mb-6">
+            <span className="text-xs font-heading font-bold uppercase tracking-widest text-[#F7B538]">
+              Portal de Acceso
+            </span>
+            <h2 className="font-heading font-extrabold text-2xl text-white tracking-tight">
+              Accede a tu cuenta o regístrate
+            </h2>
+          </div>
+
+          {rememberedUser && !showOtherAccount ? (
           <div className="bg-[#24153F]/95 backdrop-blur-xl border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5">
             {/* Remembered User Card Header */}
             <div className="text-center space-y-2">
@@ -746,14 +1010,35 @@ export const LoginView: React.FC = () => {
           )}
           </div>
         )}
+        </section>
       </main>
 
       {/* Footer Info */}
-      <footer className="w-full max-w-screen-xl mx-auto py-3 text-center text-xs text-[#FFF7EF]/60 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-white/10 shrink-0">
+      <footer className="w-full max-w-screen-xl mx-auto py-4 text-center text-xs text-[#FFF7EF]/60 flex flex-col lg:flex-row items-center justify-between gap-3 border-t border-white/10 shrink-0 relative z-10">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-[#F7B538]" />
+          <ShieldCheck className="w-4 h-4 text-[#F7B538] shrink-0" />
           <span>Protocolo Estricto de Confidencialidad y Encriptación</span>
         </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[#FFF7EF]/75">
+          <a
+            href="mailto:hola@lidacta.com"
+            className="inline-flex items-center gap-1.5 hover:text-[#F7B538] transition-colors"
+          >
+            <Mail className="w-3.5 h-3.5 text-[#F7B538]/80 shrink-0" />
+            <span>hola@lidacta.com</span>
+          </a>
+          <span className="text-white/25 hidden sm:inline" aria-hidden="true">·</span>
+          <a
+            href="https://drive.google.com/file/d/1xVUuMbx1myOMCz4_jOa9_HjR8Ua9fJqv/view"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[#F7B538] underline decoration-white/25 underline-offset-4 transition-colors"
+          >
+            Aviso de Privacidad
+          </a>
+        </div>
+
         <div>
           <span>Lidacta © 2026 · Plataforma de Liderazgo y Acción</span>
         </div>

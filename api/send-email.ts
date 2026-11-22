@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { INSUFFICIENT_STRENGTHS_MESSAGE } from '../src/utils/skillsConsolidator';
 
 export const maxDuration = 60; // 60 segundos de timeout
 
@@ -131,13 +132,13 @@ export default async function handler(req: any, res: any) {
         <!-- 1. Fortalezas detectadas -->
         <div style="background-color: #FFF7EF; border: 1px solid #EADBCE; border-left: 4px solid #F7B538; padding: 18px 20px; border-radius: 10px; margin: 0 0 18px 0;">
           <h4 style="font-size: 13px; font-weight: 800; color: #2D1B4E; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px;">🌟 Fortalezas detectadas en el líder</h4>
-          ${renderList(detectedStrengths, 'Disposición para el autoanálisis, escucha intencional y proactividad.')}
+          ${renderList(detectedStrengths.slice(0, 4), INSUFFICIENT_STRENGTHS_MESSAGE)}
         </div>
 
-        <!-- 2. Habilidades clave puestas en juego (Etapa 2) -->
+        <!-- 2. Habilidades que necesitas fortalecer y evidencias de progreso -->
         <div style="background-color: #FFF3ED; border: 1px solid #FFD3BF; border-left: 4px solid #BF3A1B; padding: 18px 20px; border-radius: 10px; margin: 0 0 18px 0;">
-          <h4 style="font-size: 13px; font-weight: 800; color: #BF3A1B; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px;">🎯 Habilidades clave puestas en juego (Etapa 2)</h4>
-          ${renderList(stageTwoSkills, 'Comunicación Asertiva, Retroalimentación Basada en Hechos.')}
+          <h4 style="font-size: 13px; font-weight: 800; color: #BF3A1B; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px;">🎯 Habilidades que necesitas fortalecer y evidencias de progreso</h4>
+          ${renderList(stageTwoSkills, 'Comunicación Asertiva y Firmeza Empática.')}
         </div>
 
         <!-- 3. Acciones que eligió el líder (Etapa 5) -->
@@ -185,7 +186,7 @@ export default async function handler(req: any, res: any) {
 </html>`;
 
       defaultText = `¡Felicidades, ${recipientName}!\n\nHas concluido satisfactoriamente las siete etapas de acompañamiento en Lidacta para tu desafío: "${challengeTitle}".\n\nA continuación compartimos tu Reporte de Retroalimentación de Liderazgo y Autonomía:\n\n` +
-        `1. FORTALEZAS DETECTADAS EN EL LÍDER:\n${renderTextList(detectedStrengths, 'Disposición para el autoanálisis, escucha intencional y proactividad.')}\n` +
+        `1. FORTALEZAS DETECTADAS EN EL LÍDER:\n${renderTextList(detectedStrengths.slice(0, 4), INSUFFICIENT_STRENGTHS_MESSAGE)}\n` +
         `2. HABILIDADES CLAVE PUESTAS EN JUEGO (ETAPA 2):\n${renderTextList(stageTwoSkills, 'Comunicación Asertiva, Retroalimentación Basada en Hechos.')}\n` +
         `3. ACCIONES QUE ELIGIÓ EL LÍDER (ETAPA 5):\n${renderTextList(chosenActions, 'Plan de acción acordado y ejecutado en el entorno real.')}\n` +
         `4. APRENDIZAJES Y REFLEXIONES (ETAPA 6):\n${renderTextList(stageSixLearnings, 'Identificación de aprendizajes clave y ajustes futuros.')}\n` +

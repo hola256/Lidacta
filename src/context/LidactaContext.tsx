@@ -11,6 +11,7 @@ import {
   UserRole,
   RecommendedResourceItem,
   SystemAlertItem,
+  LeadershipSkillEntry,
 } from '../types/lidacta';
 import {
   INITIAL_COMPANIES,
@@ -27,6 +28,13 @@ import { userService, UserServiceResponse } from '../services/userService';
 import { emailService } from '../services/emailService';
 import { safeString, extractErrorMessage } from '../utils/safeError';
 import { isHumanResourcesRole } from '../utils/roleUtils';
+import {
+  formatStageTwoSkillsWithEvidence,
+  normalizeExistingSessionSkills,
+  getActiveSkillEntries,
+  getActiveSkillNames,
+  sanitizeDetectedStrengths,
+} from '../utils/skillsConsolidator';
 
 interface LidactaContextType {
   currentUser: UserProfile;
@@ -1155,6 +1163,7 @@ El Equipo de Lidacta`;
         },
       ],
       identifiedSkills: [],
+      skillEntries: [],
     };
 
     setMentorships((prev) => [newSession, ...prev]);
@@ -1197,6 +1206,8 @@ El Equipo de Lidacta`;
           userMessage: challengeText,
           currentMessage: challengeText,
           message: challengeText,
+          identifiedSkills: [],
+          skillEntries: [],
           sessionData: newSession,
         }),
       });
@@ -1220,6 +1231,13 @@ El Equipo de Lidacta`;
           stage: 1 as StageNumber,
         };
 
+        const returnedSkillEntries = Array.isArray(coachReply.skillEntries)
+          ? coachReply.skillEntries
+          : [];
+        const returnedIdentifiedSkills = Array.isArray(coachReply.identifiedSkills)
+          ? coachReply.identifiedSkills
+          : [];
+
         setMentorships((prev) =>
           prev.map((m) =>
             m.id === newSessionId
@@ -1227,6 +1245,8 @@ El Equipo de Lidacta`;
                   ...m,
                   theme: coachReply.detectedTheme || m.theme,
                   messages: [...m.messages, replyMsg],
+                  skillEntries: m.skillEntries && m.skillEntries.length > 0 ? m.skillEntries : returnedSkillEntries,
+                  identifiedSkills: m.identifiedSkills && m.identifiedSkills.length > 0 ? m.identifiedSkills : returnedIdentifiedSkills,
                   lastActiveAt: new Date().toISOString(),
                 }
               : m
@@ -1411,8 +1431,12 @@ El Equipo de Lidacta`;
           conversationHistory: isolatedExistingMessages,
           userMessage: text,
           currentMessage: text,
+          identifiedSkills: activeMentorship.identifiedSkills || [],
+          skillEntries: activeMentorship.skillEntries || [],
           sessionData: {
             ...activeMentorship,
+            skillEntries: activeMentorship.skillEntries || [],
+            identifiedSkills: activeMentorship.identifiedSkills || [],
             messages: [...isolatedExistingMessages, leaderMsg],
           },
           isPracticeMode: isPractice,
@@ -1448,9 +1472,38 @@ El Equipo de Lidacta`;
           prev.map((m) => {
             if (m.id !== activeMentorship.id) return m;
 
-            const newSkills = coachReply.identifiedSkills
-              ? Array.from(new Set([...(m.identifiedSkills || []), ...coachReply.identifiedSkills]))
-              : m.identifiedSkills;
+            // Manejo estructurado de skillEntries:
+            // En etapas 2, 3 y 4: cuando el backend devuelve un arreglo en coachReply.skillEntries,
+            // se adopta directamente como la verdad canónica estructurada (respetando estados y evidencias reales).
+            // En etapas 1, 5, 6 y 7: se conservan intactas las entradas existentes de la sesión (m.skillEntries).
+            let newSkillEntries: LeadershipSkillEntry[] = m.skillEntries || [];
+            if ([2, 3, 4].includes(currentStage) && Array.isArray(coachReply.skillEntries)) {
+              newSkillEntries = coachReply.skillEntries;
+            } else if ((!m.skillEntries || m.skillEntries.length === 0) && Array.isArray(coachReply.skillEntries) && coachReply.skillEntries.length > 0) {
+              newSkillEntries = coachReply.skillEntries;
+            }
+
+            // Sincronización de identifiedSkills para retrocompatibilidad:
+            // Si existen skillEntries, extraemos los nombres de las habilidades activas (vigente o precisada) con getActiveSkillNames.
+            // Si no hay skillEntries, recurrimos a coachReply.identifiedSkills (en 2, 3, 4) o mantenemos m.identifiedSkills.
+            const activeSkillNamesFromEntries = newSkillEntries.length > 0 ? getActiveSkillNames(newSkillEntries) : [];
+            const newSkills =
+              activeSkillNamesFromEntries.length > 0
+                ? activeSkillNamesFromEntries
+                : [2, 3, 4].includes(currentStage) && Array.isArray(coachReply.identifiedSkills)
+                ? normalizeExistingSessionSkills(coachReply.identifiedSkills)
+                : m.identifiedSkills
+                ? normalizeExistingSessionSkills(m.identifiedSkills)
+                : [];
+
+            const skillsForReport =
+              newSkillEntries.length > 0
+                ? newSkillEntries
+                : newSkills.length > 0
+                ? newSkills
+                : m.skillEntries && m.skillEntries.length > 0
+                ? m.skillEntries
+                : m.identifiedSkills || [];
 
             // In Stage 5, the leader personally writes and owns their Action Plan.
             // Any suggestions or drafts provided by Lidacta in the conversation remain in the chat only
@@ -1458,6 +1511,12 @@ El Equipo de Lidacta`;
             const newFinalFeedback = coachReply.finalFeedback
               ? {
                   ...coachReply.finalFeedback,
+                  detectedStrengths: sanitizeDetectedStrengths(coachReply.finalFeedback.detectedStrengths),
+                  stageTwoSkills: formatStageTwoSkillsWithEvidence(
+                    coachReply.finalFeedback.stageTwoSkills && coachReply.finalFeedback.stageTwoSkills.length > 0
+                      ? coachReply.finalFeedback.stageTwoSkills
+                      : skillsForReport
+                  ),
                   deliveredAt: new Date().toISOString(),
                 }
               : m.finalFeedbackReport;
@@ -1467,6 +1526,7 @@ El Equipo de Lidacta`;
               stageReadyToAdvance: stageAdvanceSignal !== null ? stageAdvanceSignal : m.stageReadyToAdvance,
               messages: [...m.messages, lidactaMsg],
               theme: coachReply.detectedTheme || m.theme,
+              skillEntries: newSkillEntries,
               identifiedSkills: newSkills,
               suggestedAlternatives: coachReply.suggestedAlternatives || m.suggestedAlternatives,
               actionPlan: m.actionPlan,
@@ -1477,15 +1537,28 @@ El Equipo de Lidacta`;
         );
 
         // Despacho automático de correo para Etapa 7 al generarse o actualizarse el reporte final
+        const activeEntriesOrSkills =
+          (activeMentorship.skillEntries && activeMentorship.skillEntries.length > 0)
+            ? activeMentorship.skillEntries
+            : (activeMentorship.identifiedSkills || []);
+
         let generatedStage7Report: FinalFeedbackReport | undefined = coachReply.finalFeedback
-          ? { ...coachReply.finalFeedback, deliveredAt: new Date().toISOString() }
+          ? {
+              ...coachReply.finalFeedback,
+              detectedStrengths: sanitizeDetectedStrengths(coachReply.finalFeedback.detectedStrengths),
+              stageTwoSkills: formatStageTwoSkillsWithEvidence(
+                coachReply.finalFeedback.stageTwoSkills && coachReply.finalFeedback.stageTwoSkills.length > 0
+                  ? coachReply.finalFeedback.stageTwoSkills
+                  : activeEntriesOrSkills
+              ),
+              deliveredAt: new Date().toISOString(),
+            }
           : undefined;
 
         if (currentStage === 7 && !generatedStage7Report && !activeMentorship.finalFeedbackReport) {
-          const realSkills =
-            Array.isArray(activeMentorship.identifiedSkills) && activeMentorship.identifiedSkills.length > 0
-              ? activeMentorship.identifiedSkills
-              : ['Comunicación Asertiva y Gestión de Acuerdos'];
+          const realSkills = formatStageTwoSkillsWithEvidence(
+            activeEntriesOrSkills
+          );
           const realAction =
             activeMentorship.actionPlan?.what ||
             activeMentorship.chosenAlternative ||
@@ -1496,11 +1569,7 @@ El Equipo de Lidacta`;
               'La claridad temprana en los acuerdos previene fricciones y fortalece la confianza mutua.',
           ];
           generatedStage7Report = {
-            detectedStrengths: [
-              'Proactividad para abordar situaciones complejas de liderazgo sin postergarlas',
-              'Disposición para el autoanálisis y reconocimiento de áreas de oportunidad',
-              'Capacidad de generar acuerdos basados en empatía y claridad operativa',
-            ],
+            detectedStrengths: [],
             stageTwoSkills: realSkills,
             chosenActions: [realAction],
             stageSixLearnings: realLearnings,
@@ -1831,6 +1900,11 @@ El Equipo de Lidacta`;
 
     // If reached Stage 7, notify HR that leader completed mentorship!
     if (isCompletion) {
+      const activeSkillsList = (activeMentorship.skillEntries && activeMentorship.skillEntries.length > 0
+        ? getActiveSkillNames(activeMentorship.skillEntries)
+        : activeMentorship.identifiedSkills || []
+      ).join(', ') || 'Liderazgo operativo';
+
       const hrNotification: NotificationItem = {
         id: `notif_${Date.now()}_case_completed`,
         recipientRole: 'hr',
@@ -1843,7 +1917,7 @@ El Equipo de Lidacta`;
         emailSimulated: {
           to: `recursos.humanos@${activeMentorship.companyName.toLowerCase().replace(/\s+/g, '')}.com`,
           subject: `Lidacta: ${activeMentorship.leaderName} terminó su proceso de acompañamiento`,
-          bodyText: `Estimada responsable de Recursos Humanos,\n\n${activeMentorship.leaderName} concluyó satisfactoriamente las 7 etapas de desarrollo en Lidacta.\n\nYa puedes consultar los indicadores clave en tu panel:\n• Tema abordado: ${activeMentorship.theme}\n• Habilidades desarrolladas: ${activeMentorship.identifiedSkills.join(', ') || 'Liderazgo operativo'}\n• Acción implementada: ${activeMentorship.actionPlan?.what || 'Conversación 1 a 1'}\n\nGracias por impulsar el liderazgo en acción.\n\nAtentamente,\nEquipo Lidacta`,
+          bodyText: `Estimada responsable de Recursos Humanos,\n\n${activeMentorship.leaderName} concluyó satisfactoriamente las 7 etapas de desarrollo en Lidacta.\n\nYa puedes consultar los indicadores clave en tu panel:\n• Tema abordado: ${activeMentorship.theme}\n• Habilidades desarrolladas: ${activeSkillsList}\n• Acción implementada: ${activeMentorship.actionPlan?.what || 'Conversación 1 a 1'}\n\nGracias por impulsar el liderazgo en acción.\n\nAtentamente,\nEquipo Lidacta`,
         },
       };
 
@@ -1885,7 +1959,13 @@ El Equipo de Lidacta`;
           userMessage: `[Avanzando a Etapa ${nextStage}]`,
           currentMessage: `[Avanzando a Etapa ${nextStage}]`,
           message: `[Avanzando a Etapa ${nextStage}]`,
-          sessionData: activeMentorship,
+          identifiedSkills: activeMentorship.identifiedSkills || [],
+          skillEntries: activeMentorship.skillEntries || [],
+          sessionData: {
+            ...activeMentorship,
+            skillEntries: activeMentorship.skillEntries || [],
+            identifiedSkills: activeMentorship.identifiedSkills || [],
+          },
         }),
       });
 
@@ -1908,8 +1988,22 @@ El Equipo de Lidacta`;
           stage: nextStage,
         };
 
+        const activeEntriesOrSkills =
+          (activeMentorship.skillEntries && activeMentorship.skillEntries.length > 0)
+            ? activeMentorship.skillEntries
+            : (activeMentorship.identifiedSkills || []);
+
         let generatedReport: FinalFeedbackReport | undefined = coachReply.finalFeedback
-          ? { ...coachReply.finalFeedback, deliveredAt: new Date().toISOString() }
+          ? {
+              ...coachReply.finalFeedback,
+              detectedStrengths: sanitizeDetectedStrengths(coachReply.finalFeedback.detectedStrengths),
+              stageTwoSkills: formatStageTwoSkillsWithEvidence(
+                coachReply.finalFeedback.stageTwoSkills && coachReply.finalFeedback.stageTwoSkills.length > 0
+                  ? coachReply.finalFeedback.stageTwoSkills
+                  : activeEntriesOrSkills
+              ),
+              deliveredAt: new Date().toISOString(),
+            }
           : undefined;
 
         // Si la respuesta de la IA no contiene finalFeedback y avanzamos a Etapa 7,
@@ -1918,10 +2012,9 @@ El Equipo de Lidacta`;
           if (activeMentorship.finalFeedbackReport) {
             generatedReport = activeMentorship.finalFeedbackReport;
           } else {
-            const realSkills =
-              Array.isArray(activeMentorship.identifiedSkills) && activeMentorship.identifiedSkills.length > 0
-                ? activeMentorship.identifiedSkills
-                : ['Comunicación Asertiva y Gestión de Acuerdos'];
+            const realSkills = formatStageTwoSkillsWithEvidence(
+              activeEntriesOrSkills
+            );
 
             const realActions: string[] = [];
             if (activeMentorship.actionPlan?.what && activeMentorship.actionPlan.what.trim()) {
@@ -1951,11 +2044,7 @@ El Equipo de Lidacta`;
             }
 
             generatedReport = {
-              detectedStrengths: [
-                'Proactividad para abordar situaciones complejas de liderazgo sin postergarlas',
-                'Disposición para el autoanálisis y reconocimiento de áreas de oportunidad',
-                'Capacidad de generar acuerdos basados en empatía y claridad operativa',
-              ],
+              detectedStrengths: [],
               stageTwoSkills: realSkills,
               chosenActions: realActions,
               stageSixLearnings: realLearnings,
@@ -1970,16 +2059,37 @@ El Equipo de Lidacta`;
         }
 
         setMentorships((prev) =>
-          prev.map((m) =>
-            m.id === currentCaseId
-              ? {
-                  ...m,
-                  messages: [...m.messages, introMsg],
-                  finalFeedbackReport: generatedReport || m.finalFeedbackReport,
-                  lastActiveAt: new Date().toISOString(),
-                }
-              : m
-          )
+          prev.map((m) => {
+            if (m.id !== currentCaseId) return m;
+
+            // Manejo estructurado de skillEntries al avanzar de etapa:
+            // En etapas 2, 3 y 4: adoptar coachReply.skillEntries si viene definido por el backend.
+            // En etapas 1, 5, 6 y 7: conservar intactas las entradas existentes de la sesión (m.skillEntries).
+            let updatedSkillEntries: LeadershipSkillEntry[] = m.skillEntries || [];
+            if ([2, 3, 4].includes(nextStage) && Array.isArray(coachReply.skillEntries)) {
+              updatedSkillEntries = coachReply.skillEntries;
+            } else if ((!m.skillEntries || m.skillEntries.length === 0) && Array.isArray(coachReply.skillEntries) && coachReply.skillEntries.length > 0) {
+              updatedSkillEntries = coachReply.skillEntries;
+            }
+
+            // Sincronización de identifiedSkills para retrocompatibilidad:
+            const activeSkillNames = updatedSkillEntries.length > 0 ? getActiveSkillNames(updatedSkillEntries) : [];
+            const updatedIdentifiedSkills =
+              activeSkillNames.length > 0
+                ? activeSkillNames
+                : [2, 3, 4].includes(nextStage) && Array.isArray(coachReply.identifiedSkills)
+                ? normalizeExistingSessionSkills(coachReply.identifiedSkills)
+                : m.identifiedSkills || [];
+
+            return {
+              ...m,
+              messages: [...m.messages, introMsg],
+              skillEntries: updatedSkillEntries,
+              identifiedSkills: updatedIdentifiedSkills,
+              finalFeedbackReport: generatedReport || m.finalFeedbackReport,
+              lastActiveAt: new Date().toISOString(),
+            };
+          })
         );
 
         // Despacho automático de correo para Etapa 7 al generarse el reporte final
@@ -2027,10 +2137,13 @@ El Equipo de Lidacta`;
       console.error('Error transitioning stage:', err);
       if (nextStage === 7) {
         // En caso de fallo de red al avanzar a Etapa 7, asegurar que la mentoría concluya y el reporte final se genere y despache
-        const fallbackSkills =
-          Array.isArray(activeMentorship.identifiedSkills) && activeMentorship.identifiedSkills.length > 0
-            ? activeMentorship.identifiedSkills
-            : ['Comunicación Asertiva y Gestión de Acuerdos'];
+        const activeEntriesOrSkills =
+          (activeMentorship.skillEntries && activeMentorship.skillEntries.length > 0)
+            ? activeMentorship.skillEntries
+            : (activeMentorship.identifiedSkills || []);
+        const fallbackSkills = formatStageTwoSkillsWithEvidence(
+          activeEntriesOrSkills
+        );
         const fallbackAction = activeMentorship.actionPlan?.what || activeMentorship.chosenAlternative || 'Conversación 1 a 1 de alineación operativa';
         const fallbackLearnings = [
           activeMentorship.learnings?.insights ||
@@ -2038,11 +2151,7 @@ El Equipo de Lidacta`;
             'La claridad temprana en los acuerdos previene fricciones y fortalece la confianza mutua.',
         ];
         const reportFallback: FinalFeedbackReport = activeMentorship.finalFeedbackReport || {
-          detectedStrengths: [
-            'Proactividad para abordar situaciones complejas de liderazgo sin postergarlas',
-            'Disposición para el autoanálisis y reconocimiento de áreas de oportunidad',
-            'Capacidad de generar acuerdos basados en empatía y claridad operativa',
-          ],
+          detectedStrengths: [],
           stageTwoSkills: fallbackSkills,
           chosenActions: [fallbackAction],
           stageSixLearnings: fallbackLearnings,

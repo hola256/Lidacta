@@ -7,6 +7,20 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import sendEmailHandler from './api/send-email';
+import {
+  consolidateSkills,
+  consolidateSkillEntries,
+  getActiveSkillEntries,
+  getActiveSkillNames,
+  createSkillEntriesFromLegacy,
+  formatStageTwoSkillsWithEvidence,
+  normalizeExistingSessionSkills,
+  sanitizeDetectedStrengths,
+  INSUFFICIENT_EVIDENCE_MESSAGE,
+  SkillReconsiderationDirective,
+  IncomingSkillCandidate,
+  LeadershipSkillEntry,
+} from './src/utils/skillsConsolidator';
 
 dotenv.config();
 
@@ -91,27 +105,121 @@ function isSubstantiveMessage(text: string): boolean {
   return true;
 }
 
+function cleanConversationalText(raw: string | undefined | null): string {
+  if (!raw || typeof raw !== 'string') return '';
+
+  let text = raw.trim();
+
+  // 1. Eliminar etiquetas de pensamiento o introspección interna (<thought>...</thought>, <think>...</think>)
+  text = text.replace(/<(?:thought|think)>[\s\S]*?<\/(?:thought|think)>/gi, '').trim();
+
+  // 2. Si el texto completo viene envuelto en bloques de código markdown (```json ... ``` o ``` ... ```)
+  const codeBlockMatch = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    text = codeBlockMatch[1].trim();
+  }
+
+  // 3. Detectar si el texto contiene una estructura de objeto JSON o un volcado crudo
+  const hasJsonStructure =
+    (text.startsWith('{') && text.endsWith('}')) ||
+    text.includes('"replyText"') ||
+    text.includes('"reply"') ||
+    text.includes('"mensaje"');
+
+  if (hasJsonStructure) {
+    try {
+      const firstBrace = text.indexOf('{');
+      const lastBrace = text.lastIndexOf('}');
+      const jsonCandidate =
+        firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace
+          ? text.substring(firstBrace, lastBrace + 1)
+          : text;
+
+      const parsed = JSON.parse(jsonCandidate);
+      const extracted =
+        parsed.replyText ||
+        parsed.reply ||
+        parsed.text ||
+        parsed.response ||
+        parsed.mensaje ||
+        parsed.content;
+
+      if (typeof extracted === 'string' && extracted.trim().length > 0) {
+        return cleanConversationalText(extracted);
+      }
+    } catch {
+      const fieldMatch =
+        text.match(/"replyText"\s*:\s*"((?:[^"\\]|\\.)*)"/) ||
+        text.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)"/) ||
+        text.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/) ||
+        text.match(/"mensaje"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+
+      if (fieldMatch && fieldMatch[1]) {
+        try {
+          const decoded = JSON.parse(`"${fieldMatch[1]}"`);
+          if (typeof decoded === 'string' && decoded.trim().length > 0) {
+            return cleanConversationalText(decoded);
+          }
+        } catch {
+          const unescaped = fieldMatch[1]
+            .replace(/\\"/g, '"')
+            .replace(/\\n/g, '\n')
+            .replace(/\\r/g, '')
+            .replace(/\\t/g, '\t')
+            .replace(/\\\\/g, '\\')
+            .trim();
+          if (unescaped.length > 0) {
+            return unescaped;
+          }
+        }
+      }
+    }
+  }
+
+  // 4. Limpiar cercos de código markdown dispersos (```json o ```) si quedaron en el texto
+  if (text.includes('```')) {
+    text = text.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+  }
+
+  // 5. Eliminar cualquier marcador técnico de depuración que haya podido anteponerse
+  text = text.replace(/^\[(?:Pensamiento|Análisis|Analysis|Internal|Prompt|Stage\s*\d+)\]:?\s*/i, '').trim();
+
+  return text;
+}
+
 // POST /api/mentor/respond
 app.post('/api/mentor/respond', async (req: Request, res: Response) => {
+  let currentStageNum = 1;
+  let leaderProfile: any = null;
+  let companyContext: any = null;
+  let resolvedUserMessage = '';
+  let resolvedHistory: any[] = [];
+  let safeSessionContext: any = null;
+  let sessionData: any = null;
+  let isPracticeMode = false;
+
   try {
+    const body = req.body || {};
     const {
       caseId,
       mentorshipId,
       stage,
       activeStage,
-      leaderProfile,
-      companyContext,
+      currentStage,
       conversationHistory,
       history,
       userMessage,
       currentMessage,
       message,
-      sessionData,
-      isPracticeMode,
-    } = req.body;
+    } = body;
 
-    const currentStageNum = Number(stage || activeStage) || 1;
-    const resolvedUserMessage = (userMessage || currentMessage || message || '').trim();
+    leaderProfile = body.leaderProfile;
+    companyContext = body.companyContext;
+    sessionData = body.sessionData || null;
+    isPracticeMode = Boolean(body.isPracticeMode);
+
+    currentStageNum = Number(stage || activeStage || currentStage || body.currentStage) || 1;
+    resolvedUserMessage = (userMessage || currentMessage || message || '').trim();
     const targetCaseId = caseId || mentorshipId || sessionData?.id || '';
 
     const rawHistory = Array.isArray(conversationHistory)
@@ -173,11 +281,35 @@ app.post('/api/mentor/respond', async (req: Request, res: Response) => {
 
     const activeCaseTitle = (sessionData?.id === targetCaseId ? sessionData?.title : '') || (initialSubstantiveChallenge ? initialSubstantiveChallenge.slice(0, 60) : 'Caso de liderazgo activo');
     const activeCaseChallenge = (sessionData?.id === targetCaseId ? sessionData?.initialChallenge : '') || initialSubstantiveChallenge || 'Reto de liderazgo y gestión de equipo';
-    const safeSessionContext = {
+    const rawExistingSkills =
+      (sessionData?.identifiedSkills && Array.isArray(sessionData.identifiedSkills) && sessionData.identifiedSkills) ||
+      (req.body?.identifiedSkills && Array.isArray(req.body.identifiedSkills) && req.body.identifiedSkills) ||
+      [];
+    const rawExistingSkillEntries =
+      (sessionData?.skillEntries && Array.isArray(sessionData.skillEntries) && sessionData.skillEntries) ||
+      (req.body?.skillEntries && Array.isArray(req.body.skillEntries) && req.body.skillEntries) ||
+      [];
+
+    // Priorizar el registro estructurado skillEntries cuando exista; si no, crear desde identifiedSkills legadas
+    let existingSessionSkillEntries: LeadershipSkillEntry[] = [];
+    if (rawExistingSkillEntries.length > 0) {
+      existingSessionSkillEntries = rawExistingSkillEntries;
+    } else if (rawExistingSkills.length > 0) {
+      existingSessionSkillEntries = createSkillEntriesFromLegacy(rawExistingSkills, 2);
+    }
+
+    const existingSessionSkills =
+      existingSessionSkillEntries.length > 0
+        ? getActiveSkillNames(existingSessionSkillEntries)
+        : normalizeExistingSessionSkills(rawExistingSkills);
+
+    safeSessionContext = {
       id: targetCaseId,
       title: activeCaseTitle,
       initialChallenge: activeCaseChallenge,
       currentStage: currentStageNum,
+      identifiedSkills: existingSessionSkills,
+      skillEntries: existingSessionSkillEntries,
     };
 
     // Build the system prompt embedding all Lidacta rules (SYSTEM PROMPT DE 3 BLOQUES)
@@ -372,6 +504,7 @@ ETAPA 1: Detectar qué sucede
 ETAPA 2: Analizar perspectivas y habilidades
 - Objetivo: Llevar al líder a reflexionar sobre su co-responsabilidad e identificar la habilidad crítica a desarrollar. Cuestionar amablemente premisas y puntos de vista para provocar nuevas perspectivas. Distinguir entre lo que está bajo su control, lo que puede influir y lo que depende de terceros.
 - Límite: Se sugieren hasta 5 intervenciones orientativas.
+- Cuestiona premisas, explora la contribución del líder sin culparlo e identifica con base en la evidencia de sus comportamientos, decisiones y respuestas las habilidades preliminares que necesita fortalecer (no te limites a la etiqueta superficial del problema inicial; el líder NO necesita validar ni seleccionar la habilidad). Incluye en identifiedSkills las habilidades canónicas respaldadas por la evidencia disponible (puedes enviar objetos con { "skill": "Nombre canónico", "evidenceText": "Evidencia observable relatada" } o nombres canónicos). La Etapa 2 únicamente identifica e incorpora habilidades iniciales, NO reconsidera.
 - Preguntas de Indagación Enriquecida:
   * Efecto Espejo: "Si nos ponemos en los zapatos de [Involucrado], ¿cómo crees que percibe esta misma situación?"
   * Contribución: "¿De qué manera tus acciones (u omisiones) han contribuido a que la situación se mantenga así?"
@@ -383,7 +516,7 @@ ETAPA 2: Analizar perspectivas y habilidades
   * Juicios: "¿Qué juicios estás haciendo sobre ti, sobre las personas involucradas o la situación?"
   * Emocionalidad: "¿Qué emociones te genera esta situación?"
 - Punto de Control Obligatorio 1: Guiar al líder a reinterpretar o ampliar la perspectiva antes de finalizar la etapa ("Con lo que hemos conversado hasta ahora, ¿de qué te das cuenta?").
-- Punto de Control Obligatorio 2 (INDISPENSABLE): Determinar e identificar explícitamente junto con el líder la habilidad crítica de liderazgo a desarrollar o fortalecer (o si es organizacional, delimitar su ámbito de gestión e influencia).
+- Punto de Control Obligatorio 2 (INDISPENSABLE): Determinar e identificar explícitamente la habilidad crítica de liderazgo a desarrollar o fortalecer (o si es organizacional, delimitar su ámbito de gestión e influencia). La Etapa 2 únicamente identifica e incorpora habilidades iniciales, NO reconsidera.
 
 ETAPA 3: Diseñar alternativas
 - Objetivo: Guiar al líder a proponer sus propias soluciones y potenciar su autonomía.
@@ -391,12 +524,15 @@ ETAPA 3: Diseñar alternativas
   1. Preguntar: "¿Qué alternativas ves para abordar esto hoy? Yo te ayudo a analizarlas."
   2. Si el líder aporta ideas: Reforzar, pulir y aportar pros, contras, riesgos y oportunidades de cada alternativa.
   3. Si el líder está bloqueado: Proponer hasta dos opciones pertinentes basadas primero en la Biblioteca Interna (Bloque 3) o fuentes externas autorizadas, con sus beneficios y riesgos.
+- Profundiza en el análisis: puedes incorporar nuevas habilidades en identifiedSkills con su evidenceText, o reconsiderar habilidades previas si la nueva evidencia demuestra que la causa raíz es diferente o que el asunto era puramente normativo/organizacional fuera del control del líder. Para reconsiderar, emite directivas en "skillsReconsideration" (discard o replace) acompañadas SIEMPRE de su justificación explícita con evidencia.
 - Conexión: Preguntar si necesita practicar (Etapa 4) o si se siente listo para actuar directamente (Etapa 5).
 
 ETAPA 4: Practicar antes de actuar (Opcional)
 - Se activa solo cuando el líder necesita ensayar o explorar cómo llevar a la práctica una de las opciones.
 - Protocolo: Ofrecer al líder la posibilidad de: 1) Realizar una práctica o simulación, 2) Recibir una herramienta de apoyo, o avanzar sin ellas a la Etapa 5. Respetar su decisión sin forzar.
-- Si practica: Tono constructivo enfocado en fortalecer las habilidades identificadas en la situación específica.
+- Si practica: Tono constructivo enfocado en fortalecer las habilidades identificadas en la situación específica. Utiliza su comportamiento en el ejercicio como evidencia de simulación para confirmar, precisar, descartar o sustituir habilidades en "identifiedSkills" (con su evidenceText de la simulación) o "skillsReconsideration"; si la omite, conserva intactas las habilidades previas.
+
+ETAPAS 1, 5 y 6: NO deben generar, agregar, modificar, descartar ni sustituir habilidades. En el JSON identifiedSkills DEBE ser siempre [] y no emitir skillsReconsideration.
 
 ETAPA 5: Actuar (Plan de Acción)
 - Objetivo: Asegurar una acción concreta, fechada y verificable.
@@ -418,13 +554,19 @@ ETAPA 6: Aprender y reflexionar
   * "¿Qué harás diferente de ahora en adelante?"
 
 ETAPA 7: Cierre y retroalimentación
-- Objetivo: Entregar un resumen ejecutivo del proceso.
-- Estructura del Reporte:
-  1. Fortalezas demostradas por el líder.
-  2. Habilidad de liderazgo identificada y trabajada durante el acompañamiento (identificada en Etapa 2), indicando si requiere seguir fortaleciéndose.
-  3. Compromisos ejecutados y aprendizajes consolidados.
-  4. Identificación y reconocimiento del progreso o esfuerzo del líder.
-  5. Recomendaciones para mantener la autonomía.
+- Objetivo: Entregar un resumen ejecutivo del proceso con fortalezas, habilidades trabajadas y compromisos. Recupera exclusivamente las habilidades activas consolidadas existentes trabajadas en el proceso sin inferir ni generar nuevas habilidades. En el JSON identifiedSkills DEBE ser siempre []. Formula stageTwoSkills con la habilidad a fortalecer y su correspondiente evidencia observable registrada. Si no existe evidencia suficiente en el proceso, indica exactamente: 'No se cuenta con evidencia suficiente en este proceso para identificar habilidades específicas por fortalecer.'
+- OBLIGATORIO EN ETAPA 7: En el JSON incluye el objeto "finalFeedback" con las 5 secciones exactas:
+  * detectedStrengths: Array de 0 a 4 fortalezas basadas EXCLUSIVAMENTE en conductas observables demostradas por el líder durante la mentoría (etapas 1 a 6) (ej. honestidad diagnóstica en el autoanálisis, agudeza para distinguir dinámicas del equipo, precisión operativa en los acuerdos, madurez reflexiva sin buscar culpables). Si no se observaron conductas concretas que destaquen con evidencia, dejar el arreglo vacío []. Queda PROHIBIDO atribuir capacidades permanentes, dominio en piso o cambios no demostrados. REGLA CONCEPTUAL DE EXCLUSIÓN: Queda estrictamente prohibido atribuir como fortaleza el dominio o maestría de una habilidad que el líder necesita desarrollar (habilidades presentes en "Habilidades ya identificadas en la sesión"); sin embargo, sí es válido reconocer conductas del proceso asociadas (por ejemplo: reconocer que se tiene dificultad para regular una reacción demuestra autoconciencia y apertura reflexiva, pero NO autorregulación emocional).
+  * stageTwoSkills: Array con las habilidades consolidadas que el líder necesita fortalecer (identificadas en etapas 2, 3 y 4) acompañadas de su evidencia concreta de progreso observada en la conversación o práctica. Si no hay evidencia suficiente, incluir únicamente: 'No se cuenta con evidencia suficiente en este proceso para identificar habilidades específicas por fortalecer.'
+  * chosenActions: Array con la acción concreta comprometida en Etapa 5.
+  * stageSixLearnings: Array con aprendizajes y reflexiones consolidadas en Etapa 6.
+  * recommendationsForAutonomy: Array con recomendaciones para el fortalecimiento de la autonomía.
+
+REGLAS OBLIGATORIAS DE HABILIDADES Y RECONSIDERACIÓN:
+- La ausencia de mención NUNCA elimina una habilidad previamente identificada.
+- Omitir la Etapa 4 NUNCA descarta habilidades previas.
+- Toda directiva de descarte o sustitución en "skillsReconsideration" requiere OBLIGATORIAMENTE una justificación explícita y no vacía basada en la evidencia de la conversación.
+- No existe límite rígido de 3 habilidades; se conservan todas las habilidades respaldadas por evidencia.
 
 ======================================================================
 BLOQUE 3: BIBLIOTECA INTERNA
@@ -504,10 +646,11 @@ CONTEXTO DINÁMICO DE ESTA SESIÓN
 - Etapa Operativa Actual: ETAPA ${currentStageNum} - ${STAGE_NAMES[currentStageNum] || ''}
 - Caso / Reto actual: ${activeCaseTitle || 'Caso actual'}
 - Reto inicial: ${activeCaseChallenge || resolvedUserMessage || ''}
+- Habilidades ya identificadas en la sesión: ${existingSessionSkills.join(', ') || 'Ninguna aún'}
 
 CRITERIOS ESTRICTOS PARA EL CAMPO "readyToAdvance":
 - En Etapa 1: Debe ser true ÚNICAMENTE cuando ya se haya entregado previamente la síntesis con las 3 viñetas (**Hechos y situación**, **Dilema del líder**, **Impacto y reto principal**) Y el mensaje actual del líder confirme o valide dicha síntesis (ej. "de acuerdo", "sí", "si estoy lista", "totalmente", "correcto"). Si el líder corrige, pregunta, duda o aporta nuevos datos, DEBE ser false.
-- En Etapa 2: Debe ser true ÚNICAMENTE cuando la habilidad crítica haya sido planteada Y el líder en su mensaje la reconozca o valide como relevante para su reto. Si la rebate o duda, DEBE ser false.
+- En Etapa 2: Debe ser true ÚNICAMENTE cuando la habilidad crítica haya sido planteada Y el líder continúe o valide el avance hacia el diseño de alternativas. Si la rebate o duda, DEBE ser false.
 - En Etapa 3: Debe ser true ÚNICAMENTE cuando se haya planteado al menos una alternativa viable Y el líder la elija o valide para actuar. Si pide más alternativas o tiene dudas, DEBE ser false.
 - En cualquier otro escenario o ante cualquier duda/aclaración: DEBE ser false.
 
@@ -519,7 +662,15 @@ Debes responder SIEMPRE en formato JSON con la siguiente estructura exacta:
   "replyText": "Tu intervención concisa, empática, ejecutiva y al grano para el líder en español (máx 1-3 párrafos cortos).",
   "readyToAdvance": true/false,
   "advancePrompt": "Frase breve invitando a pasar a la siguiente etapa o null",
-  "identifiedSkills": ["Habilidad 1", "Habilidad 2"],
+  "identifiedSkills": [], // En Etapas 2, 3 o 4: objetos { "skill": "Habilidad", "evidenceText": "Evidencia observable..." } o strings si hay evidencia; dejar [] en etapas 1, 5, 6 y 7.
+  "skillsReconsideration": { // Opcional, ÚNICAMENTE en Etapas 3 o 4 cuando exista justificación explícita con evidencia
+    "discard": [
+      { "skill": "Habilidad a descartar", "evidence": "Justificación explícita de por qué la nueva evidencia demuestra que no corresponde al líder" }
+    ],
+    "replace": [
+      { "from": "Habilidad anterior", "to": "Nueva habilidad canónica", "evidence": "Justificación explícita de por qué la profundización reveló esta causa raíz" }
+    ]
+  },
   "detectedTheme": "Manejo de Conflictos | Retroalimentación | Inteligencia Emocional | Comunicación | Delegación | Motivación",
   "isTherapeuticCase": false,
   "therapeuticReason": "Resumen si aplica...",
@@ -538,8 +689,8 @@ Debes responder SIEMPRE en formato JSON con la siguiente estructura exacta:
     }
   ],
   "finalFeedback": {
-    "detectedStrengths": ["Fortaleza 1"],
-    "stageTwoSkills": ["Habilidad identificada en etapa 2"],
+    "detectedStrengths": [], // De 0 a 4 fortalezas demostradas en la sesión; dejar [] si no hay evidencia observable suficiente
+    "stageTwoSkills": ["Habilidad a fortalecer — Evidencia observable: Observación concreta"],
     "chosenActions": ["Acción"],
     "stageSixLearnings": ["Aprendizaje"],
     "recommendationsForAutonomy": ["Recomendación para autonomía"]
@@ -633,13 +784,139 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         try {
           parsed = JSON.parse(rawText || '{}');
         } catch {
+          parsed = null;
+        }
+
+        if (!parsed || typeof parsed !== 'object') {
           parsed = {
-            replyText: rawText,
+            replyText: cleanConversationalText(rawText),
             readyToAdvance: false,
             advancePrompt: null,
             identifiedSkills: [],
             detectedTheme: 'Liderazgo',
             isTherapeuticCase: false,
+          };
+        }
+
+        // 1. Postprocesamiento de skillEntries e identifiedSkills según la etapa del flujo
+        let finalSkillEntries = existingSessionSkillEntries;
+
+        if ([1, 5, 6].includes(currentStageNum) || currentStageNum === 7) {
+          // Requisito C: Las etapas 1, 5, 6 y 7 NO generan, agregan, modifican, descartan ni sustituyen habilidades.
+          // En la respuesta devuelta por estas etapas, identifiedSkills es SIEMPRE un arreglo vacío ([]),
+          // aunque Gemini haya devuelto habilidades o directivas en su JSON.
+          parsed.identifiedSkills = [];
+          parsed.skillEntries = existingSessionSkillEntries;
+          finalSkillEntries = existingSessionSkillEntries;
+        } else if ([2, 3, 4].includes(currentStageNum)) {
+          // En las etapas 2, 3 y 4: procesar habilidades candidatas y directivas de reconsideración
+          const rawCandidates = Array.isArray(parsed.identifiedSkills)
+            ? parsed.identifiedSkills
+            : typeof parsed.identifiedSkills === 'string' && parsed.identifiedSkills.trim()
+            ? [parsed.identifiedSkills.trim()]
+            : parsed.identifiedSkills && typeof parsed.identifiedSkills === 'object' && parsed.identifiedSkills.skill
+            ? [parsed.identifiedSkills]
+            : [];
+
+          const candidateSkills: (string | IncomingSkillCandidate)[] = [];
+          for (const item of rawCandidates) {
+            if (typeof item === 'string' && item.trim()) {
+              candidateSkills.push(item.trim());
+            } else if (item && typeof item === 'object' && typeof item.skill === 'string' && item.skill.trim()) {
+              candidateSkills.push({
+                skill: item.skill.trim(),
+                evidenceText: typeof item.evidenceText === 'string' ? item.evidenceText.trim() : undefined,
+              });
+            }
+          }
+
+          // Directivas de reconsideración (válidas EXCLUSIVAMENTE en etapas 3 y 4 con evidencia explícita)
+          const reconsiderationDirective: SkillReconsiderationDirective | undefined =
+            (currentStageNum === 3 || currentStageNum === 4) &&
+            parsed.skillsReconsideration &&
+            typeof parsed.skillsReconsideration === 'object'
+              ? parsed.skillsReconsideration
+              : undefined;
+
+          // Consolidar usando el motor central sobre skillEntries
+          finalSkillEntries = consolidateSkillEntries(
+            existingSessionSkillEntries,
+            candidateSkills,
+            currentStageNum,
+            reconsiderationDirective
+          );
+
+          parsed.skillEntries = finalSkillEntries;
+          parsed.identifiedSkills = getActiveSkillNames(finalSkillEntries);
+        } else {
+          parsed.identifiedSkills = [];
+          parsed.skillEntries = existingSessionSkillEntries;
+          finalSkillEntries = existingSessionSkillEntries;
+        }
+
+        // 2. En Etapa 7, asegurar que finalFeedback con las 5 secciones siempre esté presente
+        // y recuperar exclusivamente las habilidades activas consolidadas existentes con sus evidencias reales.
+        if (currentStageNum === 7) {
+          if (
+            !parsed.finalFeedback ||
+            !Array.isArray(parsed.finalFeedback.detectedStrengths)
+          ) {
+            const fallbackStage7 = generateDeterministicCoaching({
+              stage: 7,
+              leaderProfile,
+              companyContext,
+              userMessage: resolvedUserMessage,
+              conversationHistory: resolvedHistory,
+              sessionData: safeSessionContext,
+              isPracticeMode,
+            });
+            parsed.finalFeedback = fallbackStage7.finalFeedback;
+          }
+
+          // Requisito D: Recuperar exclusivamente las habilidades activas consolidadas y sus evidencias reales
+          let skillsToReport: (LeadershipSkillEntry | string)[] = [];
+          const activeEntries = getActiveSkillEntries(finalSkillEntries);
+
+          if (activeEntries.length > 0) {
+            skillsToReport = activeEntries;
+          } else if (existingSessionSkills.length > 0) {
+            skillsToReport = existingSessionSkills;
+          } else {
+            skillsToReport = [];
+          }
+
+          // Formatear stageTwoSkills con la evidencia real observada o el mensaje de insuficiencia
+          const formattedStageTwoSkills = formatStageTwoSkillsWithEvidence(skillsToReport);
+
+          // Garantizar la estructura de las 5 secciones intacta sin agregar una sexta sección
+          parsed.finalFeedback = {
+            detectedStrengths: sanitizeDetectedStrengths(parsed.finalFeedback?.detectedStrengths),
+            stageTwoSkills: formattedStageTwoSkills,
+            chosenActions:
+              Array.isArray(parsed.finalFeedback.chosenActions) && parsed.finalFeedback.chosenActions.length > 0
+                ? parsed.finalFeedback.chosenActions
+                : [
+                    sessionData?.actionPlan?.what ||
+                      sessionData?.chosenAlternative ||
+                      'Conversación 1 a 1 de alineación operativa con compromisos claros',
+                  ],
+            stageSixLearnings:
+              Array.isArray(parsed.finalFeedback.stageSixLearnings) && parsed.finalFeedback.stageSixLearnings.length > 0
+                ? parsed.finalFeedback.stageSixLearnings
+                : [
+                    sessionData?.learnings?.insights ||
+                      sessionData?.learnings?.whatHappened ||
+                      'La claridad temprana en los acuerdos previene fricciones y fortalece la confianza mutua.',
+                  ],
+            recommendationsForAutonomy:
+              Array.isArray(parsed.finalFeedback.recommendationsForAutonomy) &&
+              parsed.finalFeedback.recommendationsForAutonomy.length > 0
+                ? parsed.finalFeedback.recommendationsForAutonomy
+                : [
+                    'Mantener conversaciones de alineación periódicas antes de que los desvíos escalen',
+                    'Registrar los acuerdos por escrito de forma breve para asegurar entendimiento común',
+                    'Reconocer los avances del equipo de manera oportuna y fundamentada en hechos',
+                  ],
           };
         }
 
@@ -655,7 +932,9 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
           ''
         ).trim();
 
-        const safeReplyText = extractedReply || 'Lidacta está lista para acompañarte. ¿Cómo te gustaría continuar?';
+        const safeReplyText = cleanConversationalText(extractedReply) || 'Lidacta está lista para acompañarte. ¿Cómo te gustaría continuar?';
+        parsed.reply = safeReplyText;
+        parsed.replyText = safeReplyText;
 
         return res.json({
           success: true,
@@ -684,18 +963,123 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
       isPracticeMode,
     });
 
+    let finalSkillEntries = existingSessionSkillEntries;
+    let fallbackIdentifiedSkills: string[] = [];
+
+    if ([1, 5, 6].includes(currentStageNum) || currentStageNum === 7) {
+      fallbackIdentifiedSkills = [];
+      finalSkillEntries = existingSessionSkillEntries;
+    } else if ([2, 3, 4].includes(currentStageNum)) {
+      const candidateSkills = Array.isArray(fallbackResponse.identifiedSkills)
+        ? fallbackResponse.identifiedSkills
+        : [];
+      finalSkillEntries = consolidateSkillEntries(
+        existingSessionSkillEntries,
+        candidateSkills,
+        currentStageNum
+      );
+      fallbackIdentifiedSkills = getActiveSkillNames(finalSkillEntries);
+    } else {
+      fallbackIdentifiedSkills = [];
+      finalSkillEntries = existingSessionSkillEntries;
+    }
+
+    const sanitizedFallback: any = {
+      ...fallbackResponse,
+      skillEntries: finalSkillEntries,
+      identifiedSkills: fallbackIdentifiedSkills,
+    };
+
+    if (currentStageNum === 7) {
+      let skillsToReport: (LeadershipSkillEntry | string)[] = [];
+      const activeEntries = getActiveSkillEntries(finalSkillEntries);
+
+      if (activeEntries.length > 0) {
+        skillsToReport = activeEntries;
+      } else if (existingSessionSkills.length > 0) {
+        skillsToReport = existingSessionSkills;
+      } else {
+        skillsToReport = [];
+      }
+
+      const formattedStageTwoSkills = formatStageTwoSkillsWithEvidence(skillsToReport);
+
+      sanitizedFallback.finalFeedback = {
+        detectedStrengths: sanitizeDetectedStrengths(sanitizedFallback.finalFeedback?.detectedStrengths),
+        stageTwoSkills: formattedStageTwoSkills,
+        chosenActions:
+          Array.isArray(sanitizedFallback.finalFeedback?.chosenActions) && sanitizedFallback.finalFeedback.chosenActions.length > 0
+            ? sanitizedFallback.finalFeedback.chosenActions
+            : [
+                sessionData?.actionPlan?.what ||
+                  sessionData?.chosenAlternative ||
+                  'Conversación 1 a 1 de alineación operativa con compromisos claros',
+              ],
+        stageSixLearnings:
+          Array.isArray(sanitizedFallback.finalFeedback?.stageSixLearnings) && sanitizedFallback.finalFeedback.stageSixLearnings.length > 0
+            ? sanitizedFallback.finalFeedback.stageSixLearnings
+            : [
+                sessionData?.learnings?.insights ||
+                  sessionData?.learnings?.whatHappened ||
+                  'La claridad temprana en los acuerdos previene fricciones y fortalece la confianza mutua.',
+              ],
+        recommendationsForAutonomy:
+          Array.isArray(sanitizedFallback.finalFeedback?.recommendationsForAutonomy) &&
+          sanitizedFallback.finalFeedback.recommendationsForAutonomy.length > 0
+            ? sanitizedFallback.finalFeedback.recommendationsForAutonomy
+            : [
+                'Mantener conversaciones de alineación periódicas antes de que los desvíos escalen',
+                'Registrar los acuerdos por escrito de forma breve para asegurar entendimiento común',
+                'Reconocer los avances del equipo de manera oportuna y fundamentada en hechos',
+              ],
+      };
+    }
+
     return res.json({
       success: true,
-      reply: fallbackResponse.replyText,
-      text: fallbackResponse.replyText,
+      reply: sanitizedFallback.replyText,
+      text: sanitizedFallback.replyText,
       data: {
-        ...fallbackResponse,
-        reply: fallbackResponse.replyText,
-        replyText: fallbackResponse.replyText,
+        ...sanitizedFallback,
+        reply: sanitizedFallback.replyText,
+        replyText: sanitizedFallback.replyText,
       },
     });
   } catch (error: any) {
     console.error('Error in /api/mentor/respond:', error);
+    if (currentStageNum === 7) {
+      const fallbackContext = {
+        ...(sessionData || {}),
+        ...(safeSessionContext || {}),
+        skillEntries:
+          safeSessionContext?.skillEntries && safeSessionContext.skillEntries.length > 0
+            ? safeSessionContext.skillEntries
+            : Array.isArray(sessionData?.skillEntries)
+            ? sessionData.skillEntries
+            : [],
+        identifiedSkills:
+          safeSessionContext?.identifiedSkills && safeSessionContext.identifiedSkills.length > 0
+            ? safeSessionContext.identifiedSkills
+            : Array.isArray(sessionData?.identifiedSkills)
+            ? sessionData.identifiedSkills
+            : [],
+      };
+      const fallbackStage7 = generateDeterministicCoaching({
+        stage: 7,
+        leaderProfile,
+        companyContext,
+        userMessage: resolvedUserMessage || '',
+        conversationHistory: resolvedHistory || [],
+        sessionData: fallbackContext,
+        isPracticeMode,
+      });
+      return res.status(200).json({
+        success: true,
+        reply: fallbackStage7.replyText,
+        text: fallbackStage7.replyText,
+        data: fallbackStage7,
+      });
+    }
     res.status(500).json({
       success: false,
       error: 'Error procesando la mentoría de Lidacta',
@@ -1408,8 +1792,14 @@ function generateDeterministicCoaching({
   }
 
   if (stage === 2) {
-    const isBeginning = !sessionData?.identifiedSkills || sessionData.identifiedSkills.length === 0;
-    const skills = inferSkillsFromText(userMessage);
+    const existing =
+      sessionData?.skillEntries && Array.isArray(sessionData.skillEntries) && sessionData.skillEntries.length > 0
+        ? getActiveSkillNames(sessionData.skillEntries)
+        : normalizeExistingSessionSkills(sessionData?.identifiedSkills || []);
+    const isBeginning = existing.length === 0;
+    const skills = isBeginning
+      ? inferSkillsFromText(userMessage, existing)
+      : existing;
 
     if (isBeginning) {
       return {
@@ -1442,10 +1832,10 @@ function generateDeterministicCoaching({
       };
     } else {
       return {
-        replyText: `Excelente nivel de autoconciencia, ${leaderName}. Reconocer nuestros propios patrones de respuesta y visibilizar cómo lo viven los demás es precisamente lo que distingue a un liderazgo maduro.\n\nCon las habilidades de **${(sessionData.identifiedSkills || skills).join(', ')}** bien identificadas, es momento de diseñar alternativas concretas. ¿Avanzamos a la Etapa 3?`,
+        replyText: `Excelente nivel de autoconciencia, ${leaderName}. Reconocer nuestros propios patrones de respuesta y visibilizar cómo lo viven los demás es precisamente lo que distingue a un liderazgo maduro.\n\nCon las habilidades de **${skills.join(', ')}** bien identificadas, es momento de diseñar alternativas concretas. ¿Avanzamos a la Etapa 3?`,
         readyToAdvance: true,
         advancePrompt: 'Avanzar a Etapa 3: Diseñar alternativas de solución',
-        identifiedSkills: sessionData.identifiedSkills || skills,
+        identifiedSkills: skills,
         recommendedResources: [
           {
             title: 'Guía de Retroalimentación en Piso (Modelo E-H-I: Evento, Hecho, Impacto)',
@@ -1575,16 +1965,27 @@ function generateDeterministicCoaching({
   }
 
   // Stage 7: Closure
-  const skillsDetected = sessionData?.identifiedSkills || ['Comunicación Asertiva', 'Manejo de Expectativas'];
+  let rawSkillsToReport: any[] = [];
+  if (
+    sessionData?.skillEntries &&
+    Array.isArray(sessionData.skillEntries) &&
+    sessionData.skillEntries.length > 0
+  ) {
+    const activeEntries = getActiveSkillEntries(sessionData.skillEntries);
+    rawSkillsToReport = activeEntries.length > 0 ? activeEntries : [];
+  } else if (
+    sessionData?.identifiedSkills &&
+    Array.isArray(sessionData.identifiedSkills) &&
+    sessionData.identifiedSkills.length > 0
+  ) {
+    rawSkillsToReport = sessionData.identifiedSkills;
+  }
+  const skillsDetected = formatStageTwoSkillsWithEvidence(rawSkillsToReport);
   return {
     replyText: `Muchas gracias por tu compromiso y apertura en este proceso de mentoría, ${leaderName}. Has demostrado una gran capacidad para pasar de la duda a la acción decidida.\n\nTe recuerdo que **esta conversación ha sido 100% confidencial**. Recursos Humanos únicamente recibe constancia de que has concluido exitosamente tu proceso y los indicadores generales de desarrollo, salvaguardando en todo momento tu privacidad.\n\nHe generado tu **Reporte de Retroalimentación y Autonomía de Liderazgo**, el cual puedes consultar aquí en la aplicación y también te llegará a tu correo electrónico. ¡Sigue utilizando Lidacta ante cada nuevo reto!`,
     readyToAdvance: false,
     finalFeedback: {
-      detectedStrengths: [
-        'Proactividad para abordar situaciones difíciles sin postergarlas',
-        'Disposición para el autoanálisis y reconocimiento de patrones propios',
-        'Capacidad de generar acuerdos basados en empatía y claridad operativa',
-      ],
+      detectedStrengths: [],
       stageTwoSkills: skillsDetected,
       chosenActions: [
         sessionData?.actionPlan?.what || 'Conversación 1 a 1 de alineación y retroalimentación',
@@ -1612,19 +2013,22 @@ function detectTopicFromText(text: string): string {
   return 'Alineación y Gestión de Equipo';
 }
 
-function inferSkillsFromText(text: string): string[] {
+function inferSkillsFromText(text: string, existingSkills: string[] = []): string[] {
   const lower = (text || '').toLowerCase();
-  const list: string[] = [];
-  if (lower.includes('comunic') || lower.includes('decir') || lower.includes('callar')) list.push('Asertividad y Comunicación Directa');
-  if (lower.includes('escuch') || lower.includes('entiend') || lower.includes('ignoran')) list.push('Escucha Activa');
-  if (lower.includes('deleg') || lower.includes('soltar') || lower.includes('confiar')) list.push('Delegación Efectiva y Empoderamiento');
-  if (lower.includes('emoci') || lower.includes('enojo') || lower.includes('frustr') || lower.includes('calma')) list.push('Inteligencia y Regulación Emocional');
-  if (lower.includes('acuerd') || lower.includes('expectat') || lower.includes('regla')) list.push('Gestión y Clarificación de Expectativas');
+  const candidates: string[] = [];
+  if (lower.includes('comunic') || lower.includes('decir') || lower.includes('callar') || lower.includes('hablar')) candidates.push('Comunicación Asertiva y Firmeza Empática');
+  if (lower.includes('escuch') || lower.includes('entiend') || lower.includes('ignoran') || lower.includes('atencion')) candidates.push('Escucha Activa e Indagación');
+  if (lower.includes('deleg') || lower.includes('soltar') || lower.includes('confiar') || lower.includes('control')) candidates.push('Delegación Efectiva y Empoderamiento');
+  if (lower.includes('emoci') || lower.includes('enojo') || lower.includes('frustr') || lower.includes('calma') || lower.includes('estres')) candidates.push('Inteligencia y Regulación Emocional');
+  if (lower.includes('acuerd') || lower.includes('expectat') || lower.includes('regla') || lower.includes('compromis')) candidates.push('Gestión de Acuerdos y Seguimiento');
+  if (lower.includes('conflict') || lower.includes('tension') || lower.includes('roce') || lower.includes('pelea')) candidates.push('Gestión de Conversaciones Difíciles y Manejo de Conflictos');
+  if (lower.includes('retroaliment') || lower.includes('feedback') || lower.includes('corregir')) candidates.push('Retroalimentación Basada en Hechos');
 
-  if (list.length === 0) {
-    list.push('Comunicación Estratégica', 'Gestión de Acuerdos y Seguimiento');
+  if (candidates.length === 0) {
+    candidates.push('Comunicación Asertiva y Firmeza Empática');
   }
-  return list.slice(0, 3);
+
+  return consolidateSkills(existingSkills, candidates, 2);
 }
 
 // Centralized Admin Profile State (Persists in server memory across all clients & devices)

@@ -1,3 +1,18 @@
+import {
+  consolidateSkills,
+  consolidateSkillEntries,
+  getActiveSkillEntries,
+  getActiveSkillNames,
+  createSkillEntriesFromLegacy,
+  formatStageTwoSkillsWithEvidence,
+  normalizeExistingSessionSkills,
+  INSUFFICIENT_EVIDENCE_MESSAGE,
+  SkillReconsiderationDirective,
+  IncomingSkillCandidate,
+  LeadershipSkillEntry,
+  sanitizeDetectedStrengths,
+} from '../../src/utils/skillsConsolidator';
+
 const STAGE_NAMES: Record<number, string> = {
   1: 'Detectar qué sucede',
   2: 'Analizar perspectivas y habilidades',
@@ -315,6 +330,7 @@ function generateContextualCoachReply(
   advancePrompt: string | null;
   detectedTheme: string;
   identifiedSkills?: string[];
+  skillEntries?: LeadershipSkillEntry[];
   isTherapeuticCase: boolean;
   finalFeedback?: {
     detectedStrengths: string[];
@@ -690,7 +706,8 @@ function generateContextualCoachReply(
       readyToAdvance: true,
       advancePrompt: 'Avanzar a Etapa 3: Diseñar alternativas',
       detectedTheme: 'Perspectivas y Habilidades',
-      identifiedSkills: ['Comunicación Asertiva', 'Gestión de Acuerdos'],
+      identifiedSkills: [],
+      skillEntries: [],
       isTherapeuticCase: false,
     };
   }
@@ -736,12 +753,22 @@ function generateContextualCoachReply(
   }
 
   // Stage 7: Cierre y Reporte de Retroalimentación y Autonomía
-  const skillsDetected =
+  let rawSkillsToReport: any[] = [];
+  if (
+    sessionContext?.skillEntries &&
+    Array.isArray(sessionContext.skillEntries) &&
+    sessionContext.skillEntries.length > 0
+  ) {
+    const activeEntries = getActiveSkillEntries(sessionContext.skillEntries);
+    rawSkillsToReport = activeEntries.length > 0 ? activeEntries : [];
+  } else if (
     sessionContext?.identifiedSkills &&
     Array.isArray(sessionContext.identifiedSkills) &&
     sessionContext.identifiedSkills.length > 0
-      ? sessionContext.identifiedSkills
-      : ['Comunicación Asertiva', 'Gestión de Acuerdos Operativos'];
+  ) {
+    rawSkillsToReport = sessionContext.identifiedSkills;
+  }
+  const skillsDetected = formatStageTwoSkillsWithEvidence(rawSkillsToReport);
   const actionWhat =
     sessionContext?.actionPlan?.what ||
     sessionContext?.chosenAlternative ||
@@ -758,11 +785,7 @@ function generateContextualCoachReply(
     detectedTheme: 'Cierre y Consolidación',
     isTherapeuticCase: false,
     finalFeedback: {
-      detectedStrengths: [
-        'Proactividad para abordar situaciones complejas de liderazgo sin postergarlas',
-        'Disposición para el autoanálisis y reconocimiento de áreas de oportunidad',
-        'Capacidad de generar acuerdos basados en empatía y claridad operativa',
-      ],
+      detectedStrengths: [],
       stageTwoSkills: skillsDetected,
       chosenActions: [actionWhat],
       stageSixLearnings: [
@@ -799,6 +822,10 @@ export default async function handler(req: any, res: any) {
 
   let currentStageNum = 1;
   let leaderFirstName = 'Líder';
+  let safeSessionContext: any = null;
+  let sessionData: any = null;
+  let resolvedUserMessage = '';
+  let resolvedHistory: any[] = [];
 
   try {
     let body = req.body;
@@ -822,13 +849,13 @@ export default async function handler(req: any, res: any) {
       userMessage,
       currentMessage,
       message,
-      sessionData,
       isPracticeMode,
     } = body || {};
 
-    currentStageNum = Number(stage || activeStage) || 1;
+    sessionData = body?.sessionData || null;
+    currentStageNum = Number(stage || activeStage || body?.currentStage) || 1;
     leaderFirstName = (leaderProfile?.name || 'Líder').split(' ')[0];
-    const resolvedUserMessage = (userMessage || currentMessage || message || '').trim();
+    resolvedUserMessage = (userMessage || currentMessage || message || '').trim();
     const targetCaseId = caseId || mentorshipId || sessionData?.id || '';
 
     const rawHistory = Array.isArray(conversationHistory)
@@ -838,7 +865,7 @@ export default async function handler(req: any, res: any) {
       : [];
 
     // STRICT CASE ISOLATION:
-    let resolvedHistory = rawHistory.filter((m: any) => {
+    resolvedHistory = rawHistory.filter((m: any) => {
       if (!m || typeof m !== 'object') return false;
       const mCase = m.caseId || m.mentorshipId;
       if (targetCaseId) {
@@ -883,11 +910,35 @@ export default async function handler(req: any, res: any) {
 
     const activeCaseTitle = (sessionData?.id === targetCaseId ? sessionData?.title : '') || (initialSubstantiveChallenge ? initialSubstantiveChallenge.slice(0, 60) : 'Caso de liderazgo activo');
     const activeCaseChallenge = (sessionData?.id === targetCaseId ? sessionData?.initialChallenge : '') || initialSubstantiveChallenge || 'Reto de liderazgo y gestión de equipo';
-    const safeSessionContext = {
+    const rawExistingSkills =
+      (sessionData?.identifiedSkills && Array.isArray(sessionData.identifiedSkills) && sessionData.identifiedSkills) ||
+      (body?.identifiedSkills && Array.isArray(body.identifiedSkills) && body.identifiedSkills) ||
+      [];
+    const rawExistingSkillEntries =
+      (sessionData?.skillEntries && Array.isArray(sessionData.skillEntries) && sessionData.skillEntries) ||
+      (body?.skillEntries && Array.isArray(body.skillEntries) && body.skillEntries) ||
+      [];
+
+    // Priorizar el registro estructurado skillEntries cuando exista; si no, crear desde identifiedSkills legadas
+    let existingSessionSkillEntries: LeadershipSkillEntry[] = [];
+    if (rawExistingSkillEntries.length > 0) {
+      existingSessionSkillEntries = rawExistingSkillEntries;
+    } else if (rawExistingSkills.length > 0) {
+      existingSessionSkillEntries = createSkillEntriesFromLegacy(rawExistingSkills, 2);
+    }
+
+    const existingSessionSkills =
+      existingSessionSkillEntries.length > 0
+        ? getActiveSkillNames(existingSessionSkillEntries)
+        : normalizeExistingSessionSkills(rawExistingSkills);
+
+    safeSessionContext = {
       id: targetCaseId,
       title: activeCaseTitle,
       initialChallenge: activeCaseChallenge,
       currentStage: currentStageNum,
+      identifiedSkills: existingSessionSkills,
+      skillEntries: existingSessionSkillEntries,
     };
 
     const apiKey =
@@ -969,28 +1020,31 @@ ETAPA 1: DETECTAR QUÉ SUCEDE
   * Cuando haya información suficiente: Entrega la síntesis de validación con las 3 viñetas (**Hechos y situación**, **Dilema del líder**, **Impacto y reto principal**) basándote en la historia real planteada al inicio.
 
 ETAPA 2: ANALIZAR PERSPECTIVAS Y HABILIDADES
-- Cuestiona premisas, explora la contribución del líder sin culparlo e identifica la habilidad crítica a desarrollar.
+- Cuestiona premisas, explora la contribución del líder sin culparlo e identifica con base en la evidencia de sus comportamientos, decisiones y respuestas las habilidades preliminares que necesita fortalecer (no te limites a la etiqueta superficial del problema inicial; el líder NO necesita validar ni seleccionar la habilidad). Incluye en identifiedSkills las habilidades canónicas respaldadas por la evidencia disponible (puedes enviar objetos con { "skill": "Nombre canónico", "evidenceText": "Evidencia observable relatada" } o nombres canónicos). La Etapa 2 únicamente identifica e incorpora habilidades iniciales, NO reconsidera.
 
 ETAPA 3: DISEÑAR ALTERNATIVAS
 - Estimula al líder a proponer opciones. Si se bloquea, sugiere hasta 2 opciones basadas en la Biblioteca Interna (SBI, DEEC, Delegate, Semáforo Emocional).
+- Profundiza en el análisis: puedes incorporar nuevas habilidades en identifiedSkills con su evidenceText, o reconsiderar habilidades previas si la nueva evidencia demuestra que la causa raíz es diferente o que el asunto era puramente normativo/organizacional fuera del control del líder. Para reconsiderar, emite directivas en "skillsReconsideration" (discard o replace) acompañadas SIEMPRE de su justificación explícita con evidencia.
 
 ETAPA 4: PRACTICAR ANTES DE ACTUAR (OPCIONAL)
-- Ofrece simular la conversación o brindar una herramienta si aporta valor al caso.
+- Ofrece simular la conversación o brindar una herramienta si aporta valor al caso. La práctica es opcional: si el líder practica, utiliza su comportamiento en el ejercicio como evidencia de simulación para confirmar, precisar, descartar o sustituir habilidades en "identifiedSkills" (con su evidenceText de la simulación) o "skillsReconsideration"; si la omite, conserva intactas las habilidades previas.
 
-ETAPA 5: ACTUAR (PLAN DE ACCIÓN)
-- Define Acción exacta, Fecha/Hora, Involucrados y Puntos ciegos a cuidar.
-
-ETAPA 6: APRENDER Y REFLEXIONAR
-- Evalúa qué funcionó, qué no y qué aprendizaje se lleva el líder.
+ETAPAS 1, 5 y 6: NO deben generar, agregar, modificar, descartar ni sustituir habilidades. En el JSON identifiedSkills DEBE ser siempre [] y no emitir skillsReconsideration.
 
 ETAPA 7: CIERRE Y RETROALIMENTACIÓN
-- Entrega resumen ejecutivo con fortalezas, habilidades trabajadas y compromisos.
+- Entrega resumen ejecutivo con fortalezas, habilidades trabajadas y compromisos. Recupera exclusivamente las habilidades activas consolidadas existentes trabajadas en el proceso sin inferir ni generar nuevas habilidades. En el JSON identifiedSkills DEBE ser siempre []. Formula stageTwoSkills con la habilidad a fortalecer y su correspondiente evidencia observable registrada. Si no existe evidencia suficiente en el proceso, indica exactamente: 'No se cuenta con evidencia suficiente en este proceso para identificar habilidades específicas por fortalecer.'
 - OBLIGATORIO EN ETAPA 7: En el JSON incluye el objeto "finalFeedback" con las 5 secciones:
-  * detectedStrengths: Array con fortalezas demostradas por el líder en el proceso.
-  * stageTwoSkills: Array con habilidades clave puestas en juego (identificadas en Etapa 2).
+  * detectedStrengths: Array de 0 a 4 fortalezas basadas EXCLUSIVAMENTE en conductas observables demostradas por el líder durante la mentoría (etapas 1 a 6) (ej. honestidad diagnóstica en el autoanálisis, agudeza para distinguir dinámicas del equipo, precisión operativa en los acuerdos, madurez reflexiva sin buscar culpables). Si no se observaron conductas concretas que destaquen con evidencia, dejar el arreglo vacío []. Queda PROHIBIDO atribuir capacidades permanentes, dominio en piso o cambios no demostrados. REGLA CONCEPTUAL DE EXCLUSIÓN: Queda estrictamente prohibido atribuir como fortaleza el dominio o maestría de una habilidad que el líder necesita desarrollar (habilidades presentes en "Habilidades ya identificadas en la sesión"); sin embargo, sí es válido reconocer conductas del proceso asociadas (por ejemplo: reconocer que se tiene dificultad para regular una reacción demuestra autoconciencia y apertura reflexiva, pero NO autorregulación emocional).
+  * stageTwoSkills: Array con las habilidades consolidadas que el líder necesita fortalecer (identificadas en etapas 2, 3 y 4) acompañadas de su evidencia concreta de progreso observada en la conversación o práctica. Si no hay evidencia suficiente, incluir únicamente: 'No se cuenta con evidencia suficiente en este proceso para identificar habilidades específicas por fortalecer.'
   * chosenActions: Array con la acción concreta comprometida en Etapa 5.
   * stageSixLearnings: Array con aprendizajes y reflexiones consolidadas en Etapa 6.
   * recommendationsForAutonomy: Array con recomendaciones para el fortalecimiento de la autonomía.
+
+REGLAS OBLIGATORIAS DE HABILIDADES Y RECONSIDERACIÓN:
+- La ausencia de mención NUNCA elimina una habilidad previamente identificada.
+- Omitir la Etapa 4 NUNCA descarta habilidades previas.
+- Toda directiva de descarte o sustitución en "skillsReconsideration" requiere OBLIGATORIAMENTE una justificación explícita y no vacía basada en la evidencia de la conversación.
+- No existe límite rígido de 3 habilidades; se conservan todas las habilidades respaldadas por evidencia.
 
 Contexto de la sesión:
 - Empresa: ${companyContext?.name || 'Empresa'}
@@ -998,10 +1052,11 @@ Contexto de la sesión:
 - Etapa actual: Etapa ${currentStageNum} - ${STAGE_NAMES[currentStageNum] || ''}
 - Caso / Reto actual: ${activeCaseTitle || 'Caso actual'}
 - Reto inicial: ${activeCaseChallenge || resolvedUserMessage || ''}
+- Habilidades ya identificadas en la sesión: ${existingSessionSkills.join(', ') || 'Ninguna aún'}
 
 CRITERIOS ESTRICTOS PARA EL CAMPO "readyToAdvance":
 - En Etapa 1: Debe ser true ÚNICAMENTE cuando ya se haya entregado previamente la síntesis con las 3 viñetas (**Hechos y situación**, **Dilema del líder**, **Impacto y reto principal**) Y el mensaje actual del líder confirme o valide dicha síntesis (ej. "de acuerdo", "sí", "si estoy lista", "totalmente", "correcto"). Si el líder corrige, pregunta, duda o aporta nuevos datos, DEBE ser false.
-- En Etapa 2: Debe ser true ÚNICAMENTE cuando la habilidad crítica haya sido planteada Y el líder en su mensaje la reconozca o valide como relevante para su reto. Si la rebate o duda, DEBE ser false.
+- En Etapa 2: Debe ser true ÚNICAMENTE cuando la habilidad crítica haya sido planteada Y el líder continúe o valide el avance hacia el diseño de alternativas. Si la rebate o duda, DEBE ser false.
 - En Etapa 3: Debe ser true ÚNICAMENTE cuando se haya planteado al menos una alternativa viable Y el líder la elija o valide para actuar. Si pide más alternativas o tiene dudas, DEBE ser false.
 - En cualquier otro escenario o ante cualquier duda/aclaración: DEBE ser false.
 
@@ -1010,13 +1065,21 @@ Responde SIEMPRE en JSON estricto con esta estructura:
   "replyText": "Tu intervención empática, humana y reflexiva para el líder.",
   "readyToAdvance": false,
   "advancePrompt": null,
-  "identifiedSkills": [],
+  "identifiedSkills": [], // En Etapas 2, 3 o 4: objetos { "skill": "Habilidad", "evidenceText": "Evidencia observable..." } o strings si hay evidencia; dejar [] en etapas 1, 5, 6 y 7.
+  "skillsReconsideration": { // Opcional, ÚNICAMENTE en Etapas 3 o 4 cuando exista justificación explícita con evidencia
+    "discard": [
+      { "skill": "Habilidad a descartar", "evidence": "Justificación explícita de por qué la nueva evidencia demuestra que no corresponde al líder" }
+    ],
+    "replace": [
+      { "from": "Habilidad anterior", "to": "Nueva habilidad canónica", "evidence": "Justificación explícita de por qué la profundización reveló esta causa raíz" }
+    ]
+  },
   "detectedTheme": "Liderazgo",
   "isTherapeuticCase": false,
   "therapeuticReason": null,
   "finalFeedback": {
-    "detectedStrengths": ["Fortaleza 1", "Fortaleza 2"],
-    "stageTwoSkills": ["Habilidad identificada en etapa 2"],
+    "detectedStrengths": [], // De 0 a 4 fortalezas demostradas en la sesión; dejar [] si no hay evidencia observable suficiente
+    "stageTwoSkills": ["Habilidad a fortalecer — Evidencia observable: Observación concreta"],
     "chosenActions": ["Acción comprometida en etapa 5"],
     "stageSixLearnings": ["Aprendizaje consolidado en etapa 6"],
     "recommendationsForAutonomy": ["Recomendación para autonomía"]
@@ -1235,12 +1298,77 @@ Responde SIEMPRE en JSON estricto con esta estructura:
       parsed = null;
     }
 
-    // En Etapa 7, asegurar que finalFeedback con las 5 secciones siempre esté presente
+    if (!parsed || typeof parsed !== 'object') {
+      parsed = {
+        replyText: cleanConversationalText(candidatePartText || rawText),
+        readyToAdvance: false,
+        advancePrompt: null,
+        identifiedSkills: [],
+      };
+    }
+
+    // 1. Postprocesamiento de skillEntries e identifiedSkills según la etapa del flujo
+    let finalSkillEntries = existingSessionSkillEntries;
+
+    if ([1, 5, 6].includes(currentStageNum) || currentStageNum === 7) {
+      // Requisito C: Las etapas 1, 5, 6 y 7 NO generan, agregan, modifican, descartan ni sustituyen habilidades.
+      // En la respuesta devuelta por estas etapas, identifiedSkills es SIEMPRE un arreglo vacío ([]),
+      // aunque Gemini haya devuelto habilidades o directivas en su JSON.
+      parsed.identifiedSkills = [];
+      parsed.skillEntries = existingSessionSkillEntries;
+      finalSkillEntries = existingSessionSkillEntries;
+    } else if ([2, 3, 4].includes(currentStageNum)) {
+      // En las etapas 2, 3 y 4: procesar habilidades candidatas y directivas de reconsideración
+      const rawCandidates = Array.isArray(parsed.identifiedSkills)
+        ? parsed.identifiedSkills
+        : typeof parsed.identifiedSkills === 'string' && parsed.identifiedSkills.trim()
+        ? [parsed.identifiedSkills.trim()]
+        : parsed.identifiedSkills && typeof parsed.identifiedSkills === 'object' && parsed.identifiedSkills.skill
+        ? [parsed.identifiedSkills]
+        : [];
+
+      const candidateSkills: (string | IncomingSkillCandidate)[] = [];
+      for (const item of rawCandidates) {
+        if (typeof item === 'string' && item.trim()) {
+          candidateSkills.push(item.trim());
+        } else if (item && typeof item === 'object' && typeof item.skill === 'string' && item.skill.trim()) {
+          candidateSkills.push({
+            skill: item.skill.trim(),
+            evidenceText: typeof item.evidenceText === 'string' ? item.evidenceText.trim() : undefined,
+          });
+        }
+      }
+
+      // Directivas de reconsideración (válidas EXCLUSIVAMENTE en etapas 3 y 4 con evidencia explícita)
+      const reconsiderationDirective: SkillReconsiderationDirective | undefined =
+        (currentStageNum === 3 || currentStageNum === 4) &&
+        parsed.skillsReconsideration &&
+        typeof parsed.skillsReconsideration === 'object'
+          ? parsed.skillsReconsideration
+          : undefined;
+
+      // Consolidar usando el motor central sobre skillEntries
+      finalSkillEntries = consolidateSkillEntries(
+        existingSessionSkillEntries,
+        candidateSkills,
+        currentStageNum,
+        reconsiderationDirective
+      );
+
+      parsed.skillEntries = finalSkillEntries;
+      parsed.identifiedSkills = getActiveSkillNames(finalSkillEntries);
+    } else {
+      parsed.identifiedSkills = [];
+      parsed.skillEntries = existingSessionSkillEntries;
+      finalSkillEntries = existingSessionSkillEntries;
+    }
+
+    // 2. En Etapa 7, asegurar que finalFeedback con las 5 secciones siempre esté presente
+    // y recuperar exclusivamente las habilidades activas consolidadas existentes con sus evidencias reales.
     if (currentStageNum === 7) {
       if (
-        !parsed?.finalFeedback ||
-        !Array.isArray(parsed.finalFeedback.detectedStrengths) ||
-        parsed.finalFeedback.detectedStrengths.length === 0
+        !parsed.finalFeedback ||
+        !Array.isArray(parsed.finalFeedback.detectedStrengths)
       ) {
         const fallbackStage7 = generateContextualCoachReply(
           7,
@@ -1249,27 +1377,102 @@ Responde SIEMPRE en JSON estricto con esta estructura:
           resolvedHistory,
           sessionData || safeSessionContext
         );
-        parsed = {
-          ...(parsed || {}),
-          finalFeedback: fallbackStage7.finalFeedback,
-        };
+        parsed.finalFeedback = fallbackStage7.finalFeedback;
       }
+
+      // Requisito D: Recuperar exclusivamente las habilidades activas consolidadas y sus evidencias reales
+      let skillsToReport: (LeadershipSkillEntry | string)[] = [];
+      const activeEntries = getActiveSkillEntries(finalSkillEntries);
+
+      if (activeEntries.length > 0) {
+        skillsToReport = activeEntries;
+      } else if (existingSessionSkills.length > 0) {
+        skillsToReport = existingSessionSkills;
+      } else if (
+        Array.isArray(parsed.finalFeedback?.stageTwoSkills) &&
+        parsed.finalFeedback.stageTwoSkills.length > 0
+      ) {
+        skillsToReport = normalizeExistingSessionSkills(parsed.finalFeedback.stageTwoSkills);
+      } else {
+        skillsToReport = [];
+      }
+
+      // Formatear stageTwoSkills con la evidencia real observada o el mensaje de insuficiencia
+      const formattedStageTwoSkills = formatStageTwoSkillsWithEvidence(skillsToReport);
+
+      // Garantizar la estructura de las 5 secciones intacta sin agregar una sexta sección
+      parsed.finalFeedback = {
+        detectedStrengths: sanitizeDetectedStrengths(parsed.finalFeedback?.detectedStrengths),
+        stageTwoSkills: formattedStageTwoSkills,
+        chosenActions:
+          Array.isArray(parsed.finalFeedback.chosenActions) && parsed.finalFeedback.chosenActions.length > 0
+            ? parsed.finalFeedback.chosenActions
+            : [
+                sessionData?.actionPlan?.what ||
+                  sessionData?.chosenAlternative ||
+                  'Conversación 1 a 1 de alineación operativa con compromisos claros',
+              ],
+        stageSixLearnings:
+          Array.isArray(parsed.finalFeedback.stageSixLearnings) && parsed.finalFeedback.stageSixLearnings.length > 0
+            ? parsed.finalFeedback.stageSixLearnings
+            : [
+                sessionData?.learnings?.insights ||
+                  sessionData?.learnings?.whatHappened ||
+                  'La claridad temprana en los acuerdos previene fricciones y fortalece la confianza mutua.',
+              ],
+        recommendationsForAutonomy:
+          Array.isArray(parsed.finalFeedback.recommendationsForAutonomy) &&
+          parsed.finalFeedback.recommendationsForAutonomy.length > 0
+            ? parsed.finalFeedback.recommendationsForAutonomy
+            : [
+                'Mantener conversaciones de alineación periódicas antes de que los desvíos escalen',
+                'Registrar los acuerdos por escrito de forma breve para asegurar entendimiento común',
+                'Reconocer los avances del equipo de manera oportuna y fundamentada en hechos',
+              ],
+      };
     }
 
-    const responseText = parsed?.replyText || parsed?.reply || rawText || candidatePartText;
+    const rawReply = parsed?.replyText || parsed?.reply || rawText || candidatePartText;
+    const responseText = cleanConversationalText(rawReply);
+    parsed.reply = responseText;
+    parsed.replyText = responseText;
 
     return res.status(200).json({
       success: true,
       reply: responseText,
       text: responseText,
-      data: parsed
-        ? { ...parsed, reply: responseText, replyText: responseText }
-        : { reply: responseText, replyText: responseText },
+      data: {
+        ...parsed,
+        reply: responseText,
+        replyText: responseText,
+      },
     });
   } catch (error: any) {
     console.error('Error en mentor respond:', error);
     if (currentStageNum === 7) {
-      const fallbackStage7 = generateContextualCoachReply(7, leaderFirstName, '', [], {});
+      const fallbackContext = {
+        ...(sessionData || {}),
+        ...(safeSessionContext || {}),
+        skillEntries:
+          safeSessionContext?.skillEntries && safeSessionContext.skillEntries.length > 0
+            ? safeSessionContext.skillEntries
+            : Array.isArray(sessionData?.skillEntries)
+            ? sessionData.skillEntries
+            : [],
+        identifiedSkills:
+          safeSessionContext?.identifiedSkills && safeSessionContext.identifiedSkills.length > 0
+            ? safeSessionContext.identifiedSkills
+            : Array.isArray(sessionData?.identifiedSkills)
+            ? sessionData.identifiedSkills
+            : [],
+      };
+      const fallbackStage7 = generateContextualCoachReply(
+        7,
+        leaderFirstName,
+        resolvedUserMessage || '',
+        resolvedHistory || [],
+        fallbackContext
+      );
       return res.status(200).json({
         success: true,
         reply: fallbackStage7.replyText,

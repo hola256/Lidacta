@@ -12,6 +12,7 @@ import {
   isSpeechRecognitionSupported,
 } from '../utils/speechUtils';
 import { getStageTriggerQuestion as getSharedStageTriggerQuestion } from '../utils/stageQuestions';
+import { INSUFFICIENT_STRENGTHS_MESSAGE } from '../utils/skillsConsolidator';
 import {
   Compass,
   Send,
@@ -1860,10 +1861,10 @@ export const LeaderView: React.FC = () => {
                                         className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
                                       >
                                         {isSendingMessage ? (
-                                          <span>Guardando avance...</span>
+                                          <span>Enviando respuesta...</span>
                                         ) : (
                                           <>
-                                            <span>Enviar avance</span>
+                                            <span>Enviar respuesta</span>
                                             <Send className="w-4 h-4 text-[#2D1B4E]" />
                                           </>
                                         )}
@@ -1916,7 +1917,7 @@ export const LeaderView: React.FC = () => {
                                                 setStageReadyToAdvance(null);
                                                 setIsPracticingStage4(true);
                                                 sendMessageInActiveSession(
-                                                  'Lidacta, quiero simular que tú eres mi colaborador y yo te cito a solas para darte retroalimentación.',
+                                                  'Lidacta, quiero hacer una simulación',
                                                   true
                                                 );
                                               }}
@@ -2030,10 +2031,10 @@ export const LeaderView: React.FC = () => {
                                               className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
                                             >
                                               {isSendingMessage ? (
-                                                <span>Enviando diálogo...</span>
+                                                <span>Enviando respuesta...</span>
                                               ) : (
                                                 <>
-                                                  <span>Enviar diálogo</span>
+                                                  <span>Enviar respuesta</span>
                                                   <Send className="w-4 h-4 text-white" />
                                                 </>
                                               )}
@@ -2440,10 +2441,10 @@ export const LeaderView: React.FC = () => {
                                       className="min-h-[44px] flex items-center justify-center gap-2 px-5 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer active:scale-95"
                                     >
                                       {isSendingMessage ? (
-                                        <span>Enviando comentario...</span>
+                                        <span>Enviando respuesta...</span>
                                       ) : (
                                         <>
-                                          <span>Enviar comentario a Lidacta</span>
+                                          <span>Enviar respuesta</span>
                                           <Send className="w-4 h-4 text-[#2D1B4E]" />
                                         </>
                                       )}
@@ -2671,7 +2672,11 @@ export const LeaderView: React.FC = () => {
                                     onClick={() => {
                                       const report = activeMentorship.finalFeedbackReport;
                                       if (!report) return;
-                                      const summarySpeech = `Hola ${currentUser.name.split(' ')[0]}. Este es tu reporte de cierre de mentoría Lidacta. Entre tus fortalezas detectadas destacan: ${report.detectedStrengths.join(', ')}. Las habilidades clave que pusiste en juego fueron: ${report.stageTwoSkills.join(', ')}. Y tus principales recomendaciones para continuar fortaleciendo tu autonomía son: ${report.recommendationsForAutonomy.join(', ')}. ¡Felicidades por completar tu proceso!`;
+                                      const strengthsList = (report.detectedStrengths || []).slice(0, 4);
+                                      const strengthsSpeech = strengthsList.length > 0
+                                        ? `Entre tus fortalezas detectadas destacan: ${strengthsList.join(', ')}.`
+                                        : `En cuanto a fortalezas observables, ${INSUFFICIENT_STRENGTHS_MESSAGE.toLowerCase()}`;
+                                      const summarySpeech = `Hola ${currentUser.name.split(' ')[0]}. Este es tu reporte de cierre de mentoría Lidacta. ${strengthsSpeech} Las habilidades clave que pusiste en juego fueron: ${report.stageTwoSkills.join(', ')}. Y tus principales recomendaciones para continuar fortaleciendo tu autonomía son: ${report.recommendationsForAutonomy.join(', ')}. ¡Felicidades por completar tu proceso!`;
                                       toggleVoicePlayback(summarySpeech, 'report-summary');
                                     }}
                                     title="Escuchar resumen del reporte con la voz clonada de Lidacta Mentora"
@@ -2698,21 +2703,28 @@ export const LeaderView: React.FC = () => {
                                   <span className="font-heading font-bold text-[#2D1B4E] uppercase tracking-wider text-[11px] block">
                                     🌟 Fortalezas detectadas en el líder
                                   </span>
-                                  <ul className="space-y-1.5 list-disc list-inside text-[#4A3F55]">
-                                    {activeMentorship.finalFeedbackReport.detectedStrengths.map((s, i) => (
-                                      <li key={i}>{s}</li>
-                                    ))}
-                                  </ul>
+                                  {activeMentorship.finalFeedbackReport.detectedStrengths &&
+                                  activeMentorship.finalFeedbackReport.detectedStrengths.length > 0 ? (
+                                    <ul className="space-y-1.5 list-disc list-inside text-[#4A3F55]">
+                                      {activeMentorship.finalFeedbackReport.detectedStrengths.slice(0, 4).map((s, i) => (
+                                        <li key={i}>{s}</li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <p className="text-xs text-[#4A3F55]/80 italic leading-relaxed">
+                                      {INSUFFICIENT_STRENGTHS_MESSAGE}
+                                    </p>
+                                  )}
                                 </div>
 
-                                {/* Stage 2 Skills */}
+                                {/* Stage 2 Skills & Progress Evidence */}
                                 <div className="p-4 bg-[#FFD3BF]/20 rounded-xl space-y-2 border border-[#FFD3BF]">
                                   <span className="font-heading font-bold text-[#BF3A1B] uppercase tracking-wider text-[11px] block">
-                                    🎯 Habilidades clave puestas en juego (Etapa 2)
+                                    🎯 Habilidades que necesitas fortalecer y evidencias de progreso
                                   </span>
-                                  <ul className="space-y-1.5 list-disc list-inside text-[#2D1B4E]">
+                                  <ul className="space-y-2 list-disc list-inside text-[#2D1B4E]">
                                     {activeMentorship.finalFeedbackReport.stageTwoSkills.map((s, i) => (
-                                      <li key={i}>{s}</li>
+                                      <li key={i} className="text-xs sm:text-sm leading-relaxed">{s}</li>
                                     ))}
                                   </ul>
                                 </div>
