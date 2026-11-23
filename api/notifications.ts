@@ -1,4 +1,5 @@
 // Vercel Serverless Function for /api/notifications
+import { isQaRequestPayload } from '../src/utils/qaIsolation';
 
 interface ServerNotificationItem {
   id: string;
@@ -63,6 +64,15 @@ export default async function handler(req: any, res: any) {
   }
 
   if (req.method === 'POST') {
+    const qaCheck = isQaRequestPayload(body);
+    if (qaCheck.isQa) {
+      return res.status(403).json({
+        success: false,
+        blockedByQa: true,
+        message: 'Notificación bloqueada por aislamiento de sesiones QA.',
+      });
+    }
+
     if (body.notificationId && body.status) {
       memoryNotifications = memoryNotifications.map((n) => {
         if (n.id === body.notificationId && n.mentorRequestDetails) {

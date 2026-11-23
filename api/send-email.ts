@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { INSUFFICIENT_STRENGTHS_MESSAGE } from '../src/utils/skillsConsolidator';
+import { isQaRequestPayload } from '../src/utils/qaIsolation';
 
 export const maxDuration = 60; // 60 segundos de timeout
 
@@ -33,6 +34,17 @@ export default async function handler(req: any, res: any) {
       } catch {}
     }
     body = body || {};
+
+    const qaCheck = isQaRequestPayload(body);
+    if (qaCheck.isQa) {
+      console.warn(`[API /api/send-email] 🛡️ Envío bloqueado por aislamiento QA (${qaCheck.reason}).`);
+      return res.status(403).json({
+        success: false,
+        blockedByQa: true,
+        message: 'Envío bloqueado por aislamiento de sesiones QA: no se envían correos reales.',
+        error: 'Envío bloqueado por aislamiento de sesiones QA.',
+      });
+    }
 
     const { to, email, subject, html, text, type, name, role, companyName } = body;
     const targetEmail = (to || email || '').trim().toLowerCase();

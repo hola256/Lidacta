@@ -281,4 +281,94 @@ describe('Etapa 4 - Practicar antes de actuar (Estados y Conclusión)', () => {
       );
     }
   });
+
+  it('Escenario 7: «Seguir practicando» mantiene la simulación en Etapa 4 y conserva conversación y evidencia previa', () => {
+    const priorMessages: MentorshipMessage[] = [
+      {
+        id: 'm_lead_1',
+        sender: 'leader',
+        text: 'Hola Ana, quiero conversar contigo sobre los acuerdos del área.',
+        timestamp: new Date(Date.now() - 10000).toISOString(),
+        stage: 4,
+      },
+      {
+        id: 'm_lid_1',
+        sender: 'lidacta',
+        text: '[En personaje]: Claro, te escucho. [Retroalimentación]: Buen inicio, mantén foco en hechos observables.',
+        timestamp: new Date().toISOString(),
+        stage: 4,
+      },
+    ];
+    const priorSkillEntries = [
+      {
+        id: 'sk_1',
+        skill: 'Comunicación Asertiva',
+        status: 'active' as const,
+        sourceStage: 2 as const,
+        evidenceText: 'Evitó confrontar acuerdos poco claros al inicio',
+        updatedAtStage: 4 as const,
+      },
+    ];
+
+    const session = createMockSession({
+      currentStage: 4,
+      stageReadyToAdvance: null,
+      identifiedSkills: ['Comunicación Asertiva'],
+      skillEntries: priorSkillEntries,
+      messages: priorMessages,
+    });
+
+    // Simula clic en «Seguir practicando»: mantiene stageReadyToAdvance = null e isPracticingStage4 = true
+    const states = computeStage4States({
+      session,
+      sortedMessages: priorMessages,
+      isPracticingStage4: true,
+    });
+
+    assert.equal(states.isStage4Simulating, true, 'Debe seguir dentro de la simulación en Etapa 4');
+    assert.equal(states.isStage4Concluded, false, 'No debe concluir ni ocultar la práctica');
+    assert.equal(session.currentStage, 4, 'No debe avanzar automáticamente a Etapa 5');
+    assert.equal(session.messages.length, 2, 'Debe conservar intacta la conversación previa');
+    assert.deepEqual(session.identifiedSkills, ['Comunicación Asertiva'], 'Debe conservar habilidades identificadas');
+    assert.equal(session.skillEntries?.length, 1, 'Debe conservar evidencia de habilidades acumulada');
+  });
+
+  it('Escenario 8: «Avanzar a la siguiente etapa» concluye la práctica manualmente y habilita el paso a Etapa 5', () => {
+    const messages: MentorshipMessage[] = [
+      {
+        id: 'm_lead_1',
+        sender: 'leader',
+        text: 'Ensayo completo de apertura.',
+        timestamp: new Date().toISOString(),
+        stage: 4,
+      },
+    ];
+
+    // Al pulsar «Avanzar a la siguiente etapa» desde simulación activa o tarjeta concluida:
+    // 1) se concluye la práctica (stageReadyToAdvance = 4, isPracticingStage4 = false)
+    // 2) se ejecuta explícitamente advanceStage(5) (sin auto-avance previo)
+    const concludedSession = createMockSession({
+      currentStage: 4,
+      stageReadyToAdvance: 4,
+      messages,
+    });
+
+    const states = computeStage4States({
+      session: concludedSession,
+      sortedMessages: messages,
+      isPracticingStage4: false,
+    });
+
+    assert.equal(states.isStage4Simulating, false, 'Debe cerrar el modo simulación activa');
+    assert.equal(states.isStage4Concluded, true, 'Debe marcar la práctica como concluida');
+
+    const advancedSession = {
+      ...concludedSession,
+      currentStage: 5 as const,
+      stageReadyToAdvance: null,
+    };
+    assert.equal(advancedSession.currentStage, 5, 'Tras confirmación manual avanza a Etapa 5 – Plan de Acción');
+    assert.equal(advancedSession.messages.length, 1, 'Conserva el historial de práctica al pasar a Etapa 5');
+  });
 });
+

@@ -27,7 +27,7 @@ export const HRView: React.FC = () => {
   );
 
   const companyMentorships = mentorships.filter(
-    (m) => m.companyId === currentUser.companyId
+    (m) => !m.isTestSession && m.companyId === currentUser.companyId
   );
 
   const currentCompany =

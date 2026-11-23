@@ -16,6 +16,8 @@ import { WhatsAppVoiceRecorder } from './WhatsAppVoiceRecorder';
 import { STAGE_META } from './LeaderView';
 import { StageNumber } from '../types/lidacta';
 import { safeString, extractErrorMessage } from '../utils/safeError';
+import { QA_TEST_LEADER_ID } from '../utils/testSessionFixtures';
+import { isQaMentorContext, QA_MENTOR_REQUEST_BLOCKED_MESSAGE } from '../utils/qaIsolation';
 
 interface RequestMentorModalProps {
   isOpen: boolean;
@@ -42,6 +44,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
   const [priority, setPriority] = useState<'normal' | 'alta'>('normal');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<ApiErrorState | null>(null);
+  const [qaBlockedMessage, setQaBlockedMessage] = useState<string | null>(null);
   const [resendSuccess, setResendSuccess] = useState<ResendSuccessState | null>(null);
 
   const [submittedData, setSubmittedData] = useState<{
@@ -53,6 +56,11 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
   } | null>(null);
 
   if (!isOpen) return null;
+
+  const isQaSession =
+    activeMentorship?.isTestSession === true ||
+    currentUser.id === QA_TEST_LEADER_ID ||
+    isQaMentorContext({ activeMentorship, currentUser });
 
   const currentStageNum = (activeMentorship?.currentStage || 1) as StageNumber;
   const currentStageMeta = STAGE_META[currentStageNum];
@@ -66,6 +74,17 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
     transcriptText: string,
     isVoice: boolean
   ): Promise<{ ok: boolean; data?: any; error?: ApiErrorState }> => {
+    if (isQaSession) {
+      setQaBlockedMessage(QA_MENTOR_REQUEST_BLOCKED_MESSAGE);
+      return {
+        ok: false,
+        error: {
+          status: 403,
+          message: QA_MENTOR_REQUEST_BLOCKED_MESSAGE,
+        },
+      };
+    }
+
     const formattedDate = new Date().toLocaleString('es-MX', {
       timeZone: 'America/Mexico_City',
       dateStyle: 'full',
@@ -73,6 +92,9 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
     });
 
     const payload = {
+      leaderId: currentUser.id,
+      sessionId: activeMentorship?.id,
+      isTestSession: Boolean(activeMentorship?.isTestSession),
       leaderName: currentUser.name,
       message: fullReason,
       transcript: transcriptText,
@@ -157,10 +179,16 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
 
   const handleSubmit = async (e?: React.FormEvent, forceBypassEmail = false) => {
     if (e) e.preventDefault();
+    if (isQaSession) {
+      setApiError(null);
+      setQaBlockedMessage(QA_MENTOR_REQUEST_BLOCKED_MESSAGE);
+      return;
+    }
     if (!reasonText.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
     setApiError(null);
+    setQaBlockedMessage(null);
 
     const fullReason =
       priority === 'alta'
@@ -215,9 +243,15 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
   };
 
   const handleVoiceSendDirect = async (text: string, forceBypassEmail = false) => {
+    if (isQaSession) {
+      setApiError(null);
+      setQaBlockedMessage(QA_MENTOR_REQUEST_BLOCKED_MESSAGE);
+      return;
+    }
     if (!text.trim() || isSubmitting) return;
     setIsSubmitting(true);
     setApiError(null);
+    setQaBlockedMessage(null);
 
     const fullReason =
       priority === 'alta'
@@ -271,6 +305,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
     setPriority('normal');
     setSubmittedData(null);
     setApiError(null);
+    setQaBlockedMessage(null);
     setResendSuccess(null);
     onClose();
   };
@@ -308,8 +343,31 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
 
         {/* Modal Body */}
         <div className="p-3.5 sm:p-5 space-y-4 overflow-y-auto overflow-x-hidden max-h-[80vh] w-full max-w-full box-border break-words whitespace-normal">
+          {/* QA ISOLATION BANNER: Shown when active session or user is QA */}
+          {(isQaSession || qaBlockedMessage) && (
+            <div
+              data-testid="qa-mentor-request-blocked"
+              className="p-3.5 sm:p-4 bg-amber-50 border border-amber-300 rounded-xl text-left space-y-1.5 w-full box-border"
+            >
+              <div className="flex items-start gap-2.5">
+                <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <Info className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0 space-y-1">
+                  <h4 className="font-heading font-bold text-xs sm:text-sm text-amber-900">
+                    Modo Prueba QA · Envío bloqueado
+                  </h4>
+                  <p className="text-xs text-amber-800 leading-relaxed font-medium break-words">
+                    {qaBlockedMessage || QA_MENTOR_REQUEST_BLOCKED_MESSAGE}{' '}
+                    En sesiones de prueba no se envían correos reales ni se registran solicitudes en el servidor.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* VISIBLE ERROR BANNER: Shown if /api/send fails */}
-          {apiError && (
+          {apiError && !isQaSession && (
             <div className="p-3.5 sm:p-4 bg-red-50 border border-red-300 rounded-xl text-left space-y-3 w-full box-border">
               <div className="flex items-start gap-2.5 sm:gap-3">
                 <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0 mt-0.5">
@@ -470,7 +528,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
                   stageNumber={currentStageNum}
                   stageName="Solicitud de Mentoría"
                   mode="stage-card"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isQaSession}
                   isSending={isSubmitting}
                   onTranscript={handleVoiceTranscript}
                   onSendDirect={(transcript) => handleVoiceSendDirect(transcript, false)}
@@ -497,7 +555,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
 
                 <button
                   type="submit"
-                  disabled={!reasonText.trim() || isSubmitting}
+                  disabled={!reasonText.trim() || isSubmitting || isQaSession}
                   className="w-full sm:w-auto min-h-[44px] px-5 sm:px-6 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? (

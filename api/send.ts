@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { isQaRequestPayload, QA_MENTOR_REQUEST_BLOCKED_MESSAGE } from '../src/utils/qaIsolation';
 
 export const maxDuration = 60; // 60 segundos de timeout
 
@@ -47,6 +48,17 @@ export default async function handler(req: any, res: any) {
       reasonText,
       isVoiceAudio,
     } = body || {};
+
+    const qaCheck = isQaRequestPayload(body);
+    if (qaCheck.isQa) {
+      console.warn(`[API /api/send (Vercel)] 🛡️ Solicitud bloqueada por aislamiento QA (${qaCheck.reason}).`);
+      return res.status(403).json({
+        success: false,
+        blockedByQa: true,
+        error: QA_MENTOR_REQUEST_BLOCKED_MESSAGE,
+        message: 'Solicitud bloqueada por aislamiento de sesiones QA: no se envían correos reales.',
+      });
+    }
 
     const apiKey = process.env.RESEND_API_KEY;
     const targetEmail = process.env.ADMIN_EMAIL || 'hola@taniapadierna.com';

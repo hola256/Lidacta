@@ -37,6 +37,8 @@ export interface CompanyContext {
 
 export type StageNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
+export type ActionPlanExecutionStatus = 'pending_verification' | 'executed' | 'not_executed';
+
 export interface StageHistoryItem {
   stage: StageNumber;
   stageName: string;
@@ -148,6 +150,9 @@ export interface MentorshipSession {
   startedAt: string;
   lastActiveAt: string;
   completedAt?: string;
+  // QA Test Session isolation metadata (Inspector Mode only)
+  isTestSession?: boolean;
+  testScenarioLabel?: string;
   // Stage 5 follow-up tracking
   stage5EnteredAt?: string;
   email48hSent?: boolean;
@@ -156,6 +161,9 @@ export interface MentorshipSession {
   email5dSentAt?: string;
   adminInactivityAlertSent?: boolean;
   adminInactivityAlertSentAt?: string;
+  // Stage 6 execution verification tracking
+  actionPlanExecutionStatus?: ActionPlanExecutionStatus;
+  stage6ExecutionVerified?: boolean;
   // Stage 7 final feedback report email tracking
   finalReportEmailSent?: boolean;
   finalReportEmailSentAt?: string;

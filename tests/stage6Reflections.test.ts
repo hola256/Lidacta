@@ -1,5 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { resolveStage6ExecutionStatus } from '../src/context/LidactaContext';
+import { generateContextualCoachReply } from '../api/mentor/respond';
+import { MentorshipSession } from '../src/types/lidacta';
 
 describe('Etapa 6 - Aprender / Ajustar (Reflexión de Liderazgo)', () => {
   // Validation function simulating the exact logic implemented in LeaderView.tsx
@@ -123,4 +126,156 @@ describe('Etapa 6 - Aprender / Ajustar (Reflexión de Liderazgo)', () => {
       'Actualizar Reflexión'
     );
   });
+
+  describe('Verificación inicial de ejecución del Plan de Acción (Sí / No)', () => {
+    const buildStage6Session = (overrides: Partial<MentorshipSession> = {}): MentorshipSession => ({
+      id: 'session_st6_verify',
+      leaderId: 'leader_1',
+      companyId: 'comp_1',
+      title: 'Alineación de prioridades',
+      initialChallenge: 'Retrasos en entregas semanales',
+      detectedTheme: 'Retroalimentación',
+      currentStage: 6,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      lastActiveAt: new Date().toISOString(),
+      messages: [],
+      identifiedSkills: ['Comunicación Asertiva'],
+      stageHistory: [],
+      actionPlan: {
+        what: 'Conversar 1 a 1 con Ana sobre sus prioridades semanales',
+        when: 'Jueves a las 10:00 AM',
+        withWhom: 'Ana López',
+        how: 'Usando hechos observables y preguntas abiertas',
+        careReminders: 'Escuchar antes de concluir',
+        isCompleted: false,
+      },
+      ...overrides,
+    });
+
+    it('inicia en pending_verification al entrar a Etapa 6 y distingue Sí / No sin marcar ejecución prematura', () => {
+      const enteredSession = buildStage6Session();
+      assert.equal(resolveStage6ExecutionStatus(enteredSession), 'pending_verification');
+      assert.equal(enteredSession.actionPlan?.isCompleted, false, 'Avanzar a Etapa 6 no debe marcar el plan como ejecutado');
+
+      const notExecutedSession = buildStage6Session({
+        actionPlanExecutionStatus: 'not_executed',
+        stage6ExecutionVerified: true,
+        actionPlan: {
+          ...enteredSession.actionPlan!,
+          isCompleted: false,
+        },
+      });
+      assert.equal(resolveStage6ExecutionStatus(notExecutedSession), 'not_executed');
+      assert.equal(notExecutedSession.actionPlan?.isCompleted, false, 'Elegir No mantiene isCompleted en false');
+
+      const executedSession = buildStage6Session({
+        actionPlanExecutionStatus: 'executed',
+        stage6ExecutionVerified: true,
+        actionPlan: {
+          ...enteredSession.actionPlan!,
+          isCompleted: true,
+        },
+      });
+      assert.equal(resolveStage6ExecutionStatus(executedSession), 'executed');
+      assert.equal(executedSession.actionPlan?.isCompleted, true);
+    });
+
+    it('mantiene compatibilidad con sesiones legadas de Etapa 6 que ya tenían reflexión o diálogo', () => {
+      const legacySession = buildStage6Session({
+        actionPlanExecutionStatus: undefined,
+        learnings: {
+          whatHappened: 'Conversamos con calma',
+          whatWorked: 'Escucha activa',
+          whatDidnt: '',
+          insights: 'Alinear expectativas temprano evita fricciones',
+          futureAdjustments: '',
+        },
+      });
+      assert.equal(resolveStage6ExecutionStatus(legacySession), 'executed');
+    });
+
+    it('si el líder responde Sí: recupera el Plan de Acción real de Etapa 5 sin asumir resultados no compartidos', () => {
+      const reply = generateContextualCoachReply(
+        6,
+        'Sofía',
+        'Sí, ya ejecuté mi Plan de Acción.',
+        [],
+        {
+          actionPlanExecutionStatus: 'executed',
+          actionPlan: {
+            what: 'Conversar 1 a 1 con Ana sobre sus prioridades semanales',
+            when: 'Jueves a las 10:00 AM',
+            withWhom: 'Ana López',
+          },
+        }
+      );
+
+      assert.ok(
+        reply.replyText.includes('Conversar 1 a 1 con Ana sobre sus prioridades semanales'),
+        'Debe recuperar el plan real de la Etapa 5'
+      );
+      assert.match(reply.replyText, /qué ocurrió|qué funcionó|qué aprendizaje/i);
+      assert.equal(reply.finalFeedback, undefined, 'No debe fabricar feedback final en Etapa 6');
+    });
+
+    it('si el líder responde No: abre acompañamiento respetuoso sobre obstáculos y siguiente paso sin dar por hecha la ejecución', () => {
+      const reply = generateContextualCoachReply(
+        6,
+        'Sofía',
+        'No, todavía no he ejecutado mi Plan de Acción.',
+        [],
+        {
+          actionPlanExecutionStatus: 'not_executed',
+          actionPlan: {
+            what: 'Conversar 1 a 1 con Ana sobre sus prioridades semanales',
+          },
+        }
+      );
+
+      assert.match(reply.replyText, /obstáculos|circunstancias|siguiente paso|ajustar/i);
+      assert.ok(
+        !reply.replyText.toLowerCase().includes('¿qué ocurrió después de tu acción?'),
+        'No debe preguntar como si la acción ya hubiera ocurrido'
+      );
+      assert.ok(
+        !reply.replyText.toLowerCase().includes('tras ejecutar'),
+        'No debe asumir ejecución previa'
+      );
+      assert.equal(reply.finalFeedback, undefined, 'No debe registrar resultados ficticios');
+    });
+
+    it('reconoce ejecución parcial en el diálogo distinguiendo lo ejecutado de lo pendiente', () => {
+      const partialWhenNo = generateContextualCoachReply(
+        6,
+        'Sofía',
+        'Solo alcancé a avanzar una parte de la reunión, todavía falta acordar las fechas.',
+        [],
+        {
+          actionPlanExecutionStatus: 'not_executed',
+          actionPlan: {
+            what: 'Conversar 1 a 1 con Ana sobre sus prioridades semanales',
+          },
+        }
+      );
+      assert.match(partialWhenNo.replyText, /pendiente/i);
+      assert.match(partialWhenNo.replyText, /parte|avanzar|llevó a cabo|realizó/i);
+
+      const partialWhenYes = generateContextualCoachReply(
+        6,
+        'Sofía',
+        'Ejecuté solo una parte del plan, me faltó revisar el seguimiento.',
+        [],
+        {
+          actionPlanExecutionStatus: 'executed',
+          actionPlan: {
+            what: 'Conversar 1 a 1 con Ana sobre sus prioridades semanales',
+          },
+        }
+      );
+      assert.match(partialWhenYes.replyText, /pendiente/i);
+      assert.match(partialWhenYes.replyText, /parte/i);
+    });
+  });
 });
+

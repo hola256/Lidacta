@@ -1,8 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLidacta } from '../context/LidactaContext';
-import { CompanyContext, MentorshipSession, UserProfile } from '../types/lidacta';
+import { ActionPlanExecutionStatus, CompanyContext, MentorshipSession, StageNumber, UserProfile } from '../types/lidacta';
 import { INTERNAL_LIBRARY_CATALOG, EXTERNAL_SOURCES_CATALOG } from '../data/mockData';
 import { AddUserModal, EditUserModal, DeleteUserModal, ViewUserModal } from './UserManagementModals';
+import {
+  QA_TEST_LEADER_ID,
+  TEST_STAGE6_SCENARIOS,
+  TEST_STAGE_OPTIONS,
+} from '../utils/testSessionFixtures';
 import {
   Building2,
   Sliders,
@@ -40,6 +45,10 @@ import {
   Library,
   Globe,
   BookmarkCheck,
+  FlaskConical,
+  Play,
+  Loader2,
+  ShieldCheck,
 } from 'lucide-react';
 
 export const AdminView: React.FC = () => {
@@ -68,11 +77,30 @@ export const AdminView: React.FC = () => {
     impersonateUser,
     impersonateRole,
     openRoleWelcomeModal,
+    createTestSessionAtStage,
+    clearAllTestSessions,
     checkAndProcessStage5FollowUps,
     triggerStage5FollowUpCheck,
   } = useLidacta();
 
   const [isInspectorModalOpen, setIsInspectorModalOpen] = useState(false);
+  const [qaSelectedStage, setQaSelectedStage] = useState<StageNumber>(1);
+  const [qaStage6Scenario, setQaStage6Scenario] =
+    useState<ActionPlanExecutionStatus>('pending_verification');
+  const [isLaunchingQaSession, setIsLaunchingQaSession] = useState(false);
+
+  const realMentorships = useMemo(
+    () => mentorships.filter((m) => !m.isTestSession),
+    [mentorships]
+  );
+  const testSessionsCount = useMemo(
+    () => mentorships.filter((m) => Boolean(m.isTestSession)).length,
+    [mentorships]
+  );
+  const realRecommendedResources = useMemo(
+    () => (recommendedResources || []).filter((r) => r.leaderId !== QA_TEST_LEADER_ID),
+    [recommendedResources]
+  );
 
   const adminProfile = allUsers.find((u) => u.role === 'admin') || currentUser;
 
@@ -101,7 +129,7 @@ export const AdminView: React.FC = () => {
 
   // Resource Analytics Metrics and Aggregations
   const resourceStats = useMemo(() => {
-    const list = recommendedResources || [];
+    const list = realRecommendedResources;
     const total = list.length;
     const internalCount = list.filter((r) => r.origin === 'internal').length;
     const externalCount = list.filter((r) => r.origin === 'external').length;
@@ -191,11 +219,11 @@ export const AdminView: React.FC = () => {
       sortedInternalTools,
       sortedExternalSources,
     };
-  }, [recommendedResources]);
+  }, [realRecommendedResources]);
 
   // Unique list of leaders who have received resources for the filter dropdown
   const leadersWithResources = useMemo(() => {
-    const list = recommendedResources || [];
+    const list = realRecommendedResources;
     const map = new Map<string, { id: string; name: string; email: string; companyName: string }>();
     list.forEach((r) => {
       if (!map.has(r.leaderId)) {
@@ -208,22 +236,22 @@ export const AdminView: React.FC = () => {
       }
     });
     return Array.from(map.values());
-  }, [recommendedResources]);
+  }, [realRecommendedResources]);
 
   // Unique list of themes/challenges for the filter dropdown
   const uniqueResourceThemes = useMemo(() => {
-    const list = recommendedResources || [];
+    const list = realRecommendedResources;
     const set = new Set<string>();
     list.forEach((r) => {
       if (r.theme) set.add(r.theme);
       if (r.challengeTitle) set.add(r.challengeTitle);
     });
     return Array.from(set);
-  }, [recommendedResources]);
+  }, [realRecommendedResources]);
 
   // Filtered list of detailed resource recommendations
   const filteredRecommendedResources = useMemo(() => {
-    const list = recommendedResources || [];
+    const list = realRecommendedResources;
     return list.filter((item) => {
       if (resourceFilterLeader !== 'all' && item.leaderId !== resourceFilterLeader) {
         return false;
@@ -254,7 +282,7 @@ export const AdminView: React.FC = () => {
       }
       return true;
     });
-  }, [recommendedResources, resourceFilterLeader, resourceFilterOrigin, resourceFilterDifficulty, resourceFilterTheme, resourceSearchQuery]);
+  }, [realRecommendedResources, resourceFilterLeader, resourceFilterOrigin, resourceFilterDifficulty, resourceFilterTheme, resourceSearchQuery]);
 
   // System Alerts (Bitácora de Alertas) Aggregations and Filtering
   const alertsStats = useMemo(() => {
@@ -469,8 +497,8 @@ export const AdminView: React.FC = () => {
     });
   };
 
-  // Filtered mentorships for segmentation
-  const filteredMentorships = mentorships.filter((m) => {
+  // Filtered mentorships for segmentation (strictly excludes QA test sessions)
+  const filteredMentorships = realMentorships.filter((m) => {
     const matchCompany = segmentCompany === 'all' || m.companyId === segmentCompany;
     const matchArea = segmentArea === 'all' || m.leaderArea === segmentArea;
     const matchTheme = segmentTheme === 'all' || m.theme === segmentTheme;
@@ -482,13 +510,13 @@ export const AdminView: React.FC = () => {
   });
 
   // Extract unique areas and themes for filters
-  const uniqueAreas = Array.from(new Set(mentorships.map((m) => m.leaderArea).filter(Boolean)));
-  const uniqueThemes = Array.from(new Set(mentorships.map((m) => m.theme).filter(Boolean)));
+  const uniqueAreas = Array.from(new Set(realMentorships.map((m) => m.leaderArea).filter(Boolean)));
+  const uniqueThemes = Array.from(new Set(realMentorships.map((m) => m.theme).filter(Boolean)));
 
   // Analytics by company calculations
   const companyForStats = companies.find((c) => c.id === selectedCompanyId) || companies[0];
   const companyLeaders = allUsers.filter((u) => u.companyId === companyForStats.id && u.role === 'leader');
-  const companyCases = mentorships.filter((m) => m.companyId === companyForStats.id);
+  const companyCases = realMentorships.filter((m) => m.companyId === companyForStats.id);
   const uniqueUsersWhoUsed = Array.from(new Set(companyCases.map((m) => m.leaderId)));
 
   // Themes frequency
@@ -623,7 +651,7 @@ export const AdminView: React.FC = () => {
                   activeTab === 'resources_analytics' ? 'bg-white/20 text-white' : 'bg-[#2D1B4E]/10 text-[#2D1B4E]'
                 }`}
               >
-                {recommendedResources.length}
+                {realRecommendedResources.length}
               </span>
             </button>
             <button
@@ -1021,8 +1049,8 @@ export const AdminView: React.FC = () => {
               </div>
             </div>
 
-            {/* Alerta Destacada de Inactividad Día 8 (Si existen líderes inactivos >= 8 días) */}
-            {mentorships
+            {/* Alerta Destacada de Inactividad Día 8 (Si existen líderes inactivos >= 8 días; excluye sesiones QA) */}
+            {realMentorships
               .filter((m) => {
                 const stage5Date = m.stage5EnteredAt || m.actionPlan?.stage5EnteredAt || m.startedAt;
                 const lastDate = m.lastActiveAt || stage5Date;
@@ -1991,7 +2019,7 @@ export const AdminView: React.FC = () => {
             <div className="flex items-center justify-between text-xs text-[#4A3F55]/70 pt-1">
               <span>
                 Mostrando <strong className="text-[#2D1B4E] font-bold">{filteredRecommendedResources.length}</strong> de{' '}
-                {recommendedResources.length} recomendaciones registradas
+                {realRecommendedResources.length} recomendaciones registradas
               </span>
             </div>
 
@@ -3730,6 +3758,139 @@ export const AdminView: React.FC = () => {
                         </button>
                       </div>
                     ))}
+                </div>
+              </div>
+
+              {/* Section 3: QA Test Session Generator by Stage (Stages 1 to 7) */}
+              <div className="space-y-3 pt-4 border-t border-[#493447]/10">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-[#FFD3BF] text-[#BF3A1B]">
+                      <FlaskConical className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-[#2D1B4E]">
+                        3. Generador de Sesiones de Prueba por Etapa (1 a 7)
+                      </h4>
+                      <p className="text-[11px] text-[#4A3F55]/75">
+                        Inicia una sesión QA aislada directo en cualquier etapa con contexto previo coherente y flujo real de Gemini.
+                      </p>
+                    </div>
+                  </div>
+                  {testSessionsCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => clearAllTestSessions()}
+                      className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Eliminar sesiones de prueba ({testSessionsCount})</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* 7-Stage Selector Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {TEST_STAGE_OPTIONS.map((opt) => {
+                    const isSelected = qaSelectedStage === opt.stage;
+                    return (
+                      <button
+                        key={opt.stage}
+                        type="button"
+                        onClick={() => setQaSelectedStage(opt.stage)}
+                        className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#FFF7EF] border-[#BF3A1B] shadow-xs'
+                            : 'bg-white border-[#493447]/15 hover:border-[#BF3A1B]/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-heading font-bold text-xs text-[#2D1B4E]">
+                            {opt.label}
+                          </span>
+                          <span
+                            className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${
+                              isSelected
+                                ? 'bg-[#BF3A1B] text-white'
+                                : 'bg-[#FFF7EF] text-[#4A3F55]'
+                            }`}
+                          >
+                            E{opt.stage}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#4A3F55]/80 mt-1 leading-snug">
+                          {opt.preparedContext}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Stage 6 Specific Execution Sub-scenarios */}
+                {qaSelectedStage === 6 && (
+                  <div className="p-3.5 rounded-2xl bg-[#F5F1FB]/80 border border-[#C9BDF2] space-y-2.5">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#2D1B4E] block">
+                      Escenario de ejecución para Etapa 6:
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {TEST_STAGE6_SCENARIOS.map((sc) => {
+                        const active = qaStage6Scenario === sc.id;
+                        return (
+                          <button
+                            key={sc.id}
+                            type="button"
+                            onClick={() => setQaStage6Scenario(sc.id)}
+                            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                              active
+                                ? 'bg-white border-[#2D1B4E] ring-2 ring-[#F7B538]/40 shadow-xs'
+                                : 'bg-white/70 border-[#493447]/15 hover:bg-white'
+                            }`}
+                          >
+                            <div className="text-xs font-bold text-[#2D1B4E]">{sc.label}</div>
+                            <div className="text-[10px] text-[#4A3F55]/80 mt-0.5 leading-snug">
+                              {sc.description}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Isolation Notice + Launch Action */}
+                <div className="p-3.5 rounded-2xl bg-[#FFF7EF] border border-[#FFD3BF] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-2 text-[11px] text-[#4A3F55]">
+                    <ShieldCheck className="w-4 h-4 text-[#BF3A1B] shrink-0 mt-0.5" />
+                    <span>
+                      Aislado de métricas de RH/Admin, alertas Día 8/terapéuticas, seguimientos automáticos y envío de correos reales (incluyendo reporte de Etapa 7).
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isLaunchingQaSession}
+                    onClick={async () => {
+                      setIsLaunchingQaSession(true);
+                      try {
+                        await createTestSessionAtStage(qaSelectedStage, qaStage6Scenario);
+                        setIsInspectorModalOpen(false);
+                      } finally {
+                        setIsLaunchingQaSession(false);
+                      }
+                    }}
+                    className="min-h-[40px] px-4 py-2 bg-[#2D1B4E] hover:bg-[#3D2666] text-[#F7B538] font-heading font-extrabold text-xs rounded-xl shadow-md transition-all cursor-pointer active:scale-95 disabled:opacity-60 flex items-center justify-center gap-1.5 shrink-0"
+                  >
+                    {isLaunchingQaSession ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Preparando Etapa {qaSelectedStage}...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Iniciar sesión de prueba (Etapa {qaSelectedStage})</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>

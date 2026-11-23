@@ -7,6 +7,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import sendEmailHandler from './api/send-email';
+import { isQaRequestPayload, QA_MENTOR_REQUEST_BLOCKED_MESSAGE } from './src/utils/qaIsolation';
 import {
   consolidateSkills,
   consolidateSkillEntries,
@@ -310,6 +311,11 @@ app.post('/api/mentor/respond', async (req: Request, res: Response) => {
       currentStage: currentStageNum,
       identifiedSkills: existingSessionSkills,
       skillEntries: existingSessionSkillEntries,
+      leaderAlternatives: Array.isArray(req.body?.sessionData?.leaderAlternatives)
+        ? req.body.sessionData.leaderAlternatives
+        : [],
+      actionPlan: req.body?.sessionData?.actionPlan || null,
+      actionPlanExecutionStatus: req.body?.sessionData?.actionPlanExecutionStatus || null,
     };
 
     // Build the system prompt embedding all Lidacta rules (SYSTEM PROMPT DE 3 BLOQUES)
@@ -545,13 +551,20 @@ ETAPA 5: Actuar (Plan de Acción)
 - Protocolo de Seguimiento: Al registrar el plan en Etapa 5, el sistema programa 2 correos (a las 48h y a los 5 días). A los 8 días de inactividad, se emite una alerta a hola@taniapadierna.com.
 
 ETAPA 6: Aprender y reflexionar
-- Objetivo: Capitalizar la experiencia tras ejecutar la acción. Celebrar aciertos o extraer aprendizajes en resultados desfavorables.
-- Preguntas Clave:
-  * "¿Qué resultados obtuviste tras la interacción?"
-  * "¿Qué funcionó de acuerdo a lo planeado y qué te sorprendió?"
-  * "¿Qué aprendizaje te llevas sobre tu estilo de liderazgo para futuras situaciones?"
-  * "¿Qué no volverías a hacer?"
-  * "¿Qué harás diferente de ahora en adelante?"
+- Primera interacción: verificar "¿Ya ejecutaste tu Plan de Acción?" (Sí / No).
+- Si actionPlanExecutionStatus === "executed" (el líder respondió Sí):
+  * Recuperar el Plan de Acción real de la Etapa 5 (actionPlan) para contextualizar la reflexión sin asumir resultados que el líder no haya compartido.
+  * Preguntas Clave:
+    - "¿Qué ocurrió concretamente al llevarlo a la práctica?"
+    - "¿Qué funcionó de acuerdo a lo planeado y qué te sorprendió?"
+    - "¿Qué aprendizaje te llevas sobre tu estilo de liderazgo para futuras situaciones?"
+    - "¿Qué ajustarías o harías diferente de ahora en adelante?"
+- Si actionPlanExecutionStatus === "not_executed" (el líder respondió No):
+  * Abrir una conversación empática, respetuosa y SIN juicios para entender qué ocurrió, explorar los obstáculos o circunstancias que impidieron ejecutar el plan y ayudar a identificar cómo continuar, qué ajustar y cuál puede ser su siguiente paso.
+  * PROHIBIDO formular preguntas dando por hecho que la acción ya ocurrió (ej. nunca preguntar "¿qué ocurrió después de tu acción?" o "¿qué funcionó tras aplicarlo?").
+  * PROHIBIDO inventar o registrar aprendizajes, resultados o avances de ejecución que no ocurrieron (learningsSummary debe quedar vacío si no hubo ejecución ni aprendizaje real).
+- Ejecución parcial en el diálogo: si el líder explica que solo ejecutó una parte de su Plan de Acción, reconocerlo explícitamente y distinguir lo ya ejecutado de lo que queda pendiente.
+- La verificación de ejecución NO debe bloquear al líder para continuar su proceso de acompañamiento.
 
 ETAPA 7: Cierre y retroalimentación
 - Objetivo: Entregar un resumen ejecutivo del proceso con fortalezas, habilidades trabajadas y compromisos. Recupera exclusivamente las habilidades activas consolidadas existentes trabajadas en el proceso sin inferir ni generar nuevas habilidades. En el JSON identifiedSkills DEBE ser siempre []. Formula stageTwoSkills con la habilidad a fortalecer y su correspondiente evidencia observable registrada. Si no existe evidencia suficiente en el proceso, indica exactamente: 'No se cuenta con evidencia suficiente en este proceso para identificar habilidades específicas por fortalecer.'
@@ -647,6 +660,8 @@ CONTEXTO DINÁMICO DE ESTA SESIÓN
 - Caso / Reto actual: ${activeCaseTitle || 'Caso actual'}
 - Reto inicial: ${activeCaseChallenge || resolvedUserMessage || ''}
 - Habilidades ya identificadas en la sesión: ${existingSessionSkills.join(', ') || 'Ninguna aún'}
+- Plan de Acción (Etapa 5): ${req.body?.sessionData?.actionPlan?.what ? `${req.body.sessionData.actionPlan.what}${req.body.sessionData.actionPlan.when ? ` | Cuándo: ${req.body.sessionData.actionPlan.when}` : ''}${req.body.sessionData.actionPlan.withWhom ? ` | Con quién: ${req.body.sessionData.actionPlan.withWhom}` : ''}` : 'No registrado aún'}
+- Estado de ejecución del Plan de Acción (Etapa 6): ${req.body?.sessionData?.actionPlanExecutionStatus || 'Sin verificar'}
 
 CRITERIOS ESTRICTOS PARA EL CAMPO "readyToAdvance":
 - En Etapa 1: Debe ser true ÚNICAMENTE cuando ya se haya entregado previamente la síntesis con las 3 viñetas (**Hechos y situación**, **Dilema del líder**, **Impacto y reto principal**) Y el mensaje actual del líder confirme o valide dicha síntesis (ej. "de acuerdo", "sí", "si estoy lista", "totalmente", "correcto"). Si el líder corrige, pregunta, duda o aporta nuevos datos, DEBE ser false.
@@ -1153,28 +1168,288 @@ function detectTherapeuticNature(text: string): { isTherapeutic: boolean; reason
   return { isTherapeutic: false, reason: '' };
 }
 
+function stripNegatedAndSelfRoleClauses(text: string): string {
+  if (!text) return '';
+  return text
+    // Eliminar declaraciones de rol propio ("Yo soy la gerente...", "Como gerente...", "En mi rol de director...")
+    .replace(
+      /\b(?:yo\s+)?(?:soy|como|siendo|en\s+mi\s+(?:rol|puesto)\s+de|mi\s+puesto\s+es(?:\s+de)?)\s+(?:la\s+|el\s+|un\s+|una\s+)?(?:gerente|gerenta|director|directora|jefe|jefa)\b/gi,
+      ' '
+    )
+    // Eliminar cláusulas donde el líder niega o descarta explícitamente un conflicto con jefatura o tema específico
+    .replace(
+      /\bno\s+(?:es|son|se\s+trata\s+de|estoy\s+hablando\s+de|hablo\s+de|me\s+refiero\s+a|tengo|hay|existe)\s+(?:ning[uú]n\s+|un\s+|una\s+)?(?:problema\s+(?:con|de)\s+|tema\s+(?:con|de)\s+)?(?:mi\s+|el\s+|la\s+|tu\s+)?(?:jefe|jefa|jefatura|superior|director|directora|gerente|gerencia|falta\s+de\s+respeto|abuso(?:\s+de\s+autoridad)?|robo|aumento(?:\s+de\s+sueldo)?|vacaciones)\b/gi,
+      ' '
+    )
+    .replace(
+      /\bni\s+(?:tampoco\s+)?(?:(?:estoy\s+hablando|hablo|se\s+trata)\s+de\s+|tengo\s+(?:un\s+)?|de\s+)?(?:una?\s+)?(?:falta\s+de\s+respeto|abuso(?:\s+de\s+autoridad)?|problema\s+con\s+(?:mi\s+|el\s+|la\s+)?(?:jefe|jefa|jefatura|superior)|robo)\b/gi,
+      ' '
+    )
+    .replace(/\b(?:no\s+(?:hubo|existe|hay)|sin)\s+(?:faltas?\s+de\s+respeto|maltrato|abuso(?:\s+de\s+autoridad)?)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function detectHierarchyOrBossConflict(text: string): boolean {
+  const cleaned = stripNegatedAndSelfRoleClauses(text).toLowerCase();
+  if (!cleaned) return false;
+
+  // 1. Abuso explícito de autoridad o liderazgo superior
+  if (/\b(?:abuso\s+de\s+autoridad|liderazgo\s+superior)\b/i.test(cleaned)) {
+    return true;
+  }
+
+  // 2. Mención explícita a una figura jerárquica superior del propio líder (nunca "gerente" suelto como rol propio)
+  const hasSuperiorActor =
+    /\b(?:mi\s+jefe|mi\s+jefa|mi\s+jefatura|mi\s+superior|mi\s+director|mi\s+directora|mi\s+gerente|el\s+jefe|la\s+jefa|la\s+jefatura|el\s+director|la\s+directora|la\s+direcci[oó]n)\b/i.test(
+      cleaned
+    );
+
+  const hasDisrespectOrConflictSignal =
+    /\b(?:falta\s+de\s+respeto|falt[oó]\s+al\s+respeto|me\s+grit[oó]|grit[oó]|descalific[oó]|humill[oó]|maltrato|trato\s+injusto|trato\s+prepotente|prepotente|problema\s+con|conflicto\s+con|tensi[oó]n\s+con|me\s+exhibi[oó]|me\s+invalida|no\s+me\s+respalda|me\s+presiona|en\s+p[uú]blico|frente\s+a\s+(?:todos|el\s+equipo|otros)|junta)\b/i.test(
+      cleaned
+    );
+
+  if (hasSuperiorActor && hasDisrespectOrConflictSignal) {
+    return true;
+  }
+
+  // 3. Señales directas de agresión verbal/humillación atribuidas a jefatura o superior
+  if (
+    hasSuperiorActor &&
+    /\b(?:respeto|autoritari|injust|tenso|tensa|dignidad|l[ií]mites)\b/i.test(cleaned)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function detectDelegationOrAutonomyCase(text: string): boolean {
+  const cleaned = stripNegatedAndSelfRoleClauses(text).toLowerCase();
+  if (!cleaned) return false;
+
+  const directTerms = [
+    'delegar',
+    'delegación',
+    'delegacion',
+    'microgestión',
+    'microgestion',
+    'micromanagement',
+    'centralizo',
+    'centralizar',
+    'centralización',
+    'centralizacion',
+    'cuello de botella',
+    'soltar el control',
+    'miedo a delegar',
+  ];
+  if (directTerms.some((k) => cleaned.includes(k))) {
+    return true;
+  }
+
+  return /\b(?:dependen\s+(?:demasiado|mucho|totalmente|siempre)?\s*(?:de\s+m[ií]|de\s+su\s+l[ií]der)|me\s+consultan\s+(?:casi\s+|pr[aá]cticamente\s+)?(?:todo|todas|cada)|consultan\s+(?:casi\s+|pr[aá]cticamente\s+)?todas?\s+las?\s+decisiones|no\s+toman\s+decisiones|tom[ea]n?\s+decisiones\s+(?:por\s+s[ií]|sol[oa]s?|propi[oa]s?)|desarrollar\s+autonom[ií]a|mayor\s+autonom[ií]a|autonom[ií]a\s+(?:en|de)\s+(?:mi|el|su)\s+equipo|superviso\s+(?:constantemente|todo|demasiado|de\s+m[aá]s)|supervisi[oó]n\s+constante|intervengo\s+(?:constantemente|siempre|demasiado|y\s+termino)|termino\s+(?:resolviendo|haci[eé]ndolo|haciendo)\s+(?:yo|personalmente|todo)|revisar\s+todo|revisando\s+(?:todo|cada\s+detalle)|cuesta\s+confiar|confiar\s+en\s+(?:la\s+calidad|su\s+trabajo|que\s+lo\s+hagan)|absorber\s+(?:tareas|todo)|hago\s+el\s+trabajo\s+de\s+(?:ellos|mi\s+equipo))\b/i.test(
+    cleaned
+  );
+}
+
+function detectNaturalCorrection(text: string): {
+  isCorrection: boolean;
+  hasSubstantiveNewContext: boolean;
+  substantiveContent: string;
+} {
+  const clean = (text || '').trim();
+  const lower = clean.toLowerCase();
+  if (!clean) {
+    return { isCorrection: false, hasSubstantiveNewContext: false, substantiveContent: '' };
+  }
+
+  const literalCorrections = [
+    'te confundiste', 'te confundes', 'eso no es lo que me preocupa', 'no es lo que me preocupa',
+    'no me preocupa eso', 'te estás equivocando', 'te estas equivocando', 'te equivocaste',
+    'no me entendiste', 'no me comprendiste', 'no es por ahí', 'no es por ahi', 'no dije eso',
+    'entendiste mal', 'comprendiste mal', 'no es ese el problema', 'no es ese mi problema',
+    'te fuiste por otro lado', 'no estás entendiendo', 'no estas entendiendo',
+  ];
+
+  const hasLiteralCorrection = literalCorrections.some((t) => lower.includes(t));
+
+  const hasNaturalCorrection =
+    /\bno\s+(?:estoy\s+hablando|hablo|se\s+trata|es)\s+(?:de\s+)?(?:un\s+problema\s+con|una\s+falta\s+de\s+respeto|eso|ese\s+tema|mi\s+jefe|mi\s+jefatura|abuso)/i.test(
+      lower
+    ) ||
+    /\bno\s+tengo\s+(?:un\s+|ning[uú]n\s+)?problema\s+con\s+(?:mi\s+)?(?:jefe|jefa|jefatura|superior|director)/i.test(
+      lower
+    ) ||
+    /\b(?:me\s+malinterpretaste|malinterpretaste|interpretaste\s+mal|entendiste\s+al\s+rev[eé]s|no\s+va\s+por\s+ah[ií]|no\s+se\s+trata\s+de\s+eso|no\s+es\s+un\s+tema\s+de\s+(?:mi\s+jefe|abuso|falta\s+de\s+respeto)|te\s+aclaro\s+que\s+no|cambiemos\s+el\s+enfoque)\b/i.test(
+      lower
+    ) ||
+    (/\b(?:yo\s+soy\s+(?:la|el)\s+(?:gerente|gerenta|jefa|jefe|directora?|l[ií]der))\b/i.test(lower) &&
+      /\b(?:no\s+(?:estoy|tengo|es)|mi\s+preocupaci[oó]n|lo\s+que\s+(?:realmente\s+)?(?:pasa|me\s+preocupa))\b/i.test(
+        lower
+      ));
+
+  const isCorrection = hasLiteralCorrection || hasNaturalCorrection;
+  if (!isCorrection) {
+    return { isCorrection: false, hasSubstantiveNewContext: false, substantiveContent: clean };
+  }
+
+  // Extraer contenido sustantivo nuevo después de quitar frases de corrección/negación y declaración de rol
+  let remaining = stripNegatedAndSelfRoleClauses(clean);
+  for (const phrase of literalCorrections) {
+    remaining = remaining.replace(new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' ');
+  }
+  remaining = remaining
+    .replace(/\b(?:no\s+va\s+por\s+ah[ií]|no\s+se\s+trata\s+de\s+eso|me\s+malinterpretaste|malinterpretaste|interpretaste\s+mal|entendiste\s+al\s+rev[eé]s|te\s+aclaro\s+que\s+no|cambiemos\s+el\s+enfoque)\b/gi, ' ')
+    .replace(/\b(?:y\s+mi\s+preocupaci[oó]n\s+es\s+que|lo\s+que\s+(?:realmente\s+)?(?:pasa|me\s+preocupa)\s+es\s+que)\b/gi, ' ')
+    .replace(/^[,.\s;:y]+|[,.\s;:]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const words = remaining.split(/\s+/).filter((w) => w.length >= 2);
+  const hasSubstantiveNewContext =
+    words.length >= 6 ||
+    detectDelegationOrAutonomyCase(remaining) ||
+    /\b(?:colaborador|colaboradores|equipo|delegar|decisiones|sueldo|salario|vacaciones|ausencia|robo|entregas|retraso|actitud|confiar|intervengo|superviso)\b/i.test(
+      remaining
+    );
+
+  return {
+    isCorrection: true,
+    hasSubstantiveNewContext,
+    substantiveContent: remaining || clean,
+  };
+}
+
+function buildEffectiveStage1Context(
+  history: any[],
+  currentMsg: string,
+  sessionContext?: any
+) {
+  const stage1History = (history || []).filter(
+    (m: any) => !m?.stage || Number(m.stage) === 1
+  );
+
+  // Encontrar la última corrección sustantiva dentro del historial para invalidar anclajes previos erróneos
+  let lastCorrectionIndex = -1;
+  for (let i = 0; i < stage1History.length; i++) {
+    const m = stage1History[i];
+    if (m?.sender === 'leader' || m?.role === 'user') {
+      const txt = String(m?.text || m?.content || '').trim();
+      if (txt && detectNaturalCorrection(txt).isCorrection) {
+        lastCorrectionIndex = i;
+      }
+    }
+  }
+
+  const currentCorrection = detectNaturalCorrection(currentMsg);
+  const currentOverridesAnchor =
+    currentCorrection.isCorrection && currentCorrection.hasSubstantiveNewContext;
+
+  let effectiveLeaderTexts: string[] = [];
+  let effectivePrevLidactaTexts: string[] = [];
+
+  if (currentOverridesAnchor) {
+    // La corrección actual trae el contexto real: ignorar title, initialChallenge e historial previo contaminado
+    const strippedCurrent = stripNegatedAndSelfRoleClauses(currentMsg);
+    effectiveLeaderTexts = [strippedCurrent || currentMsg].filter(Boolean);
+    effectivePrevLidactaTexts = [];
+  } else if (lastCorrectionIndex >= 0) {
+    // Hubo una corrección en un turno anterior: usar solo mensajes desde esa corrección en adelante
+    const postCorrectionMsgs = stage1History.slice(lastCorrectionIndex);
+    effectiveLeaderTexts = postCorrectionMsgs
+      .filter((m: any) => m?.sender === 'leader' || m?.role === 'user')
+      .map((m: any) => stripNegatedAndSelfRoleClauses(String(m?.text || m?.content || '')))
+      .filter((t: string) => Boolean(t) && !isMetaOrOperationalMessage(t));
+    if (currentMsg && !isMetaOrOperationalMessage(currentMsg)) {
+      effectiveLeaderTexts.push(stripNegatedAndSelfRoleClauses(currentMsg));
+    }
+    effectivePrevLidactaTexts = stage1History
+      .slice(lastCorrectionIndex + 1)
+      .filter((m: any) => m?.sender === 'lidacta' || m?.role === 'model')
+      .map((m: any) => String(m?.text || m?.content || '').toLowerCase())
+      .filter(Boolean);
+  } else {
+    const historyLeaderTexts = stage1History
+      .filter((m: any) => m?.sender === 'leader' || m?.role === 'user')
+      .map((m: any) => String(m?.text || m?.content || '').trim())
+      .filter((t: string) => Boolean(t) && !isMetaOrOperationalMessage(t));
+
+    if (historyLeaderTexts.length === 0) {
+      if (sessionContext?.title && !isMetaOrOperationalMessage(sessionContext.title)) {
+        effectiveLeaderTexts.push(stripNegatedAndSelfRoleClauses(sessionContext.title));
+      }
+      if (
+        sessionContext?.initialChallenge &&
+        !isMetaOrOperationalMessage(sessionContext.initialChallenge)
+      ) {
+        effectiveLeaderTexts.push(stripNegatedAndSelfRoleClauses(sessionContext.initialChallenge));
+      }
+    } else {
+      effectiveLeaderTexts.push(...historyLeaderTexts.map(stripNegatedAndSelfRoleClauses));
+    }
+
+    if (currentMsg && !isMetaOrOperationalMessage(currentMsg)) {
+      effectiveLeaderTexts.push(stripNegatedAndSelfRoleClauses(currentMsg));
+    }
+
+    effectivePrevLidactaTexts = stage1History
+      .filter((m: any) => m?.sender === 'lidacta' || m?.role === 'model')
+      .map((m: any) => String(m?.text || m?.content || '').toLowerCase())
+      .filter(Boolean);
+  }
+
+  const combinedRawForAnchor = [
+    ...(currentOverridesAnchor
+      ? [currentMsg]
+      : lastCorrectionIndex >= 0
+      ? stage1History
+          .slice(lastCorrectionIndex)
+          .filter((m: any) => m?.sender === 'leader' || m?.role === 'user')
+          .map((m: any) => String(m?.text || m?.content || ''))
+          .concat(currentMsg ? [currentMsg] : [])
+      : [
+          ...(stage1History.length === 0
+            ? [sessionContext?.initialChallenge || '', sessionContext?.title || '']
+            : []),
+          ...stage1History
+            .filter((m: any) => m?.sender === 'leader' || m?.role === 'user')
+            .map((m: any) => String(m?.text || m?.content || '')),
+          currentMsg,
+        ]),
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const effectiveText = effectiveLeaderTexts.filter(Boolean).join(' ').trim();
+  const effectiveLower = effectiveText.toLowerCase();
+
+  return {
+    effectiveText,
+    effectiveLower,
+    combinedRawForAnchor,
+    effectivePrevLidactaTexts,
+    currentCorrection,
+    hasPriorCorrection: lastCorrectionIndex >= 0,
+    isCleanStage1History:
+      currentOverridesAnchor ||
+      effectivePrevLidactaTexts.length === 0,
+  };
+}
+
 function extractDiagnosticVariablesServer(
   history: any[],
   currentMsg: string,
   sessionContext?: any
 ) {
-  const allUserTexts: string[] = [];
-  if (sessionContext?.title && !isMetaOrOperationalMessage(sessionContext.title)) {
-    allUserTexts.push(sessionContext.title);
-  }
-  if (sessionContext?.initialChallenge && !isMetaOrOperationalMessage(sessionContext.initialChallenge)) {
-    allUserTexts.push(sessionContext.initialChallenge);
-  }
-  for (const m of history || []) {
-    const txt = (m.text || m.content || '').trim();
-    if (txt && !isMetaOrOperationalMessage(txt)) allUserTexts.push(txt);
-  }
-  if (currentMsg && !isMetaOrOperationalMessage(currentMsg)) {
-    allUserTexts.push(currentMsg.trim());
-  }
+  const { effectiveText, effectiveLower, combinedRawForAnchor } = buildEffectiveStage1Context(
+    history,
+    currentMsg,
+    sessionContext
+  );
 
-  const combinedText = allUserTexts.join(' ');
-  const lower = combinedText.toLowerCase();
+  const lower = effectiveLower;
+  const anchorText = stripNegatedAndSelfRoleClauses(combinedRawForAnchor).toLowerCase();
 
   // Check if leader clarified that raise / increase is not viable or an option
   const raiseNotAnOption = [
@@ -1186,25 +1461,16 @@ function extractDiagnosticVariablesServer(
 
   // Priority: Detect crime / theft / inventory loss
   const isCrimeOrTheft = [
-    'robo', 'robaron', 'sustraccion', 'sustracción', 'material', 'delito', 'seguridad patrimonial',
-    'guardias', 'almacen', 'almacén', 'inventario', 'faltante ilicito', 'faltante ilícito'
-  ].some((k) => lower.includes(k) || (sessionContext?.initialChallenge && sessionContext.initialChallenge.toLowerCase().includes(k)) || (sessionContext?.title && sessionContext.title.toLowerCase().includes(k)));
+    'robo', 'robando', 'robaron', 'robó', 'sustraccion', 'sustracción', 'sustrajo',
+    'desvío de material', 'delito', 'fraude', 'seguridad patrimonial',
+    'faltante ilicito', 'faltante ilícito'
+  ].some((k) => lower.includes(k) || anchorText.includes(k));
 
-  // Priority: Detect hierarchy or boss disrespect / conflict
-  const isHierarchyOrBossConflict = [
-    'jefe', 'jefa', 'jefatura', 'director', 'directora', 'gerente', 'gerencia',
-    'falta de respeto', 'respeto', 'me gritó', 'me grito', 'descalificó', 'descalifico',
-    'humilló', 'humillo', 'maltrato', 'trato injusto', 'trato prepotente', 'prepotente',
-    'mi superior', 'liderazgo superior'
-  ].some((k) => lower.includes(k));
+  // Priority: Detect hierarchy or boss disrespect / conflict (con validación de rol y negaciones)
+  const isHierarchyOrBossConflict =
+    !isCrimeOrTheft && detectHierarchyOrBossConflict(combinedRawForAnchor);
 
-  // 0. EJE INAMOVIBLE: Detect disciplinary / unauthorized vacation / absence breach as primary anchor
-  const anchorText = [
-    sessionContext?.initialChallenge,
-    sessionContext?.title,
-    (history && history.length > 0 ? (history[0]?.text || history[0]?.content) : ''),
-  ].filter(Boolean).join(' ').toLowerCase();
-
+  // Detect disciplinary / unauthorized vacation / absence breach
   const isDisciplinaryOrAbsenceCase = !isHierarchyOrBossConflict && !isCrimeOrTheft && [
     'vacacion', 'vacación', 'vacaciones', 'ausencia injustificada', 'ausencias injustificadas',
     'días sin permiso', 'dias sin permiso', 'sin autorizacion', 'sin autorización',
@@ -1218,7 +1484,7 @@ function extractDiagnosticVariablesServer(
     'despido', 'baja', 'castigo', 'proceder', 'medida', 'regreso'
   ].some((k) => lower.includes(k));
 
-  // 1. Detect salary / compensation / money / raise / counteroffer
+  // Detect salary / compensation / money / raise / counteroffer
   const isSalaryCase = !isCrimeOrTheft && [
     'sueldo', 'salario', 'aumento', 'aumento de sueldo', 'aumento salarial', 'pagar', 'paga',
     'remuneracion', 'remuneración', 'compensacion', 'compensación', 'tabulador', 'dinero',
@@ -1226,39 +1492,41 @@ function extractDiagnosticVariablesServer(
     'ganar mas', 'ganar más', 'exige aumento', 'exigiendo sueldo', 'pide aumento'
   ].some((k) => lower.includes(k));
 
-  // 2. Detect shift handoff / logs / veteran resistance
-  const isShiftLogCase = [
-    'bitacora', 'bitácora', 'cambio de turno', 'relevo de turno', 'supervisor veterano',
-    'prensas', 'celda robótica', 'ernesto'
+  // Detect delegation / micromanagement / dependency / autonomy
+  const isDelegationCase =
+    !isCrimeOrTheft &&
+    !isHierarchyOrBossConflict &&
+    detectDelegationOrAutonomyCase(effectiveText || combinedRawForAnchor);
+
+  // Detect customer / client conflict ONLY when explicitly describing a client complaint/conflict
+  const isClientCase = !isDelegationCase && [
+    'queja de cliente', 'reclamo de cliente', 'problema con el cliente', 'conflicto con el cliente', 'entrega al cliente'
   ].some((k) => lower.includes(k));
 
-  // 3. Detect delegation / audit / micromanagement
-  const isDelegationCase = [
-    'delegar', 'delegación', 'delegacion', 'auditoría', 'auditoria', 'iatf', 'absorber',
-    'novato', 'novatos', 'revisar todo', 'cuello de botella', 'supervisores novatos'
-  ].some((k) => lower.includes(k));
+  // Detect performance / task non-compliance
+  const isTaskNonComplianceCase =
+    !isHierarchyOrBossConflict &&
+    !isCrimeOrTheft &&
+    !isDelegationCase &&
+    [
+      'entrega', 'entregable', 'plazo', 'fecha límite', 'fecha limite', 'no cumple', 'incumple',
+      'retraso', 'desempeño', 'desempeno', 'resultados', 'metas'
+    ].some((k) => lower.includes(k));
 
-  // 4. Detect customer / client conflict (ONLY if actually mentioned!)
-  const isClientCase = [
-    'cliente', 'queja de cliente', 'entrega al cliente', 'pedido del cliente', 'proveedor'
-  ].some((k) => lower.includes(k));
+  // Detect interpersonal friction / attitude / resistance
+  const isAttitudeCase =
+    !isHierarchyOrBossConflict &&
+    !isCrimeOrTheft &&
+    !isDelegationCase &&
+    [
+      'actitud', 'defensiva', 'desmotivacion', 'desmotivación', 'apatía', 'apatia', 'resistencia',
+      'conflicto', 'roce', 'desacuerdo', 'quejas'
+    ].some((k) => lower.includes(k));
 
-  // 5. Detect performance / task non-compliance
-  const isTaskNonComplianceCase = !isHierarchyOrBossConflict && !isCrimeOrTheft && [
-    'entrega', 'entregable', 'plazo', 'fecha límite', 'fecha limite', 'no cumple', 'incumple',
-    'retraso', 'desempeño', 'desempeno', 'resultados', 'metas'
-  ].some((k) => lower.includes(k));
-
-  // 6. Detect interpersonal friction / attitude / resistance
-  const isAttitudeCase = !isHierarchyOrBossConflict && !isCrimeOrTheft && [
-    'actitud', 'defensiva', 'desmotivacion', 'desmotivación', 'apatía', 'apatia', 'resistencia',
-    'conflicto', 'roce', 'desacuerdo', 'quejas'
-  ].some((k) => lower.includes(k));
-
-  // Formulate 1: Hechos y situación (Lo que está pasando objetivamente con el colaborador y las tareas)
+  // Formulate 1: Hechos y situación
   let factsAndSituation = '';
   if (isCrimeOrTheft) {
-    factsAndSituation = 'El faltante y presunto robo o sustracción no autorizada de material en el almacén o área operativa.';
+    factsAndSituation = 'El faltante y presunto robo o sustracción no autorizada de material o recursos en el área.';
   } else if (isHierarchyOrBossConflict) {
     factsAndSituation = 'La situación de tensión y falta de respeto experimentada en la relación o interacción con la jefatura.';
   } else if (isDisciplinaryOrAbsenceCase) {
@@ -1269,10 +1537,9 @@ function extractDiagnosticVariablesServer(
     } else {
       factsAndSituation = 'El colaborador plantea una exigencia de aumento salarial inmediato y manifiesta inconformidad o intención de salida si no se le concede.';
     }
-  } else if (isShiftLogCase) {
-    factsAndSituation = 'La omisión sistemática en el llenado de las bitácoras y registros operativos durante el cambio de turno por parte de un colaborador experimentado.';
   } else if (isDelegationCase) {
-    factsAndSituation = 'La absorción directa de revisiones operativas por temor a fallas o no conformidades en el equipo.';
+    factsAndSituation =
+      'El equipo muestra alta dependencia para tomar decisiones y tú tiendes a supervisar de cerca e intervenir directamente cuando el trabajo no cumple con lo que esperas.';
   } else if (isClientCase) {
     factsAndSituation = 'El roce operativo directo con el cliente y los compromisos de entrega o servicio afectados por la situación.';
   } else if (isTaskNonComplianceCase) {
@@ -1283,7 +1550,7 @@ function extractDiagnosticVariablesServer(
     factsAndSituation = 'La dinámica y los desacuerdos observados en el equipo respecto a los compromisos de trabajo cotidianos.';
   }
 
-  // Formulate 2: Dilema del líder (La encrucijada concreta del líder)
+  // Formulate 2: Dilema del líder
   let leaderDilemma = '';
   if (isCrimeOrTheft) {
     leaderDilemma = 'Actuar con apego estricto a las normas y lineamientos legales o de seguridad patrimonial, asegurando que la investigación se realice de forma objetiva sin caer en señalamientos prematuros ni omisiones.';
@@ -1301,22 +1568,16 @@ function extractDiagnosticVariablesServer(
     } else {
       leaderDilemma = 'Dar retroalimentación firme y delimitar los compromisos laborales sin el temor a que la persona renuncie, se desmotive o genere fracturas en el equipo.';
     }
-  } else if (isShiftLogCase) {
-    leaderDilemma = 'Exigir la disciplina operativa requerida sin deteriorar el vínculo ni la motivación de una persona de amplia trayectoria en el equipo.';
   } else if (isDelegationCase) {
-    leaderDilemma = 'Soltar el control y dar espacio de autonomía a los supervisores frente al temor de que ocurra un error crítico bajo tu responsabilidad.';
+    leaderDilemma =
+      'Soltar el control operativo y confiar en el criterio de tu equipo para que tome decisiones propias, frente al temor de que la calidad del resultado no alcance tus estándares.';
   } else if (isClientCase) {
     leaderDilemma = 'Defender las capacidades y tiempos de tu equipo sin poner en riesgo la relación comercial ni el nivel de servicio con el cliente.';
   } else {
-    const mentionsBoss = ['jefe', 'director', 'gerencia', 'liderazgo superior', 'directora'].some((k) => lower.includes(k));
-    if (mentionsBoss) {
-      leaderDilemma = 'Equilibrar la presión de las expectativas de la dirección con el cuidado de la capacidad y el bienestar de tu equipo.';
-    } else {
-      leaderDilemma = 'Abordar una conversación difícil con asertividad y firmeza, balanceando la exigencia de resultados con el cuidado del vínculo con la persona.';
-    }
+    leaderDilemma = 'Abordar la situación con asertividad y firmeza, balanceando la exigencia de resultados con el cuidado del vínculo y la claridad en el equipo.';
   }
 
-  // Formulate 3: Impacto y reto principal (Efecto en el equipo y objetivo clave a resolver)
+  // Formulate 3: Impacto y reto principal
   let impactAndMainChallenge = '';
   const expressesFatigue = ['cansad', 'agota', 'harto', 'frustra', 'estres', 'estrés', 'abrumad', 'desgaste'].some((k) => lower.includes(k));
   if (isCrimeOrTheft) {
@@ -1329,10 +1590,9 @@ function extractDiagnosticVariablesServer(
     impactAndMainChallenge = expressesFatigue
       ? 'Frenar el desgaste emocional acumulado, evitar sentar precedentes inviables en el equipo y definir con certeza el rumbo de la posición.'
       : 'Cuidar la equidad interna del equipo, proteger el clima laboral y definir con claridad el futuro de la colaboración.';
-  } else if (isShiftLogCase) {
-    impactAndMainChallenge = 'Garantizar la trazabilidad y seguridad en piso, evitando que la falta de registros afecte la calidad o al turno entrante.';
   } else if (isDelegationCase) {
-    impactAndMainChallenge = 'Desarrollar la autonomía real de los supervisores y liberar tu tiempo de la operación para enfocarte en tu liderazgo estratégico.';
+    impactAndMainChallenge =
+      'Desarrollar autonomía real en tus colaboradores para reducir la dependencia hacia ti y liberar tu tiempo hacia decisiones estratégicas de liderazgo.';
   } else {
     impactAndMainChallenge = expressesFatigue
       ? 'Frenar la sobrecarga mental acumulada y alinear los compromisos para que la operación fluya sin requerir tu intervención constante.'
@@ -1349,8 +1609,103 @@ function extractDiagnosticVariablesServer(
   };
 }
 
+function isStage3EntryMarker(text: string): boolean {
+  const normalized = (text || '').trim();
+  return !normalized || /^\[avanzando a etapa \d+\]$/i.test(normalized);
+}
+
+function isPureDoubtOrQuestionClause(clause: string): boolean {
+  const lower = clause.trim().toLowerCase();
+  if (!lower) return true;
+  if (/^[¿?]/.test(lower) || /\?$/.test(lower)) return true;
+  return /^(?:pero|aunque|sin embargo|y\s+la\s+verdad|la\s+verdad)\s+(?:tengo dudas?|no\s+s[eé]|me\s+preocupa|tengo\s+miedo|me\s+da\s+temor|no\s+estoy\s+segur)/i.test(lower) ||
+    /^(?:tengo dudas?|no\s+s[eé]\s+(?:cu[aá]l|c[oó]mo|qu[eé])|me\s+preocupa|qu[eé]\s+(?:me\s+recomiendas|opinas|sugieres|piensas)|cu[aá]l\s+(?:conviene|es\s+mejor|me\s+recomiendas)|c[oó]mo\s+(?:combinar|hacerle|proceder)|ay[uú]dame\s+a)/i.test(lower);
+}
+
+function stripLeadingAlternativeLabel(text: string): string {
+  return text
+    .replace(/^(?:mis\s+(?:dos|\d+)?\s*(?:alternativas|opciones)\s*(?:son|ser[ií]an)?\s*[:.-]?\s*)/i, '')
+    .replace(/^(?:se\s+me\s+ocurren(?:\s+\d+|\s+dos)?\s*(?:alternativas|opciones)?\s*[:.-]?\s*)/i, '')
+    .replace(/^(?:(?:opci[oó]n|alternativa)\s*\d+\s*[:.)-]\s*)/i, '')
+    .replace(/^(?:\d+[.)]\s*|[-•*]\s+)/, '')
+    .replace(/^(?:por\s+un\s+lado|por\s+otro\s+lado|por\s+otra\s+parte|la\s+primera(?:\s+opci[oó]n|\s+alternativa)?(?:\s+es|\s+ser[ií]a)?|la\s+segunda(?:\s+opci[oó]n|\s+alternativa)?(?:\s+es|\s+ser[ií]a)?)\s*[:,]?\s*/i, '')
+    .trim();
+}
+
+function extractStage3AlternativesFromTexts(texts: string[]): string[] {
+  const results: string[] = [];
+  const seen = new Set<string>();
+
+  const pushCandidate = (raw: string) => {
+    const cleaned = stripLeadingAlternativeLabel(
+      raw
+        .replace(/\b(?:pero|aunque|sin embargo)\s+(?:tengo dudas?|no\s+s[eé]|me\s+preocupa|tengo\s+miedo|me\s+da\s+temor|no\s+estoy\s+segur).*$/i, '')
+        .replace(/¿[^?]*\??/g, '')
+        .replace(/[.:\s]+$/g, '')
+        .trim()
+    );
+    if (!cleaned || cleaned.length < 12) return;
+    if (isPureDoubtOrQuestionClause(cleaned)) return;
+    // Skip pure selection statements like "Me quedo con la primera opción"
+    if (/^(?:me\s+quedo\s+con|elijo|selecciono|vamos\s+con|me\s+decido\s+por|prefiero)\s+(?:la\s+)?(?:primera|segunda|esa|ambas|las\s+dos)(?:\s+opci[oó]n|\s+alternativa)?$/i.test(cleaned)) {
+      return;
+    }
+    const key = cleaned.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      results.push(cleaned.slice(0, 160));
+    }
+  };
+
+  for (const rawText of texts) {
+    const text = cleanConversationalText(rawText || '');
+    if (!text || isStage3EntryMarker(text)) continue;
+
+    // 1. Check explicit numbered/bulleted/labeled items (multiline or inline)
+    const strippedQuestions = text.replace(/¿[^?]*\??/g, '').trim();
+    const numberedSplit = strippedQuestions
+      .split(/(?:^|\n|\s+)(?=(?:\d+[.)]|[-•*]|(?:opci[oó]n|alternativa)\s*\d+\s*[:.)-]?)\s+)/i)
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    const hasExplicitMarkers = numberedSplit.some((part) =>
+      /^(?:\d+[.)]|[-•*]|(?:opci[oó]n|alternativa)\s*\d+\s*[:.)-]?)\s+/i.test(part)
+    );
+
+    if (hasExplicitMarkers) {
+      for (const part of numberedSplit) {
+        if (/^(?:\d+[.)]|[-•*]|(?:opci[oó]n|alternativa)\s*\d+\s*[:.)-]?)\s+/i.test(part)) {
+          pushCandidate(part);
+        }
+      }
+      if (results.length > 0) continue;
+    }
+
+    // 2. Split prose into sentences / alternative clauses
+    const proseWithoutQuestions = strippedQuestions
+      .split(/(?<=[.!])\s+|\n+/)
+      .filter((s) => !isPureDoubtOrQuestionClause(s))
+      .join(' ');
+
+    const clauses = proseWithoutQuestions
+      .split(/(?:,\s*o\s+(?:tambi[eé]n\s+|bien\s+)?|\s+o\s+(?:bien|tambi[eé]n)\s+|\s*;\s*|\bpor\s+otro\s+lado\b|\bpor\s+otra\s+parte\b|\.\s+)/i)
+      .map((c) => c.trim())
+      .filter(Boolean);
+
+    const actionVerbHint = /\b(podr[ií]a|har[ií]a|ser[ií]a|hablar|conversar|reunir|junta|acuerdo|acordar|delegar|capacitar|revisar|ajustar|establecer|implementar|redistribuir|acompa[nñ]ar|pedir|negociar|definir|monitorear|seguimiento|tablero|sesi[oó]n|reuni[oó]n|retroalimentaci[oó]n|alternativa|opci[oó]n|planteo|propongo|se\s+me\s+ocurre|pienso\s+en)\b/i;
+
+    for (const clause of clauses) {
+      if (actionVerbHint.test(clause) || clauses.length >= 2) {
+        pushCandidate(clause);
+      }
+    }
+  }
+
+  return results.slice(0, 4);
+}
+
 // Deterministic Coaching Engine (Ensures 100% uptime, adhering to all PDF rules)
-function generateDeterministicCoaching({
+export function generateDeterministicCoaching({
   stage,
   leaderProfile,
   companyContext,
@@ -1385,17 +1740,21 @@ function generateDeterministicCoaching({
 
   const cleanMsg = (userMessage || '').trim();
   const lowerMsg = cleanMsg.toLowerCase();
+  const stage1Context = stage === 1 ? buildEffectiveStage1Context(conversationHistory, cleanMsg, sessionData) : null;
 
-  // Regla 4: Reacción directa ante correcciones del usuario ("te confundiste", "eso no es lo que me preocupa")
-  const isDirectCorrection = [
-    'te confundiste', 'te confundes', 'eso no es lo que me preocupa', 'no es lo que me preocupa',
-    'no me preocupa eso', 'te estás equivocando', 'te estas equivocando', 'te equivocaste',
-    'no me entendiste', 'no me comprendiste', 'no es por ahí', 'no es por ahi', 'no dije eso',
-    'entendiste mal', 'comprendiste mal', 'no es ese el problema', 'no es ese mi problema',
-    'te fuiste por otro lado', 'no estás entendiendo', 'no estas entendiendo'
-  ].some((t) => lowerMsg.includes(t));
+  // Regla 4: Reacción directa ante correcciones del usuario ("te confundiste", o correcciones naturales con/sin información nueva)
+  const isDirectCorrection =
+    stage === 1
+      ? Boolean(stage1Context?.currentCorrection.isCorrection)
+      : [
+          'te confundiste', 'te confundes', 'eso no es lo que me preocupa', 'no es lo que me preocupa',
+          'no me preocupa eso', 'te estás equivocando', 'te estas equivocando', 'te equivocaste',
+          'no me entendiste', 'no me comprendiste', 'no es por ahí', 'no es por ahi', 'no dije eso',
+          'entendiste mal', 'comprendiste mal', 'no es ese el problema', 'no es ese mi problema',
+          'te fuiste por otro lado', 'no estás entendiendo', 'no estas entendiendo',
+        ].some((t) => lowerMsg.includes(t));
 
-  if (isDirectCorrection && stage === 1) {
+  if (isDirectCorrection && stage === 1 && !stage1Context?.currentCorrection.hasSubstantiveNewContext) {
     return {
       replyText: `Una disculpa por la confusión, ${leaderName}; te agradezco la aclaración.\n\nPara enfocar exactamente lo que necesitas: ¿qué es lo que más te preocupa en este momento respecto a esta situación y qué detalles adicionales nos faltan por poner sobre la mesa?`,
       readyToAdvance: false,
@@ -1414,7 +1773,7 @@ function generateDeterministicCoaching({
     'aclaracion', 'ojo', 'rectifico', 'un detalle', 'no quiero que', 'no está sobre la mesa',
     'no esta sobre la mesa', 'no está contemplado', 'no esta contemplado',
     'no podemos pagar', 'no es posible aumentarle', 'imposible aumentar'
-  ].some((t) => lowerMsg.includes(t));
+  ].some((t) => lowerMsg.includes(t)) && !stage1Context?.currentCorrection.hasSubstantiveNewContext;
 
   if (isNuanceOrConstraint && stage === 1) {
     const { factsAndSituation, leaderDilemma, impactAndMainChallenge } = extractDiagnosticVariablesServer(conversationHistory, cleanMsg, sessionData);
@@ -1457,7 +1816,7 @@ function generateDeterministicCoaching({
     'refleja fielmente', 'refleja lo que vivo', 'si, avancemos', 'sí, avancemos'
   ].some((t) => lowerMsg.includes(t));
 
-  if (userConfirmsBreakdownOrReady && !isNuanceOrConstraint && stage === 1) {
+  if (userConfirmsBreakdownOrReady && !isNuanceOrConstraint && !isDirectCorrection && stage === 1) {
     return {
       replyText: `Me da mucho gusto que tengamos este mapa claro y alineado, ${leaderName}. Al tener delimitado con precisión lo que ocurre y tu encrucijada como líder, ¿estás de acuerdo en que pasemos a la Etapa 2 para analizar las perspectivas de las personas involucradas y las habilidades que necesitas activar?`,
       readyToAdvance: true,
@@ -1467,30 +1826,50 @@ function generateDeterministicCoaching({
   }
 
   // Detección de confusión o solicitud de aclaración del líder (FILTRADO DE MENSAJES OPERATIVOS)
-  const isConfusion = isMetaOrOperationalMessage(cleanMsg) || [
-    'no entiendo', 'no comprendo', 'a que te refieres', 'a qué te refieres',
-    'como que', 'cómo que', 'como asi', 'cómo así', 'no se que responder',
-    'no sé qué responder', 'no se a que te refieres', 'no sé a qué te refieres',
-    'explicate', 'explícate', 'a que te refieres con', 'a qué te refieres con',
-    'no me queda claro', 'que significa', 'qué significa', 'a que te refieres exactamente',
-    'no entendi', 'no entendí', 'no te sigo', 'no te comprendo', 'de que hablas', 'de qué hablas'
-  ].some((t) => lowerMsg.includes(t));
+  const isConfusion =
+    !(stage === 1 && stage1Context?.currentCorrection.hasSubstantiveNewContext) &&
+    (isMetaOrOperationalMessage(cleanMsg) ||
+      [
+        'no entiendo', 'no comprendo', 'a que te refieres', 'a qué te refieres',
+        'como que', 'cómo que', 'como asi', 'cómo así', 'no se que responder',
+        'no sé qué responder', 'no se a que te refieres', 'no sé a qué te refieres',
+        'explicate', 'explícate', 'a que te refieres con', 'a qué te refieres con',
+        'no me queda claro', 'que significa', 'qué significa', 'a que te refieres exactamente',
+        'no entendi', 'no entendí', 'no te sigo', 'no te comprendo', 'de que hablas', 'de qué hablas'
+      ].some((t) => lowerMsg.includes(t)));
 
   if (isConfusion) {
     if (stage === 1) {
       // Re-formular la pregunta anterior de forma más sencilla y concreta,
-      // preservando estrictamente el contexto original del caso SIN plantilla de resumen
-      const anchorForConfusion = [
-        sessionData?.initialChallenge,
-        sessionData?.title,
-        ...(conversationHistory || []).map((m: any) => m.text || m.content || '')
-      ].filter(Boolean).join(' ').toLowerCase();
+      // usando únicamente el contexto efectivo no descartado ni negado
+      const anchorForConfusion = (
+        stage1Context?.effectiveLower ||
+        stripNegatedAndSelfRoleClauses(cleanMsg).toLowerCase()
+      );
+      const rawAnchorForBoss = stage1Context?.combinedRawForAnchor || cleanMsg;
 
-      const isCrimeOrTheftConfusion = ['robo', 'material', 'sustraccion', 'sustracción', 'delito', 'almacen', 'almacén'].some((k) => anchorForConfusion.includes(k));
-      const isBossConfusion = ['jefe', 'jefatura', 'gritó', 'grito', 'humilló', 'humillo', 'respeto'].some((k) => anchorForConfusion.includes(k));
-      const isDisciplinaryConfusion = ['vacacion', 'vacación', 'ausencia', 'sin permiso', 'sin autorizacion', 'sin autorización'].some((k) => anchorForConfusion.includes(k));
-      const isSalaryConfusion = ['sueldo', 'salario', 'aumento', 'dinero', 'paga'].some((k) => anchorForConfusion.includes(k));
-      const isDeliveryConfusion = ['entrega', 'plazo', 'retraso', 'calidad', 'compromiso'].some((k) => anchorForConfusion.includes(k));
+      const isCrimeOrTheftConfusion = ['robo', 'robaron', 'sustraccion', 'sustracción', 'delito', 'fraude'].some((k) =>
+        anchorForConfusion.includes(k)
+      );
+      const isBossConfusion = !isCrimeOrTheftConfusion && detectHierarchyOrBossConflict(rawAnchorForBoss);
+      const isDisciplinaryConfusion =
+        !isBossConfusion &&
+        !isCrimeOrTheftConfusion &&
+        ['vacacion', 'vacación', 'ausencia', 'sin permiso', 'sin autorizacion', 'sin autorización'].some((k) =>
+          anchorForConfusion.includes(k)
+        );
+      const isSalaryConfusion = ['sueldo', 'salario', 'aumento', 'dinero', 'paga'].some((k) =>
+        anchorForConfusion.includes(k)
+      );
+      const isDelegationConfusion =
+        !isBossConfusion &&
+        !isCrimeOrTheftConfusion &&
+        detectDelegationOrAutonomyCase(anchorForConfusion);
+      const isDeliveryConfusion =
+        !isBossConfusion &&
+        !isCrimeOrTheftConfusion &&
+        !isDelegationConfusion &&
+        ['entrega', 'plazo', 'retraso', 'compromiso'].some((k) => anchorForConfusion.includes(k));
 
       let simplifiedQuestion = '';
       if (isCrimeOrTheftConfusion) {
@@ -1501,6 +1880,8 @@ function generateDeterministicCoaching({
         simplifiedQuestion = `Te lo formulo de manera más clara y simple, ${leaderName}: respecto al colaborador que se tomó los días sin autorización, ¿qué tareas urgentes quedaron afectadas en el equipo y qué reglamento interno tienen para atender una falta así?`;
       } else if (isSalaryConfusion) {
         simplifiedQuestion = `Te lo pregunto de forma más clara y cotidiana, ${leaderName}: sobre este colaborador que pide más sueldo, ¿cuánto incremento está solicitando y qué margen real tiene la empresa para considerar o descartar esa petición?`;
+      } else if (isDelegationConfusion) {
+        simplifiedQuestion = `Te lo planteo de forma más directa y concreta, ${leaderName}: sobre esa dependencia de tu equipo al consultarte o cuando terminas interviniendo en su trabajo, ¿en qué tipo de decisiones concretas pasa más seguido y qué te preocupa que suceda si los dejas resolver por su cuenta?`;
       } else if (isDeliveryConfusion) {
         simplifiedQuestion = `Te lo pregunto de forma más clara y concreta, ${leaderName}: sobre los retrasos o la postura del colaborador en las entregas, ¿cuáles eran las fechas y compromisos exactos pactados y qué te respondió cuando hablaste con él?`;
       } else {
@@ -1523,10 +1904,13 @@ function generateDeterministicCoaching({
     'ya te respondi esa pregunta', 'ya te contesté eso', 'ya te conteste eso', 'repetitivo'
   ].some((t) => lowerMsg.includes(t));
 
-  // Extraer preguntas previas de Lidacta para evitar repetir
-  const prevLidactaTexts = (conversationHistory || [])
-    .filter((m: any) => m.sender === 'lidacta' || m.role === 'model')
-    .map((m: any) => (m.text || m.content || '').toLowerCase());
+  // Extraer preguntas previas de Lidacta para evitar repetir (respetando reseteo por corrección)
+  const prevLidactaTexts =
+    stage === 1 && stage1Context
+      ? stage1Context.effectivePrevLidactaTexts
+      : (conversationHistory || [])
+          .filter((m: any) => m.sender === 'lidacta' || m.role === 'model')
+          .map((m: any) => (m.text || m.content || '').toLowerCase());
 
   if (isQuestionRepetitionComplaint && stage === 1) {
     return {
@@ -1537,44 +1921,58 @@ function generateDeterministicCoaching({
     };
   }
 
-  if (stage === 1) {
+  if (stage === 1 && stage1Context) {
+    const effectiveLower = stage1Context.effectiveLower;
+    const rawAnchor = stage1Context.combinedRawForAnchor;
+    const justCorrectedWithContext =
+      stage1Context.currentCorrection.isCorrection &&
+      stage1Context.currentCorrection.hasSubstantiveNewContext;
+
     const isCrimeOrTheft = [
       'robo', 'robando', 'robaron', 'robó', 'robo de material', 'hurto', 'sustracción',
       'sustraccion', 'sustrajo', 'desvío de material', 'delito', 'fraude'
-    ].some((k) => lowerMsg.includes(k) || (sessionData?.initialChallenge && sessionData.initialChallenge.toLowerCase().includes(k)) || (sessionData?.title && sessionData.title.toLowerCase().includes(k)));
+    ].some((k) => effectiveLower.includes(k));
 
-    const isHierarchyOrBossConflict = !isCrimeOrTheft && [
-      'jefe', 'jefa', 'jefatura', 'director', 'directora', 'gerente', 'gerencia',
-      'falta de respeto', 'respeto', 'me gritó', 'me grito', 'descalificó', 'descalifico',
-      'humilló', 'humillo', 'maltrato', 'trato injusto', 'trato prepotente', 'prepotente',
-      'mi superior', 'liderazgo superior', 'abuso de autoridad'
-    ].some((k) => lowerMsg.includes(k) || (sessionData?.initialChallenge && sessionData.initialChallenge.toLowerCase().includes(k)) || (sessionData?.title && sessionData.title.toLowerCase().includes(k)));
+    const isHierarchyOrBossConflict =
+      !isCrimeOrTheft && detectHierarchyOrBossConflict(rawAnchor);
 
     const isDisciplinaryOrAbsenceCase = !isHierarchyOrBossConflict && !isCrimeOrTheft && [
       'vacacion', 'vacación', 'vacaciones', 'ausencia injustificada', 'ausencias injustificadas',
       'días sin permiso', 'dias sin permiso', 'sin autorizacion', 'sin autorización',
       'aviso por mensaje', 'avisó por mensaje', 'notifico por mensaje', 'notificó por mensaje',
       'no vino a trabajar', 'abandono de trabajo', 'abandono de puesto', 'faltar al trabajo'
-    ].some((k) => lowerMsg.includes(k) || (sessionData?.initialChallenge && sessionData.initialChallenge.toLowerCase().includes(k)) || (sessionData?.title && sessionData.title.toLowerCase().includes(k)));
+    ].some((k) => effectiveLower.includes(k));
 
     const isSalaryIssue = !isCrimeOrTheft && [
       'sueldo', 'salario', 'aumento', 'aumento salarial', 'dinero', 'remuneracion', 'remuneración',
       'compensacion', 'compensación', 'pagar', 'paga', 'exigiendo sueldo', 'pide aumento'
-    ].some((k) => lowerMsg.includes(k) || (sessionData?.initialChallenge && sessionData.initialChallenge.toLowerCase().includes(k)) || (sessionData?.title && sessionData.title.toLowerCase().includes(k)));
+    ].some((k) => effectiveLower.includes(k));
 
-    const isAttitudeOrDelivery = !isHierarchyOrBossConflict && !isCrimeOrTheft && [
-      'entrega', 'entregables', 'plazo', 'fecha limite', 'fecha límite', 'retraso', 'retrasos',
-      'no cumple', 'incumple', 'desempeño', 'calidad', 'actitud', 'defensiva', 'desmotivacion',
-      'desmotivación', 'resistencia', 'apatia', 'apatía', 'compromiso'
-    ].some((k) => lowerMsg.includes(k) || (sessionData?.initialChallenge && sessionData.initialChallenge.toLowerCase().includes(k)) || (sessionData?.title && sessionData.title.toLowerCase().includes(k)));
+    const isDelegationOrAutonomy =
+      !isCrimeOrTheft &&
+      !isHierarchyOrBossConflict &&
+      detectDelegationOrAutonomyCase(effectiveLower);
 
-    const isCleanHistory = !conversationHistory || conversationHistory.length === 0 || conversationHistory.every((m: any) => m.sender === 'leader' || m.role === 'user');
+    const isAttitudeOrDelivery =
+      !isHierarchyOrBossConflict &&
+      !isCrimeOrTheft &&
+      !isDelegationOrAutonomy &&
+      [
+        'entrega', 'entregables', 'plazo', 'fecha limite', 'fecha límite', 'retraso', 'retrasos',
+        'no cumple', 'incumple', 'desempeño', 'actitud', 'defensiva', 'desmotivacion',
+        'desmotivación', 'resistencia', 'apatia', 'apatía', 'compromiso'
+      ].some((k) => effectiveLower.includes(k));
 
-    // Turn 1 (historial limpio o inicio de acompañamiento): Responder directamente al mensaje del usuario sin plantillas ajenas ni eco robótico
+    const isCleanHistory = stage1Context.isCleanStage1History;
+    const ackPrefix = justCorrectedWithContext
+      ? `Disculpa la confusión anterior, ${leaderName}; gracias por aclararlo. `
+      : '';
+
+    // Turn 1 o re-enfoque inmediato tras corrección con contexto nuevo
     if (isCleanHistory) {
       if (isCrimeOrTheft) {
         return {
-          replyText: `Una situación que involucra robo de material o faltas a la integridad y legalidad en la empresa es un hecho de máxima gravedad que trasciende el manejo habitual de equipo, ${leaderName}.\n\nPara evaluar los hechos con rigor y evitar pasos en falso: ¿cuáles son las evidencias concretas con las que se cuenta hasta ahora, qué protocolos existen en la empresa con Recursos Humanos o Seguridad, y la persona involucrada ya fue confrontada directamente?`,
+          replyText: `${ackPrefix}Una situación que involucra robo de material o faltas a la integridad y legalidad en la empresa es un hecho de máxima gravedad que trasciende el manejo habitual de equipo, ${leaderName}.\n\nPara evaluar los hechos con rigor y evitar pasos en falso: ¿cuáles son las evidencias concretas con las que se cuenta hasta ahora, qué protocolos existen en la empresa con Recursos Humanos o Seguridad, y la persona involucrada ya fue confrontada directamente?`,
           readyToAdvance: false,
           advancePrompt: null,
           detectedTheme: 'Falta Grave y Protocolos Internos/Seguridad',
@@ -1583,7 +1981,7 @@ function generateDeterministicCoaching({
 
       if (isHierarchyOrBossConflict) {
         return {
-          replyText: `Que ocurra un abuso de autoridad o una falta de respeto de tu jefatura en público frente a otros colaboradores es una situación inaceptable que vulnera tu liderazgo y genera un desgaste severo, ${leaderName}.\n\nPara enfocar la situación con claridad estratégica: ¿cuál era el contexto de la junta o reunión cuando esto ocurrió, hubo alguna reacción de tu parte o del equipo en ese instante, y se trata de un comportamiento repetitivo del jefe o de un hecho aislado?`,
+          replyText: `${ackPrefix}Que ocurra un abuso de autoridad o una falta de respeto de tu jefatura en público frente a otros colaboradores es una situación inaceptable que vulnera tu liderazgo y genera un desgaste severo, ${leaderName}.\n\nPara enfocar la situación con claridad estratégica: ¿cuál era el contexto de la junta o reunión cuando esto ocurrió, hubo alguna reacción de tu parte o del equipo en ese instante, y se trata de un comportamiento repetitivo del jefe o de un hecho aislado?`,
           readyToAdvance: false,
           advancePrompt: null,
           detectedTheme: 'Falta de Respeto y Relación con Jefatura',
@@ -1592,7 +1990,7 @@ function generateDeterministicCoaching({
 
       if (isDisciplinaryOrAbsenceCase) {
         return {
-          replyText: `Que un colaborador se tome días sin autorización previa y solo lo notifique por mensaje es una falta grave a los acuerdos del equipo y a la disciplina operativa, ${leaderName}.\n\nPara dimensionar la gravedad y actuar con la firmeza debida: ¿qué impacto operativo inmediato está teniendo esto en la continuidad de las tareas del equipo, y existen políticas, precedentes o procesos disciplinarios claros en la empresa para atender un caso así?`,
+          replyText: `${ackPrefix}Que un colaborador se tome días sin autorización previa y solo lo notifique por mensaje es una falta grave a los acuerdos del equipo y a la disciplina operativa, ${leaderName}.\n\nPara dimensionar la gravedad y actuar con la firmeza debida: ¿qué impacto operativo inmediato está teniendo esto en la continuidad de las tareas del equipo, y existen políticas, precedentes o procesos disciplinarios claros en la empresa para atender un caso así?`,
           readyToAdvance: false,
           advancePrompt: null,
           detectedTheme: 'Falta Disciplinaria y Normativa',
@@ -1601,24 +1999,49 @@ function generateDeterministicCoaching({
 
       if (isSalaryIssue) {
         return {
-          replyText: `Que un colaborador condicione su permanencia o actitud exigiendo un incremento de sueldo inmediato genera una presión delicada sobre tu liderazgo y sobre la equidad interna del equipo, ${leaderName}.\n\nPara dimensionar el escenario completo: ¿qué expectativas puntuales ha puesto sobre la mesa, y qué políticas o márgenes de tabulador existen en la empresa para una revisión de este tipo?`,
+          replyText: `${ackPrefix}Que un colaborador condicione su permanencia o actitud exigiendo un incremento de sueldo inmediato genera una presión delicada sobre tu liderazgo y sobre la equidad interna del equipo, ${leaderName}.\n\nPara dimensionar el escenario completo: ¿qué expectativas puntuales ha puesto sobre la mesa, y qué políticas o márgenes de tabulador existen en la empresa para una revisión de este tipo?`,
           readyToAdvance: false,
           advancePrompt: null,
           detectedTheme: 'Exigencia Salarial y Equidad',
         };
       }
 
+      if (isDelegationOrAutonomy) {
+        const ackSelfContrib = /\b(contribuyo|intervengo|superviso|confiar|termino resolviendo|lo resuelvo)\b/i.test(
+          effectiveLower
+        );
+        const opener = ackSelfContrib
+          ? `${ackPrefix}Reconozco con claridad lo que planteas, ${leaderName}: como líder de tu equipo ves que dependen demasiado de ti para decidir y también notas cómo tu propia intervención constante alimenta ese ciclo.`
+          : `${ackPrefix}La dinámica en la que tu equipo depende de ti para decidir y terminas supervisando o resolviendo personalmente genera desgaste constante y frena su autonomía, ${leaderName}.`;
+        return {
+          replyText: `${opener}\n\nPara entender dónde se atora la delegación en el día a día: ¿en qué tipo de decisiones o tareas específicas te consultan con más frecuencia tus colaboradores, y qué es lo que más te genera desconfianza o te lleva a intervenir cuando delegas?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Delegación y Desarrollo de Autonomía',
+        };
+      }
+
       if (isAttitudeOrDelivery) {
         return {
-          replyText: `Que existan fallas recurrentes en las entregas y una postura a la defensiva desgasta la dinámica del equipo y compromete los resultados que debes entregar, ${leaderName}.\n\nPara basarnos en hechos concretos y verificables: ¿cuáles fueron los acuerdos y plazos específicos que pactaron para esa tarea, y qué conversación previa directa has tenido con la persona sobre este incumplimiento?`,
+          replyText: `${ackPrefix}Que existan fallas recurrentes en las entregas y una postura a la defensiva desgasta la dinámica del equipo y compromete los resultados que debes entregar, ${leaderName}.\n\nPara basarnos en hechos concretos y verificables: ¿cuáles fueron los acuerdos y plazos específicos que pactaron para esa tarea, y qué conversación previa directa has tenido con la persona sobre este incumplimiento?`,
           readyToAdvance: false,
           advancePrompt: null,
           detectedTheme: 'Acuerdos de Entrega y Desempeño',
         };
       }
 
+      const wordCount = effectiveLower.split(/\s+/).filter(Boolean).length;
+      if (wordCount < 12) {
+        return {
+          replyText: `${ackPrefix}Te escucho, ${leaderName}. Para comprender bien la situación sin hacer suposiciones: ¿qué está ocurriendo concretamente en este momento, quiénes participan y qué es lo que más te preocupa resolver?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Exploración Inicial Neutral',
+        };
+      }
+
       return {
-        replyText: `Comprendo la complejidad de la situación que estás enfrentando en tu área y el impacto que esto genera en tu liderazgo, ${leaderName}.\n\nPara profundizar en los hechos concretos y evitar suposiciones: ¿cómo se originó esta situación y qué hechos observables han ocurrido recientemente entre las personas involucradas?`,
+        replyText: `${ackPrefix}Comprendo la situación que estás enfrentando en tu área, ${leaderName}.\n\nPara profundizar en los hechos concretos y evitar suposiciones: ¿cómo se originó esta situación y qué conductas o hechos observables han ocurrido recientemente?`,
         readyToAdvance: false,
         advancePrompt: null,
         detectedTheme: 'Mapeo de Hechos',
@@ -1630,6 +2053,9 @@ function generateDeterministicCoaching({
     );
     const askedAgreementsOrPriorTalk = prevLidactaTexts.some((t: string) =>
       t.includes('acuerdos específicos') || t.includes('conversación previa') || t.includes('conversacion previa') || t.includes('compromisos pactados') || t.includes('en privado con tu jefe')
+    );
+    const askedDelegationImpact = prevLidactaTexts.some((t: string) =>
+      t.includes('qué consecuencias está teniendo esta dependencia') || t.includes('soltar una primera responsabilidad')
     );
 
     // 0. Caso Delito / Robo de material en turnos posteriores
@@ -1685,7 +2111,19 @@ function generateDeterministicCoaching({
       }
     }
 
-    // 3. Caso de Actitud o Entregas / Tareas
+    // 3. Caso de Delegación, Dependencia del Equipo y Autonomía
+    else if (isDelegationOrAutonomy) {
+      if (!askedDelegationImpact) {
+        return {
+          replyText: `Entiendo cómo se retroalimenta esa dinámica, ${leaderName}: mientras más intervienes para asegurar el resultado, menos espacio tiene tu equipo para desarrollar criterio propio.\n\nPara ubicar el impacto y el margen de cambio: ¿qué consecuencias está teniendo esta dependencia en tu carga diaria o en la autonomía del área, y qué nivel de aprendizaje o ajuste estarías dispuesta a permitir al soltar una primera responsabilidad?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Delegación y Desarrollo de Autonomía',
+        };
+      }
+    }
+
+    // 4. Caso de Actitud o Entregas / Tareas
     else if (isAttitudeOrDelivery) {
       if (!askedAgreementsOrPriorTalk) {
         return {
@@ -1706,7 +2144,7 @@ function generateDeterministicCoaching({
       }
     }
 
-    // 4. Caso Salarial / Compensación
+    // 5. Caso Salarial / Compensación
     else if (isSalaryIssue) {
       if (!askedImpactOrPolicies) {
         return {
@@ -1727,11 +2165,11 @@ function generateDeterministicCoaching({
       }
     }
 
-    // 5. Caso General
+    // 6. Caso General
     else {
-      if (!askedAgreementsOrPriorTalk) {
+      if (!askedAgreementsOrPriorTalk && !prevLidactaTexts.some((t: string) => t.includes('hechos observables'))) {
         return {
-          replyText: `Comprendo la situación que describes en tu equipo, ${leaderName}. Para enfocar los hechos observables y evitar interpretaciones: ¿cuáles han sido los acuerdos específicos previos entre ustedes sobre este tema y cuál ha sido la conducta directa de las personas involucradas?`,
+          replyText: `Comprendo lo que compartes sobre tu equipo, ${leaderName}. Para enfocar los hechos observables sin asumir intenciones: ¿qué acuerdos o expectativas existían previamente y qué has notado de forma concreta en las personas involucradas?`,
           readyToAdvance: false,
           advancePrompt: null,
           detectedTheme: 'Mapeo de Hechos',
@@ -1740,8 +2178,14 @@ function generateDeterministicCoaching({
     }
 
     const hasExploredInitialPilar = prevLidactaTexts.some((t: string) =>
-      t.includes('evidencias concretas') || t.includes('contexto de la junta') || t.includes('impacto operativo inmediato') ||
-      t.includes('expectativas puntuales') || t.includes('acuerdos y plazos específicos') || t.includes('te cuesta delegar')
+      t.includes('evidencias concretas') ||
+      t.includes('contexto de la junta') ||
+      t.includes('impacto operativo inmediato') ||
+      t.includes('expectativas puntuales') ||
+      t.includes('acuerdos y plazos específicos') ||
+      t.includes('se atora la delegación') ||
+      t.includes('qué consecuencias está teniendo esta dependencia') ||
+      t.includes('hechos observables')
     );
 
     // Si aún no se indaga sobre el impacto o antecedentes, continuar la conversación narrativa
@@ -1853,45 +2297,182 @@ function generateDeterministicCoaching({
   }
 
   if (stage === 3) {
-    const isInitial = !sessionData?.leaderAlternatives || sessionData.leaderAlternatives.length === 0;
+    const normalizedUserMsg = cleanConversationalText(userMessage || '');
+    const isEntryMarker = isStage3EntryMarker(normalizedUserMsg);
+
+    const historyArray = Array.isArray(conversationHistory) ? conversationHistory : [];
+    const hasNumericStages = historyArray.some((m: any) => typeof m?.stage === 'number');
+
+    const stage3History = hasNumericStages
+      ? historyArray.filter((m: any) => m?.stage === 3)
+      : (() => {
+          const openingIdx = historyArray.findIndex((m: any) => {
+            const isCoach = m?.sender === 'lidacta' || m?.role === 'model';
+            const txt = String(m?.text || m?.content || '').toLowerCase();
+            return (
+              isCoach &&
+              (txt.includes('para diseñar las posibles salidas') ||
+                txt.includes('alternativas o caminos de solución'))
+            );
+          });
+          return openingIdx >= 0 ? historyArray.slice(openingIdx) : [];
+        })();
+
+    const priorStage3LeaderTexts = stage3History
+      .filter((m: any) => m?.sender === 'leader' || m?.role === 'user')
+      .map((m: any) => cleanConversationalText(String(m?.text || m?.content || '')))
+      .filter((t: string) => Boolean(t) && !isStage3EntryMarker(t));
+
+    const savedAlternatives: string[] = Array.isArray(sessionData?.leaderAlternatives)
+      ? sessionData.leaderAlternatives
+          .map((a: any) => cleanConversationalText(String(a || '')))
+          .filter(Boolean)
+      : [];
+
+    const hasCurrentLeaderReply = !isEntryMarker && normalizedUserMsg.length > 0;
+    const isInitial =
+      !hasCurrentLeaderReply &&
+      priorStage3LeaderTexts.length === 0 &&
+      savedAlternatives.length === 0;
+
     if (isInitial) {
       return {
         replyText: `Para diseñar las posibles salidas, ${leaderName}, quiero escucharte a ti primero:\n\n¿Qué alternativas o caminos de solución visualizas tú para resolver esta problemática? Piensa en al menos 2 opciones (por ejemplo, una conversación directa de alineación, una revisión estructurada de acuerdos o un ajuste en la dinámica de seguimiento). ¿Qué se te ocurre?`,
         readyToAdvance: false,
       };
-    } else {
+    }
+
+    const currentLower = normalizedUserMsg.toLowerCase();
+    const currentAlternatives = hasCurrentLeaderReply
+      ? extractStage3AlternativesFromTexts([normalizedUserMsg])
+      : [];
+    const priorAlternatives = [
+      ...savedAlternatives,
+      ...extractStage3AlternativesFromTexts(priorStage3LeaderTexts),
+    ].filter((alt, idx, arr) => arr.findIndex((x) => x.toLowerCase() === alt.toLowerCase()) === idx);
+
+    const allKnownAlternatives = [...currentAlternatives, ...priorAlternatives]
+      .filter((alt, idx, arr) => arr.findIndex((x) => x.toLowerCase() === alt.toLowerCase()) === idx)
+      .slice(0, 4);
+
+    const expressesDoubt =
+      /(\bduda|\bdudas\b|\bno s[eé]\b|\bno estoy segur|\bme preocupa|\btengo miedo|\btemor|\bincertidumbre|\bme cuesta|\bconfundid|\binsegur|\bdefensiv|\brechazo|\bcomplicad|\bdif[ií]cil decidir|\bno me queda claro|\bindecis)/i.test(
+        currentLower
+      );
+
+    const requestsGuidance =
+      /(\bqu[eé] me recomiendas|\bqu[eé] sugieres|\bqu[eé] opinas|\bqu[eé] ves mejor|\bcu[aá]l conviene|\bcu[aá]l elegir|\bcu[aá]l es mejor|\bay[uú]dame|\borientaci[oó]n|\bgu[ií]a|\bconsejo|\bc[oó]mo combinar|\bcombinarlas|\bmezclarlas|\bintegrarlas|\bqu[eé] camino|\bqu[eé] har[ií]as|\bc[oó]mo ves|\bme orientas|\bqu[eé] me aconsejas)/i.test(
+        currentLower
+      ) || /\?/.test(normalizedUserMsg);
+
+    const exploresConsequencesOrObstacles =
+      /(\bconsecuencia|\bimpacto|\befecto|\bobst[aá]culo|\bbarrera|\bfreno|\bresistencia|\briesgo|\bdesventaja|\bcontra\b|\bsiguiente paso|\bpr[oó]ximo paso|\bc[oó]mo empezar|\bpor d[oó]nde empezar|\breacci[oó]n|\bqu[eé] pasar[ií]a|\bqu[eé] pasa si)/i.test(
+        currentLower
+      );
+
+    const explicitlySelectsPath =
+      !expressesDoubt &&
+      !requestsGuidance &&
+      !/\?/.test(normalizedUserMsg) &&
+      /(\bme quedo con\b|\belijo\b|\bselecciono\b|\bvamos con\b|\bme decido por\b|\bprefiero (?:la|esa|esta|ambas)\b|\bopt[oó] por\b|\btomar[eé] (?:la|esa)\b|\baplicar[eé] (?:la|esa|ambas|las dos)\b|\bhar[eé] (?:la|esa|las dos|ambas)\b|\bvoy a (?:aplicar|implementar|elegir|combinar|hacer)\b|\best[aá] decidido\b|\bya eleg[ií]\b|\bavancemos con esa\b|\bme parece mejor la\b)/i.test(
+        currentLower
+      );
+
+    const alternativesSummaryBlock =
+      allKnownAlternatives.length >= 2
+        ? allKnownAlternatives.map((alt, idx) => `${idx + 1}. ${alt}`).join('\n')
+        : allKnownAlternatives.length === 1
+        ? `• ${allKnownAlternatives[0]}`
+        : '';
+
+    // 1. El líder ya eligió/validó explícitamente una alternativa o combinación sin bloqueos ni dudas activas
+    if (explicitlySelectsPath && (allKnownAlternatives.length > 0 || priorStage3LeaderTexts.length > 0)) {
+      const selectedSnippet = normalizedUserMsg.slice(0, 180);
+      const contextLine =
+        allKnownAlternatives.length > 0
+          ? `Partiendo de las opciones que trabajaste:\n${alternativesSummaryBlock}\n\n`
+          : '';
+
       return {
-        replyText: `Muy bien planteado. Construyendo sobre tus ideas, te sugiero dos formas de fortalecer la alternativa elegida:\n\n1. Inicia la conversación validando los objetivos compartidos antes de señalar el desvío.\n2. Establece acuerdos observables con fechas de revisión específicas.\n\nRecuerda: **yo te sugiero estas estrategias, pero tú eres quien decide y conduce la acción.**\n\n¿Quieres que practiquemos esta conversación antes de que la lleves a la realidad en la Etapa 4 (simulación/roleplay), o prefieres pasar directo a estructurar tu plan de acción?`,
+        replyText: `Perfecto, ${leaderName}. Tomo nota clara de tu decisión: "${selectedSnippet}".\n\n${contextLine}Recuerda: **tú eres quien decide y conduce la acción**, y elegir con claridad ya te da una base concreta para avanzar.\n\nSi lo deseas, podemos pasar a la **Etapa 4 (simulación opcional)** para ensayar cómo plantearlo antes de llevarlo a la realidad, o avanzar directamente a estructurar tu Plan de Acción en la Etapa 5.`,
         readyToAdvance: true,
         advancePrompt: 'Ir a Etapa 4: Practicar antes de actuar (opcional)',
-        suggestedAlternatives: [
-          'Conversación 1 a 1 de alineación de expectativas y acuerdos mutuos',
-          'Retroalimentación enfocada en hechos observables con plan de seguimiento',
-        ],
-        recommendedResources: [
-          {
-            title: 'Protocolo de Conversación 1 a 1 con Personal de Mayor Antigüedad',
-            origin: 'internal',
-            category: 'Protocolo de Diálogo (Bloque 3)',
-            sourceOrAuthor: 'Biblioteca Interna Lidacta (Bloque 3)',
-            estimatedUtility: 'Muy Alta',
-            utilityReason: 'Estructura específica para establecer acuerdos con colaboradores veteranos reduciendo la fricción generacional.',
-            estimatedDifficulty: 'Media',
-            resistanceOrDoubtNotes: 'Resistencia anticipada por diferencia de edad; se modela el valor del respeto a su experiencia técnica.',
-          },
-          {
-            title: 'Radical Candor: Care Personally & Challenge Directly',
-            origin: 'external',
-            category: 'Marco de Liderazgo Directivo',
-            sourceOrAuthor: 'Kim Scott',
-            estimatedUtility: 'Alta',
-            utilityReason: 'Marco conceptual para mantener empatía humana genuina sin diluir la firmeza en la exigencia operativa.',
-            estimatedDifficulty: 'Media',
-            resistanceOrDoubtNotes: 'Temor del líder a parecer insensible o distante al señalar errores repetitivos.',
-          },
-        ],
+        ...(allKnownAlternatives.length > 0 ? { suggestedAlternatives: allKnownAlternatives } : {}),
+        recommendedResources: [],
       };
     }
+
+    // 2. El líder propuso alternativas (ahora o en turnos previos de Etapa 3) y además expresa dudas, pide orientación o explora consecuencias/obstáculos
+    if (
+      allKnownAlternatives.length > 0 &&
+      (expressesDoubt || requestsGuidance || exploresConsequencesOrObstacles)
+    ) {
+      const intro =
+        currentAlternatives.length > 0
+          ? `Gracias por compartir tus opciones, ${leaderName}. Veo claramente lo que estás poniendo sobre la mesa:`
+          : `Retomo las alternativas que ya planteaste en esta etapa, ${leaderName}:`;
+
+      const doubtOrFocusBlock = expressesDoubt
+        ? 'Es completamente válido tener reservas antes de actuar; observar ese riesgo desde ahora te ayuda a cuidar el manejo de la situación.'
+        : exploresConsequencesOrObstacles
+        ? 'Analizar de frente los posibles obstáculos y consecuencias te da mucha mayor precisión antes de dar el paso.'
+        : 'Con gusto te ayudo a contrastar tus opciones para que decidas con mayor claridad.';
+
+      const combinationHint =
+        allKnownAlternatives.length >= 2 &&
+        /(combinar|ambas|mezclar|integrar|cu[aá]l|recomiendas|opinas|conviene)/i.test(currentLower)
+          ? '\n• **Posible secuencia o combinación:** No siempre tienes que elegir una sola de forma excluyente; evalúa si una puede servir como primer paso de acercamiento y la otra como respaldo de seguimiento.'
+          : '';
+
+      const consequenceHint = exploresConsequencesOrObstacles
+        ? '\n• **Anticipación de obstáculos y reacción:** Identifica qué resistencia concreta podría surgir al aplicar la opción que te genera más duda y qué ajuste breve la reduciría desde el inicio.'
+        : '';
+
+      const closingQuestion =
+        allKnownAlternatives.length >= 2
+          ? 'Con base en estas opciones que tú propusiste, ¿qué consecuencia o reacción te pesa más en cada una, o ves viable iniciar con una y complementarla después con la otra?'
+          : 'Pensando en esa alternativa que propusiste, ¿qué obstáculo concreto ves en tu equipo o interlocutor y qué ajuste te ayudaría a sentirte más seguro para dar el primer paso?';
+
+      return {
+        replyText: `${intro}\n${alternativesSummaryBlock}\n\n${doubtOrFocusBlock}\n\nPara ayudarte a evaluar sin decidir por ti, revisa tus opciones bajo estos criterios:\n• **Cuidado del vínculo vs. urgencia operativa:** Qué opción reduce mejor la tensión o postura defensiva sin perder claridad en el resultado que necesitas.\n• **Control de ejecución:** Cuál depende más directamente de una acción tuya inmediata y qué reacción esperas de la otra parte.${combinationHint}${consequenceHint}\n\n${closingQuestion}`,
+        readyToAdvance: false,
+        suggestedAlternatives: allKnownAlternatives,
+        recommendedResources: [],
+      };
+    }
+
+    // 3. El líder propuso alternativas en este turno sin expresar dudas ni haber elegido todavía
+    if (currentAlternatives.length > 0) {
+      if (currentAlternatives.length === 1) {
+        return {
+          replyText: `Muy bien, ${leaderName}. Ya pusiste una primera alternativa concreta sobre la mesa:\n${alternativesSummaryBlock}\n\nPara tomar una mejor decisión, vale la pena contrastarla: ¿qué posible obstáculo o consecuencia ves en esta opción, y qué otra alternativa distinta podrías considerar (aunque sea más gradual o con otro enfoque) antes de elegir con cuál quedarte?`,
+          readyToAdvance: false,
+          suggestedAlternatives: allKnownAlternatives,
+          recommendedResources: [],
+        };
+      }
+
+      return {
+        replyText: `Muy bien planteado, ${leaderName}. Reconozco las alternativas concretas que acabas de proponer:\n${alternativesSummaryBlock}\n\nAntes de que elijas un camino, contrastémoslas brevemente:\n• **Viabilidad e impacto inmediato:** ¿Cuál atiende mejor el punto crítico del reto con menor desgaste?\n• **Posibles obstáculos o reacciones:** ¿Qué resistencia podría aparecer en cada opción y cómo la manejarías?\n• **Complementariedad:** ¿Te hace sentido elegir una como principal o combinarlas en secuencia?\n\n¿Cuál de estas alternativas te resulta más viable para avanzar, o qué duda te gustaría explorar sobre ellas?`,
+        readyToAdvance: false,
+        suggestedAlternatives: allKnownAlternatives,
+        recommendedResources: [],
+      };
+    }
+
+    // 4. El líder respondió con dudas, incertidumbre, pedido de orientación o exploración de consecuencias/pasos sin haber listado aún alternativas formales
+    const snippet = normalizedUserMsg.slice(0, 160);
+    const challengeHint =
+      sessionData?.initialChallenge &&
+      !/reto de liderazgo y gesti[oó]n de equipo/i.test(String(sessionData.initialChallenge))
+        ? ` respecto al reto que estás trabajando ("${String(sessionData.initialChallenge).slice(0, 110)}")`
+        : '';
+
+    return {
+      replyText: `Te escucho, ${leaderName}. Tomo muy en cuenta lo que compartes ("${snippet}")${challengeHint}.\n\nCuando hay dudas sobre cómo proceder, es mejor no forzar una decisión apresurada. Para destrabar el criterio juntos sin que yo decida por ti, miremos dos ángulos concretos:\n• **Qué necesitas proteger primero:** Si hoy pesa más frenar el impacto operativo inmediato o cuidar la apertura de la persona involucrada.\n• **Riesgo vs. siguiente paso mínimo:** Qué obstáculo o reacción te preocupa evitar y qué acción pequeña de bajo riesgo te daría información real.\n\nDe lo que te genera duda en este momento, ¿qué consecuencia es la que más te preocupa o qué primer paso tentativo ves más manejable?`,
+      readyToAdvance: false,
+      recommendedResources: [],
+    };
   }
 
   if (stage === 4) {
@@ -1943,24 +2524,82 @@ function generateDeterministicCoaching({
   }
 
   if (stage === 6) {
+    const executionStatus = sessionData?.actionPlanExecutionStatus;
+    const planWhat = sessionData?.actionPlan?.what?.trim();
+    const lowerUserMsg = (userMessage || '').toLowerCase();
+    const mentionsPartial = [
+      'parte',
+      'parcial',
+      'solo alcancé',
+      'solo alcance',
+      'solo pude',
+      'a medias',
+      'avancé algo',
+      'avance algo',
+      'me faltó',
+      'me falto',
+      'todavía falta',
+      'todavia falta',
+    ].some((k) => lowerUserMsg.includes(k));
+
+    if (executionStatus === 'not_executed') {
+      if (mentionsPartial) {
+        return {
+          replyText: `Gracias por compartirlo con claridad, ${leaderName}. Valoro lo que sí lograste avanzar hasta ahora${
+            planWhat ? ` respecto a tu compromiso ("${planWhat}")` : ''
+          }. Para acompañarte sin presiones: ¿qué parte concreta ya se realizó, qué quedó pendiente y qué obstáculo o ajuste necesitas considerar para tu siguiente paso?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          learningsSummary: '',
+          recommendedResources: [],
+        };
+      }
+
+      return {
+        replyText: `Gracias por compartirlo con total honestidad, ${leaderName}; este espacio es para acompañarte sin juicios. Respecto al compromiso que definiste en la Etapa 5${
+          planWhat ? ` ("${planWhat}")` : ''
+        }, ¿qué obstáculos o circunstancias se presentaron que impidieron llevarlo a cabo, o lograste avanzar en alguna parte? Conversemos para ver cómo ajustarlo y definir tu siguiente paso.`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        learningsSummary: '',
+        recommendedResources: [],
+      };
+    }
+
+    if (executionStatus === 'pending_verification') {
+      return {
+        replyText: `Antes de entrar a la reflexión de la Etapa 6${
+          planWhat ? ` sobre tu compromiso ("${planWhat}")` : ''
+        }, quiero verificar contigo: ¿ya ejecutaste tu Plan de Acción?`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        learningsSummary: '',
+        recommendedResources: [],
+      };
+    }
+
+    if (mentionsPartial) {
+      return {
+        replyText: `Gracias por precisarlo, ${leaderName}. Es muy valioso distinguir lo que ya ejecutaste${
+          planWhat ? ` de tu plan ("${planWhat}")` : ''
+        } frente a lo que aún sigue pendiente. Sobre la parte que sí lograste realizar: ¿qué ocurrió concretamente, qué observaste en la otra persona o tu equipo en ${company}, y qué necesitarías para abordar lo pendiente?`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        learningsSummary: '',
+        recommendedResources: [],
+      };
+    }
+
     return {
-      replyText: `¡Qué gran paso, ${leaderName}! La acción es donde se forja el verdadero liderazgo.\n\nAhora reflexionemos con calma para consolidar tu crecimiento:\n• ¿Qué ocurrió durante la interacción?\n• ¿Qué funcionó de acuerdo a lo previsto y qué imprevistos surgieron?\n• ¿De qué te diste cuenta sobre ti mismo/a y tu equipo?\n• ¿Qué aprendizaje te llevas para situaciones futuras en ${company}?`,
-      readyToAdvance: true,
-      advancePrompt: 'Avanzar a Etapa 7: Cierre y Reporte de Retroalimentación',
-      learningsSummary:
-        'El líder identificó que anticipar la conversación con acuerdos observables redujo la fricción y fortaleció el compromiso mutuo.',
-      recommendedResources: [
-        {
-          title: 'Rúbrica de Empoderamiento y Nivel de Autonomía de Supervisores',
-          origin: 'internal',
-          category: 'Rúbrica Formativa (Bloque 3)',
-          sourceOrAuthor: 'Biblioteca Interna Lidacta (Bloque 3)',
-          estimatedUtility: 'Muy Alta',
-          utilityReason: 'Instrumento para medir el avance del colaborador hacia la resolución autónoma de problemas sin depender del líder.',
-          estimatedDifficulty: 'Media',
-          resistanceOrDoubtNotes: 'Duda sobre cuándo soltar la supervisión directa; la rúbrica ofrece criterios objetivos por nivel.',
-        },
-      ],
+      replyText: `${
+        planWhat
+          ? `Tomando en cuenta tu compromiso de la Etapa 5 ("${planWhat}"), reflexionemos con calma sobre lo que viviste, ${leaderName}:`
+          : `Para reflexionar a partir de tu experiencia real en ${company}, ${leaderName}:`
+      }\n• ¿Qué ocurrió concretamente al llevarlo a la práctica?\n• ¿Qué funcionó bien y qué imprevistos o matices surgieron?\n• ¿De qué te das cuenta sobre ti y qué aprendizaje te llevas para futuras situaciones?`,
+      readyToAdvance: false,
+      advancePrompt: null,
+      learningsSummary: '',
+      recommendedResources: [],
     };
   }
 
@@ -3431,6 +4070,17 @@ app.post('/api/notifications/status', (req: Request, res: Response) => {
 // POST /api/send - Dedicated Resend email dispatch route
 app.post('/api/send', async (req: Request, res: Response) => {
   try {
+    const qaCheck = isQaRequestPayload(req.body);
+    if (qaCheck.isQa) {
+      console.warn(`[API /api/send] 🛡️ Solicitud bloqueada por aislamiento QA (${qaCheck.reason}).`);
+      return res.status(403).json({
+        success: false,
+        blockedByQa: true,
+        error: QA_MENTOR_REQUEST_BLOCKED_MESSAGE,
+        message: 'Solicitud bloqueada por aislamiento de sesiones QA: no se envían correos reales ni se registran notificaciones.',
+      });
+    }
+
     const {
       leaderName,
       message,
@@ -3625,6 +4275,17 @@ app.post('/api/send', async (req: Request, res: Response) => {
 // POST /api/mentor/request - Multichannel notifications for human mentor requests (Real Email + Centralized DB)
 app.post('/api/mentor/request', async (req: Request, res: Response) => {
   try {
+    const qaCheck = isQaRequestPayload(req.body);
+    if (qaCheck.isQa) {
+      console.warn(`[API /api/mentor/request] 🛡️ Solicitud bloqueada por aislamiento QA (${qaCheck.reason}).`);
+      return res.status(403).json({
+        success: false,
+        blockedByQa: true,
+        error: QA_MENTOR_REQUEST_BLOCKED_MESSAGE,
+        message: 'Solicitud bloqueada por aislamiento de sesiones QA: no se envían correos reales ni se registran notificaciones.',
+      });
+    }
+
     const {
       leaderId,
       leaderName,
@@ -3990,4 +4651,12 @@ async function startServer() {
   });
 }
 
-startServer();
+const isMainModule =
+  Boolean(process.argv[1]) &&
+  path.resolve(process.argv[1]) === path.resolve(__filename);
+
+if (isMainModule) {
+  startServer();
+}
+
+export { app };

@@ -318,7 +318,7 @@ function extractDiagnosticVariables(
   };
 }
 
-function generateContextualCoachReply(
+export function generateContextualCoachReply(
   stage: number,
   leaderName: string,
   userMsg: string,
@@ -743,10 +743,79 @@ function generateContextualCoachReply(
   }
 
   if (stage === 6) {
+    const executionStatus = sessionContext?.actionPlanExecutionStatus;
+    const planWhat = sessionContext?.actionPlan?.what?.trim();
+    const mentionsPartial = [
+      'parte',
+      'parcial',
+      'solo alcancé',
+      'solo alcance',
+      'solo pude',
+      'a medias',
+      'avancé algo',
+      'avance algo',
+      'me faltó',
+      'me falto',
+      'todavía falta',
+      'todavia falta',
+    ].some((k) => lowerMsg.includes(k));
+
+    if (executionStatus === 'not_executed') {
+      if (mentionsPartial) {
+        return {
+          replyText: `Gracias por compartirlo con claridad, ${leaderName}. Valoro mucho lo que sí lograste avanzar hasta ahora${
+            planWhat ? ` respecto a tu compromiso ("${planWhat}")` : ''
+          }. Para acompañarte sin presiones: ¿qué parte concreta ya se llevó a cabo, qué quedó pendiente y qué obstáculo o ajuste necesitas considerar para tu siguiente paso?`,
+          readyToAdvance: false,
+          advancePrompt: null,
+          detectedTheme: 'Acompañamiento sobre Plan Pendiente (Avance Parcial)',
+          isTherapeuticCase: false,
+        };
+      }
+
+      return {
+        replyText: `Gracias por compartirlo con honestidad, ${leaderName}; este espacio es para acompañarte sin juicios. Respecto al compromiso que definiste en la Etapa 5${
+          planWhat ? ` ("${planWhat}")` : ''
+        }, ¿qué obstáculos o circunstancias se presentaron que impidieron llevarlo a cabo, o hubo alguna parte en la que sí lograste avanzar? Conversemos para ver qué ajustar y definir tu siguiente paso.`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        detectedTheme: 'Acompañamiento sobre Plan Pendiente',
+        isTherapeuticCase: false,
+      };
+    }
+
+    if (executionStatus === 'pending_verification') {
+      return {
+        replyText: `Antes de entrar a la reflexión de la Etapa 6${
+          planWhat ? ` sobre tu compromiso ("${planWhat}")` : ''
+        }, quiero confirmar contigo: ¿ya ejecutaste tu Plan de Acción?`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        detectedTheme: 'Verificación de Ejecución del Plan',
+        isTherapeuticCase: false,
+      };
+    }
+
+    if (mentionsPartial) {
+      return {
+        replyText: `Gracias por precisarlo, ${leaderName}. Es muy valioso distinguir lo que ya ejecutaste${
+          planWhat ? ` de tu plan ("${planWhat}")` : ''
+        } frente a lo que aún sigue pendiente. Sobre la parte que sí lograste realizar: ¿qué ocurrió concretamente, qué observaste en la otra persona o el equipo, y qué necesitarías para abordar la parte restante?`,
+        readyToAdvance: false,
+        advancePrompt: null,
+        detectedTheme: 'Reflexión sobre Ejecución Parcial',
+        isTherapeuticCase: false,
+      };
+    }
+
     return {
-      replyText: `Al revisar lo ocurrido tras ejecutar la acción: ¿qué funcionó según lo previsto, qué te sorprendió y qué aprendizaje te llevas sobre tu estilo de liderazgo?`,
-      readyToAdvance: true,
-      advancePrompt: 'Avanzar a Etapa 7: Cierre y retroalimentación',
+      replyText: `${
+        planWhat
+          ? `Tomando en cuenta tu compromiso de la Etapa 5 ("${planWhat}"), reflexionemos sobre tu experiencia real, ${leaderName}:`
+          : `Para reflexionar a partir de tu experiencia real, ${leaderName}:`
+      } ¿qué ocurrió concretamente al llevarlo a la práctica, qué funcionó bien y qué aprendizaje te llevas sobre tu liderazgo?`,
+      readyToAdvance: false,
+      advancePrompt: null,
       detectedTheme: 'Aprendizaje y Reflexión',
       isTherapeuticCase: false,
     };
@@ -939,6 +1008,8 @@ export default async function handler(req: any, res: any) {
       currentStage: currentStageNum,
       identifiedSkills: existingSessionSkills,
       skillEntries: existingSessionSkillEntries,
+      actionPlan: sessionData?.actionPlan || null,
+      actionPlanExecutionStatus: sessionData?.actionPlanExecutionStatus || null,
     };
 
     const apiKey =
@@ -1029,6 +1100,18 @@ ETAPA 3: DISEÑAR ALTERNATIVAS
 ETAPA 4: PRACTICAR ANTES DE ACTUAR (OPCIONAL)
 - Ofrece simular la conversación o brindar una herramienta si aporta valor al caso. La práctica es opcional: si el líder practica, utiliza su comportamiento en el ejercicio como evidencia de simulación para confirmar, precisar, descartar o sustituir habilidades en "identifiedSkills" (con su evidenceText de la simulación) o "skillsReconsideration"; si la omite, conserva intactas las habilidades previas.
 
+ETAPA 6: APRENDER Y REFLEXIONAR
+- Primera interacción: verifica "¿Ya ejecutaste tu Plan de Acción?" (Sí / No).
+- Si actionPlanExecutionStatus === "executed" (el líder respondió Sí):
+  * Recupera el Plan de Acción real de la Etapa 5 (actionPlan.what, when, withWhom, how, careReminders) para contextualizar la reflexión.
+  * Haz preguntas de reflexión sobre resultados reales, qué funcionó y qué aprendió, SIN asumir resultados que el líder no haya compartido.
+- Si actionPlanExecutionStatus === "not_executed" (el líder respondió No):
+  * Abre una conversación empática, respetuosa y SIN juicios ni reproches para entender qué ocurrió, explorar los obstáculos o circunstancias que impidieron ejecutarlo y ayudar a identificar cómo continuar, qué ajustar y un siguiente paso realista.
+  * PROHIBIDO formular preguntas dando por hecho que la acción ya ocurrió (ej. nunca preguntar "¿qué ocurrió después de tu acción?" o "¿cómo reaccionó la persona tras aplicarlo?").
+  * PROHIBIDO inventar o registrar aprendizajes, resultados o avances de ejecución que no ocurrieron.
+- Ejecución parcial en el diálogo: si el líder explica que solo ejecutó una parte de su Plan de Acción, reconócelo explícitamente y distingue con claridad lo ya ejecutado de lo que queda pendiente.
+- La verificación de ejecución NO debe bloquear al líder para continuar su proceso de acompañamiento.
+
 ETAPAS 1, 5 y 6: NO deben generar, agregar, modificar, descartar ni sustituir habilidades. En el JSON identifiedSkills DEBE ser siempre [] y no emitir skillsReconsideration.
 
 ETAPA 7: CIERRE Y RETROALIMENTACIÓN
@@ -1053,6 +1136,8 @@ Contexto de la sesión:
 - Caso / Reto actual: ${activeCaseTitle || 'Caso actual'}
 - Reto inicial: ${activeCaseChallenge || resolvedUserMessage || ''}
 - Habilidades ya identificadas en la sesión: ${existingSessionSkills.join(', ') || 'Ninguna aún'}
+- Plan de Acción (Etapa 5): ${sessionData?.actionPlan?.what ? `${sessionData.actionPlan.what}${sessionData.actionPlan.when ? ` | Cuándo: ${sessionData.actionPlan.when}` : ''}${sessionData.actionPlan.withWhom ? ` | Con quién: ${sessionData.actionPlan.withWhom}` : ''}` : 'No registrado aún'}
+- Estado de ejecución del Plan de Acción (Etapa 6): ${sessionData?.actionPlanExecutionStatus || 'Sin verificar'}
 
 CRITERIOS ESTRICTOS PARA EL CAMPO "readyToAdvance":
 - En Etapa 1: Debe ser true ÚNICAMENTE cuando ya se haya entregado previamente la síntesis con las 3 viñetas (**Hechos y situación**, **Dilema del líder**, **Impacto y reto principal**) Y el mensaje actual del líder confirme o valide dicha síntesis (ej. "de acuerdo", "sí", "si estoy lista", "totalmente", "correcto"). Si el líder corrige, pregunta, duda o aporta nuevos datos, DEBE ser false.

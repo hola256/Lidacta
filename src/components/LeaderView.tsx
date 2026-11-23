@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLidacta } from '../context/LidactaContext';
+import { useLidacta, resolveStage6ExecutionStatus } from '../context/LidactaContext';
 import {
   StageNumber,
   MentorshipSession,
@@ -13,6 +13,7 @@ import {
 } from '../utils/speechUtils';
 import { getStageTriggerQuestion as getSharedStageTriggerQuestion } from '../utils/stageQuestions';
 import { INSUFFICIENT_STRENGTHS_MESSAGE } from '../utils/skillsConsolidator';
+import { QA_TEST_LEADER_ID } from '../utils/testSessionFixtures';
 import {
   Compass,
   Send,
@@ -47,6 +48,8 @@ import {
   Save,
   MessageSquare,
   Mail,
+  FlaskConical,
+  Trash2,
 } from 'lucide-react';
 import { NewMentorshipModal } from './NewMentorshipModal';
 import { WhatsAppVoiceRecorder } from './WhatsAppVoiceRecorder';
@@ -262,15 +265,22 @@ export const LeaderView: React.FC = () => {
     advanceStage,
     setStageReadyToAdvance,
     updateActionPlan,
-    markActionCompleted,
+    respondStage6ExecutionCheck,
     saveLearnings,
     isSendingMessage,
     showToast,
     retrySendFinalReportEmail,
+    isImpersonating,
+    deleteTestSession,
   } = useLidacta();
 
-  // Filter mentorships for this leader
-  const leaderMentorships = mentorships.filter((m) => m.leaderId === currentUser.id);
+  // Filter mentorships for this leader (QA sessions strictly isolated to QA Inspector profile)
+  const isQaProfile = isImpersonating && currentUser.id === QA_TEST_LEADER_ID;
+  const leaderMentorships = mentorships.filter((m) =>
+    isQaProfile
+      ? m.leaderId === QA_TEST_LEADER_ID && Boolean(m.isTestSession)
+      : m.leaderId === currentUser.id && !m.isTestSession
+  );
 
   const [filterTab, setFilterTab] = useState<'all' | 'active' | 'completed'>('all');
   const [inputText, setInputText] = useState('');
@@ -290,6 +300,7 @@ export const LeaderView: React.FC = () => {
   const [onboardingSpeechRecognizer, setOnboardingSpeechRecognizer] = useState<{ start: () => void; stop: () => void } | null>(null);
   const onboardingBaseTextRef = useRef<string>('');
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const stage4TextareaRef = useRef<HTMLTextAreaElement>(null);
   const [newChallengePriority, setNewChallengePriority] = useState<'alta' | 'media' | 'baja'>('media');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [mobileHomeTab, setMobileHomeTab] = useState<'prompt' | 'list'>('prompt');
@@ -369,8 +380,20 @@ export const LeaderView: React.FC = () => {
     7: false,
   });
 
-  // Todas las etapas inician cerradas / colapsadas por defecto al cargar o seleccionar caso
+  // Todas las etapas inician cerradas en sesiones reales; en sesiones QA se abre automáticamente la etapa objetivo
   useEffect(() => {
+    if (activeMentorship?.isTestSession) {
+      setOpenStages({
+        1: activeMentorship.currentStage === 1,
+        2: activeMentorship.currentStage === 2,
+        3: activeMentorship.currentStage === 3,
+        4: activeMentorship.currentStage === 4,
+        5: activeMentorship.currentStage === 5,
+        6: activeMentorship.currentStage === 6,
+        7: activeMentorship.currentStage === 7,
+      });
+      return;
+    }
     setOpenStages({
       1: false,
       2: false,
@@ -790,7 +813,6 @@ export const LeaderView: React.FC = () => {
       return;
     }
     handleSaveActionPlan(true);
-    markActionCompleted();
     advanceStage(6);
     showToast('¡Compromiso registrado! Avanzando a Etapa 6: Aprender y reflexionar.', 'success');
   };
@@ -1005,6 +1027,11 @@ export const LeaderView: React.FC = () => {
                           >
                             {m.status === 'completed' ? 'Concluido' : `Etapa ${m.currentStage}`}
                           </span>
+                          {m.isTestSession && (
+                            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider bg-[#2D1B4E] text-[#F7B538]">
+                              PRUEBA QA
+                            </span>
+                          )}
                           {m.priority && (
                             <span
                               className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
@@ -1019,9 +1046,24 @@ export const LeaderView: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] text-[#4A3F55]/60">
-                          {new Date(m.startedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-[#4A3F55]/60">
+                            {new Date(m.startedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                          </span>
+                          {m.isTestSession && isImpersonating && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteTestSession(m.id);
+                              }}
+                              title="Eliminar esta sesión de prueba QA"
+                              className="p-1 text-[#4A3F55]/60 hover:text-red-600 rounded transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <h3 className="text-xs font-bold text-[#2D1B4E] line-clamp-2 leading-snug">
                         {m.title}
@@ -1133,6 +1175,11 @@ export const LeaderView: React.FC = () => {
                       >
                         {m.status === 'completed' ? 'Concluido' : `Etapa ${m.currentStage}`}
                       </span>
+                      {m.isTestSession && (
+                        <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider bg-[#2D1B4E] text-[#F7B538]">
+                          PRUEBA QA
+                        </span>
+                      )}
                       {m.priority && (
                         <span
                           className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
@@ -1147,9 +1194,24 @@ export const LeaderView: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <span className="text-[10px] text-[#4A3F55]/60">
-                      {new Date(m.startedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-[#4A3F55]/60">
+                        {new Date(m.startedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                      </span>
+                      {m.isTestSession && isImpersonating && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteTestSession(m.id);
+                          }}
+                          title="Eliminar esta sesión de prueba QA"
+                          className="p-1 text-[#4A3F55]/60 hover:text-red-600 rounded transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <h3 className="text-xs font-bold text-[#2D1B4E] line-clamp-2 leading-snug">
@@ -1249,6 +1311,11 @@ export const LeaderView: React.FC = () => {
                           >
                             {m.status === 'completed' ? 'Concluido' : `Etapa ${m.currentStage}`}
                           </span>
+                          {m.isTestSession && (
+                            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider bg-[#2D1B4E] text-[#F7B538]">
+                              PRUEBA QA
+                            </span>
+                          )}
                           {m.priority && (
                             <span
                               className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
@@ -1263,9 +1330,24 @@ export const LeaderView: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] text-[#4A3F55]/60">
-                          {new Date(m.startedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-[#4A3F55]/60">
+                            {new Date(m.startedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                          </span>
+                          {m.isTestSession && isImpersonating && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteTestSession(m.id);
+                              }}
+                              title="Eliminar esta sesión de prueba QA"
+                              className="p-1 text-[#4A3F55]/60 hover:text-red-600 rounded transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <h3 className="font-heading font-bold text-sm text-[#2D1B4E]">
                         {m.title}
@@ -1497,6 +1579,12 @@ export const LeaderView: React.FC = () => {
                 <div>
                   <h3 className="font-heading font-extrabold text-sm sm:text-base text-[#2D1B4E] flex items-center gap-2 flex-wrap">
                     <span>Mentoría - {activeMentorship.title}</span>
+                    {activeMentorship.isTestSession && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#2D1B4E] text-[#F7B538]">
+                        <FlaskConical className="w-3 h-3" />
+                        <span>SESIÓN DE PRUEBA QA · SIN EFECTOS REALES</span>
+                      </span>
+                    )}
                     <span
                       className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
                         activeMentorship.status === 'completed' ||
@@ -1516,6 +1604,17 @@ export const LeaderView: React.FC = () => {
                         ? 'Proceso Concluido'
                         : `Etapa activa: ${activeMentorship.currentStage} de 7`}
                     </span>
+                    {activeMentorship.isTestSession && isImpersonating && (
+                      <button
+                        type="button"
+                        onClick={() => deleteTestSession(activeMentorship.id)}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 cursor-pointer transition-colors"
+                        title="Eliminar esta sesión de prueba QA"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Eliminar prueba</span>
+                      </button>
+                    )}
                   </h3>
                   <p className="text-xs text-[#4A3F55]/80 mt-0.5">
                     Toca cualquier etapa para desplegar o comprimir su contenido, herramientas e historial.
@@ -1950,29 +2049,17 @@ export const LeaderView: React.FC = () => {
                                       </div>
                                     )}
 
-                                    {/* Estado 2: Simulación activa (exclusivamente banner activo + espacio de diálogo; sin tarjeta de avance ni botón de completar) */}
+                                    {/* Estado 2: Simulación activa (exclusivamente banner activo + espacio de diálogo + 2 acciones explícitas) */}
                                     {isStage4Simulating && (
                                       <div className="space-y-3 animate-in fade-in duration-200">
                                         <div className="p-3.5 sm:p-4 bg-white border border-[#BF3A1B]/30 rounded-2xl shadow-xs space-y-2">
-                                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                            <div className="flex items-center gap-2">
-                                              <div className="w-6 h-6 rounded-lg bg-[#FFD3BF] text-[#BF3A1B] flex items-center justify-center font-bold text-xs shrink-0">
-                                                🎭
-                                              </div>
-                                              <h4 className="font-heading font-bold text-xs sm:text-sm text-[#2D1B4E]">
-                                                Simulación de conversación activa
-                                              </h4>
+                                          <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-lg bg-[#FFD3BF] text-[#BF3A1B] flex items-center justify-center font-bold text-xs shrink-0">
+                                              🎭
                                             </div>
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                setStageReadyToAdvance(4);
-                                                setIsPracticingStage4(false);
-                                              }}
-                                              className="text-xs text-[#4A3F55] hover:text-[#BF3A1B] font-medium underline cursor-pointer text-left sm:text-right"
-                                            >
-                                              Concluir práctica y pasar a Actuar (Plan de Acción) →
-                                            </button>
+                                            <h4 className="font-heading font-bold text-xs sm:text-sm text-[#2D1B4E]">
+                                              Simulación de conversación activa
+                                            </h4>
                                           </div>
                                           <p className="text-xs text-[#4A3F55]/85 leading-relaxed">
                                             Responde como si estuvieras conversando con la otra persona. Lidacta te responderá en el rol y te retroalimentará.
@@ -1993,6 +2080,7 @@ export const LeaderView: React.FC = () => {
                                           </div>
 
                                           <textarea
+                                            ref={stage4TextareaRef}
                                             value={stageInputText}
                                             onChange={(e) => {
                                               setStageInputText(e.target.value);
@@ -2040,6 +2128,45 @@ export const LeaderView: React.FC = () => {
                                               )}
                                             </button>
                                           </div>
+
+                                          {/* Opciones claras para continuar practicando o concluir y avanzar a Etapa 5 */}
+                                          <div className="pt-3 border-t border-[#493447]/10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                                            <button
+                                              type="button"
+                                              disabled={isSendingMessage || isAdvancingStage}
+                                              onClick={() => {
+                                                setStageReadyToAdvance(null);
+                                                setIsPracticingStage4(true);
+                                                setTimeout(() => stage4TextareaRef.current?.focus(), 0);
+                                              }}
+                                              className="min-h-[44px] flex items-center justify-center gap-2 px-4 py-2.5 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 text-[#2D1B4E] border border-[#BF3A1B]/30 font-heading font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                                            >
+                                              <span>Seguir practicando</span>
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              disabled={isSendingMessage || isAdvancingStage}
+                                              onClick={async () => {
+                                                setIsAdvancingStage(true);
+                                                setStageReadyToAdvance(4);
+                                                setIsPracticingStage4(false);
+                                                await advanceStage(5);
+                                                setIsAdvancingStage(false);
+                                                setOpenStages((prev) => ({ ...prev, 4: false, 5: true }));
+                                              }}
+                                              className="min-h-[44px] flex items-center justify-center gap-2 px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2666] text-[#F7B538] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                                            >
+                                              {isAdvancingStage ? (
+                                                <span>Avanzando a Etapa 5...</span>
+                                              ) : (
+                                                <>
+                                                  <span>Avanzar a la siguiente etapa</span>
+                                                  <ArrowRight className="w-4 h-4 text-[#F7B538]" />
+                                                </>
+                                              )}
+                                            </button>
+                                          </div>
                                         </div>
                                       </div>
                                     )}
@@ -2057,7 +2184,7 @@ export const LeaderView: React.FC = () => {
                                                 Objetivo de la {meta.name} completado
                                               </h4>
                                               <p className="text-xs text-[#4A3F55]/85 mt-0.5 leading-relaxed">
-                                                Has concluido la preparación de esta etapa. Tienes el camino listo para definir tu plan de acción.
+                                                Has concluido la preparación de esta etapa. Tienes el camino listo para definir tu plan de acción en la Etapa 5.
                                               </p>
                                             </div>
                                           </div>
@@ -2069,10 +2196,23 @@ export const LeaderView: React.FC = () => {
 
                                         <div className="p-3 bg-[#FFF7EF] border border-[#F7B538]/30 rounded-xl text-xs text-[#2D1B4E] flex items-center gap-2">
                                           <Clock className="w-4 h-4 text-[#BF3A1B] shrink-0" />
-                                          <span>El avance es exclusivamente manual. Confirma cuando desees dar el siguiente paso en tu acompañamiento.</span>
+                                          <span>El avance es exclusivamente manual. Confirma cuando desees ir a la Etapa 5 – Plan de Acción.</span>
                                         </div>
 
                                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1 border-t border-[#493447]/10">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setStageReadyToAdvance(null);
+                                              setIsPracticingStage4(true);
+                                            }}
+                                            className="min-h-[44px] flex items-center justify-center gap-2 px-4 py-2.5 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 text-[#2D1B4E] border border-[#BF3A1B]/30 font-heading font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer active:scale-95"
+                                          >
+                                            {hasStage4LeaderMessage
+                                              ? 'Seguir practicando'
+                                              : 'Deseo realizar una simulación antes de continuar'}
+                                          </button>
+
                                           <button
                                             type="button"
                                             disabled={isAdvancingStage}
@@ -2088,21 +2228,10 @@ export const LeaderView: React.FC = () => {
                                               <span>Avanzando a Etapa 5: Actuar...</span>
                                             ) : (
                                               <>
-                                                <span>Completar {meta.name} y continuar a {STAGE_META[5]?.name}</span>
+                                                <span>Avanzar a la siguiente etapa</span>
                                                 <ArrowRight className="w-4 h-4 text-[#F7B538]" />
                                               </>
                                             )}
-                                          </button>
-
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setStageReadyToAdvance(null);
-                                              setIsPracticingStage4(true);
-                                            }}
-                                            className="text-xs text-[#BF3A1B] hover:text-[#9e2f15] font-semibold underline cursor-pointer text-center sm:text-right py-1 transition-colors"
-                                          >
-                                            Deseo realizar una simulación antes de continuar
                                           </button>
                                         </div>
                                       </div>
@@ -2497,153 +2626,334 @@ export const LeaderView: React.FC = () => {
                             </>
                           )}
 
-                          {/* Stage 6: Learnings & Reflections */}
-                          {st === 6 && (
-                            <div className="p-4 sm:p-5 bg-white border border-[#493447]/15 rounded-2xl shadow-sm space-y-4">
-                              <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <div className="flex items-center gap-2">
-                                  <BookOpen className="w-4 h-4 text-[#BF3A1B] shrink-0" />
-                                  <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
-                                    Etapa 6: Aprender y reflexionar
-                                  </h4>
+                          {/* Stage 6: Verificación de Ejecución del Plan de Acción + Reflexión / Acompañamiento */}
+                          {st === 6 && !isPending && (() => {
+                            const stage6ExecutionStatus = resolveStage6ExecutionStatus(activeMentorship);
+                            const stage5Plan = activeMentorship.actionPlan;
+                            const hasStage5PlanSummary = Boolean(
+                              stage5Plan?.what?.trim() ||
+                              stage5Plan?.when?.trim() ||
+                              stage5Plan?.withWhom?.trim()
+                            );
+
+                            return (
+                              <div className="p-4 sm:p-5 bg-white border border-[#493447]/15 rounded-2xl shadow-sm space-y-4">
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                  <div className="flex items-center gap-2">
+                                    <BookOpen className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                                    <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
+                                      Etapa 6: Aprender y reflexionar
+                                    </h4>
+                                  </div>
+                                  {stage6ExecutionStatus === 'executed' && hasSavedLearnings ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E2F7E1] text-[#246B2A] text-[11px] font-semibold border border-[#246B2A]/20">
+                                      <CheckCircle2 className="w-3 h-3 text-[#246B2A]" />
+                                      Reflexión guardada
+                                    </span>
+                                  ) : stage6ExecutionStatus === 'not_executed' ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#FFF7EF] text-[#BF3A1B] text-[11px] font-semibold border border-[#BF3A1B]/25">
+                                      <Clock className="w-3 h-3 text-[#BF3A1B]" />
+                                      Plan pendiente de ejecución
+                                    </span>
+                                  ) : null}
                                 </div>
-                                {hasSavedLearnings && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E2F7E1] text-[#246B2A] text-[11px] font-semibold border border-[#246B2A]/20">
-                                    <CheckCircle2 className="w-3 h-3 text-[#246B2A]" />
-                                    Reflexión guardada
-                                  </span>
+
+                                {hasStage5PlanSummary && (
+                                  <div className="p-3.5 bg-[#FFF7EF]/75 border border-[#FFD3BF] rounded-xl space-y-1.5 text-xs text-[#2D1B4E]">
+                                    <div className="font-heading font-bold text-[11px] uppercase tracking-wider text-[#BF3A1B]">
+                                      Plan de Acción acordado en Etapa 5
+                                    </div>
+                                    {stage5Plan?.what?.trim() && (
+                                      <p>
+                                        <span className="font-semibold">Acción:</span> {stage5Plan.what.trim()}
+                                      </p>
+                                    )}
+                                    {(stage5Plan?.when?.trim() || stage5Plan?.withWhom?.trim()) && (
+                                      <p className="text-[#4A3F55]">
+                                        {stage5Plan?.when?.trim() && (
+                                          <span>
+                                            <span className="font-semibold text-[#2D1B4E]">Cuándo:</span> {stage5Plan.when.trim()}
+                                          </span>
+                                        )}
+                                        {stage5Plan?.when?.trim() && stage5Plan?.withWhom?.trim() && ' · '}
+                                        {stage5Plan?.withWhom?.trim() && (
+                                          <span>
+                                            <span className="font-semibold text-[#2D1B4E]">Con quién:</span> {stage5Plan.withWhom.trim()}
+                                          </span>
+                                        )}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Estado A: Verificación inicial obligatoria (Sí / No) */}
+                                {stage6ExecutionStatus === 'pending_verification' && (
+                                  <div className="p-4 bg-[#FFF7EF] border-2 border-[#BF3A1B]/35 rounded-2xl space-y-3.5 animate-in fade-in duration-200">
+                                    <div className="space-y-1">
+                                      <h5 className="font-heading font-extrabold text-sm sm:text-base text-[#2D1B4E]">
+                                        ¿Ya ejecutaste tu Plan de Acción?
+                                      </h5>
+                                      <p className="text-xs text-[#4A3F55] leading-relaxed">
+                                        Tu respuesta orientará nuestra conversación de esta etapa. Si aún no pudiste llevarlo a cabo, te acompañaré a revisar qué ocurrió y definir tu siguiente paso sin bloquear tu proceso.
+                                      </p>
+                                    </div>
+
+                                    <div className="flex flex-col sm:flex-row gap-2.5">
+                                      <button
+                                        type="button"
+                                        disabled={isSendingMessage}
+                                        onClick={() => respondStage6ExecutionCheck(true)}
+                                        className="min-h-[44px] flex-1 px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2666] text-[#F7B538] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                                      >
+                                        <CheckCircle2 className="w-4 h-4 text-[#F7B538]" />
+                                        <span>Sí</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        disabled={isSendingMessage}
+                                        onClick={() => respondStage6ExecutionCheck(false)}
+                                        className="min-h-[44px] flex-1 px-5 py-2.5 bg-white hover:bg-[#FFD3BF]/35 text-[#2D1B4E] border-2 border-[#BF3A1B]/40 font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-xs transition-all cursor-pointer active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                                      >
+                                        <Clock className="w-4 h-4 text-[#BF3A1B]" />
+                                        <span>No</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Estado B: Plan ejecutado -> Reflexión guiada y formulario de aprendizaje */}
+                                {stage6ExecutionStatus === 'executed' && (
+                                  <>
+                                    <div className="space-y-3 text-xs">
+                                      <div>
+                                        <div className="flex items-center justify-between mb-1">
+                                          <label className="font-bold text-[#2D1B4E]">¿Qué ocurrió después de tu acción?</label>
+                                          <span className="text-[10px] text-[#493447]/60 font-medium">Requerido</span>
+                                        </div>
+                                        <textarea
+                                          value={learningWhatHappened}
+                                          onChange={(e) => setLearningWhatHappened(e.target.value)}
+                                          placeholder="Describe cómo reaccionó la otra persona o el equipo..."
+                                          rows={2}
+                                          className="w-full p-2.5 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
+                                        />
+                                      </div>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div>
+                                          <div className="flex items-center justify-between mb-1">
+                                            <label className="font-bold text-[#2D1B4E]">¿Qué funcionó?</label>
+                                            <span className="text-[10px] text-[#493447]/60 font-medium">Requerido</span>
+                                          </div>
+                                          <input
+                                            type="text"
+                                            value={learningWhatWorked}
+                                            onChange={(e) => setLearningWhatWorked(e.target.value)}
+                                            placeholder="Lo que dio buen resultado..."
+                                            className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
+                                          />
+                                        </div>
+                                        <div>
+                                          <div className="flex items-center justify-between mb-1">
+                                            <label className="font-bold text-[#2D1B4E]">¿De qué te das cuenta y qué aprendes?</label>
+                                            <span className="text-[10px] text-[#493447]/60 font-medium">Requerido</span>
+                                          </div>
+                                          <input
+                                            type="text"
+                                            value={learningInsights}
+                                            onChange={(e) => setLearningInsights(e.target.value)}
+                                            placeholder="Tu insight de liderazgo..."
+                                            className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
+                                          />
+                                        </div>
+                                      </div>
+
+                                      {/* Campo Opcional para Compartir Aprendizajes con Recursos Humanos */}
+                                      <div className="mt-3 p-3.5 bg-[#FFF7EF]/80 border border-[#FFD3BF] rounded-xl space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                          <label className="font-bold text-[#2D1B4E] text-xs">
+                                            ¿Te gustaría compartir con Recursos Humanos algún aprendizaje de este proceso? Puedes escribirlo con tus propias palabras.
+                                          </label>
+                                          <span className="text-[10px] text-[#BF3A1B] font-semibold bg-[#FFD3BF]/60 px-2 py-0.5 rounded-full shrink-0 ml-2">
+                                            Opcional
+                                          </span>
+                                        </div>
+                                        <textarea
+                                          value={learningShareWithHR}
+                                          onChange={(e) => setLearningShareWithHR(e.target.value)}
+                                          placeholder="Escribe aquí voluntariamente el aprendizaje que deseas que el equipo de Recursos Humanos conozca..."
+                                          rows={2}
+                                          className="w-full p-2.5 bg-white border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
+                                        />
+                                        <p className="text-[11px] text-[#4A3F55]/70 leading-normal">
+                                          Este campo es 100% opcional. Si lo dejas vacío, tus reflexiones se mantendrán estrictamente privadas y no se comparte nada con la organización.
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {/* Botón «Guardar Reflexión» debajo del formulario */}
+                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-3 border-t border-[#493447]/10">
+                                      <button
+                                        type="button"
+                                        disabled={!isLearningsValid || isSavingLearnings}
+                                        onClick={handleSaveLearnings}
+                                        className={`w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                                          !isLearningsValid
+                                            ? 'bg-neutral-200 text-[#493447]/40 border border-neutral-300 cursor-not-allowed shadow-none'
+                                            : justSavedLearnings
+                                            ? 'bg-[#E2F7E1] text-[#246B2A] border border-[#246B2A]/30 font-bold'
+                                            : 'bg-[#BF3A1B] hover:bg-[#a63014] text-white shadow-sm hover:shadow active:scale-98 cursor-pointer'
+                                        }`}
+                                      >
+                                        {isSavingLearnings ? (
+                                          <>
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            <span>Guardando...</span>
+                                          </>
+                                        ) : justSavedLearnings ? (
+                                          <>
+                                            <CheckCircle2 className="w-4 h-4 text-[#246B2A]" />
+                                            <span>Reflexión Guardada</span>
+                                          </>
+                                        ) : hasSavedLearnings ? (
+                                          <>
+                                            <CheckCircle2 className="w-3.5 h-3.5" />
+                                            <span>Actualizar Reflexión</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <CheckCircle2 className="w-3.5 h-3.5" />
+                                            <span>Guardar Reflexión</span>
+                                          </>
+                                        )}
+                                      </button>
+                                      {!isLearningsValid ? (
+                                        <span className="text-[11px] text-[#493447]/60 italic">
+                                          Completa los 3 campos obligatorios de reflexión para habilitar el guardado.
+                                        </span>
+                                      ) : hasSavedLearnings && !justSavedLearnings ? (
+                                        <span className="text-[11px] text-[#246B2A] font-medium flex items-center gap-1">
+                                          <CheckCircle2 className="w-3 h-3 text-[#246B2A]" />
+                                          Reflexión registrada. Puedes editar los campos y actualizarla en cualquier momento.
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </>
+                                )}
+
+                                {/* Estado C: Plan aún no ejecutado -> Acompañamiento respetuoso sin juicios (sin formulario post-ejecución) */}
+                                {stage6ExecutionStatus === 'not_executed' && (
+                                  <div className="p-4 bg-[#FFF7EF]/80 border border-[#BF3A1B]/25 rounded-2xl space-y-3 text-xs">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                      <h5 className="font-heading font-bold text-[#2D1B4E]">
+                                        Acompañamiento sobre tu Plan de Acción pendiente
+                                      </h5>
+                                      {isCurrent && (
+                                        <button
+                                          type="button"
+                                          disabled={isSendingMessage}
+                                          onClick={() => respondStage6ExecutionCheck(true)}
+                                          className="text-[11px] font-bold text-[#BF3A1B] hover:text-[#2D1B4E] underline cursor-pointer text-left sm:text-right disabled:opacity-50"
+                                        >
+                                          Ya ejecuté mi Plan de Acción (cambiar a Sí)
+                                        </button>
+                                      )}
+                                    </div>
+                                    <p className="text-[#4A3F55] leading-relaxed">
+                                      No pasa nada si todavía no lo llevaste a cabo. Conversa con Lidacta abajo sobre qué obstáculos o circunstancias se presentaron, si lograste avanzar en alguna parte y qué ajuste o siguiente paso realista te gustaría dar.
+                                    </p>
+                                  </div>
+                                )}
+
+                                {/* Diálogo directo en Etapa 6 tras responder Sí o No */}
+                                {isCurrent && stage6ExecutionStatus !== 'pending_verification' && (
+                                  <div className="bg-white border-2 border-[#F7B538] rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
+                                    <div className="flex items-center justify-between">
+                                      <label className="text-xs font-heading font-extrabold text-[#2D1B4E] flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#BF3A1B] animate-pulse" />
+                                        <span>
+                                          {stage6ExecutionStatus === 'not_executed'
+                                            ? 'Conversa sobre lo que ocurrió y tu siguiente paso:'
+                                            : 'Tu reflexión en conversación con Lidacta:'}
+                                        </span>
+                                      </label>
+                                      <span className="text-[11px] text-[#4A3F55]/70 flex items-center gap-1">
+                                        <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
+                                        <span>Escribe o habla por nota de voz</span>
+                                      </span>
+                                    </div>
+
+                                    <textarea
+                                      value={stageInputText}
+                                      onChange={(e) => {
+                                        setStageInputText(e.target.value);
+                                        setInputText(e.target.value);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                          e.preventDefault();
+                                          handleSubmitStageMessage(6);
+                                        }
+                                      }}
+                                      placeholder={
+                                        stage6ExecutionStatus === 'not_executed'
+                                          ? 'Cuéntame qué obstáculos o circunstancias se presentaron, si avanzaste en algo y qué te gustaría ajustar...'
+                                          : 'Comparte qué ocurrió tras tu acción, qué funcionó o si solo lograste ejecutar una parte...'
+                                      }
+                                      rows={3}
+                                      disabled={isSendingMessage}
+                                      className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
+                                    />
+
+                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
+                                      <WhatsAppVoiceRecorder
+                                        stageNumber={6}
+                                        stageName={meta.name}
+                                        mode="stage-card"
+                                        disabled={isSendingMessage}
+                                        isSending={isSendingMessage}
+                                        onTranscript={(text) => {
+                                          setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
+                                          setInputText((prev) => (prev ? `${prev} ${text}` : text));
+                                        }}
+                                        onSendDirect={(text) => handleSubmitVoiceDirect(6, text)}
+                                      />
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSubmitStageMessage(6)}
+                                        disabled={!stageInputText.trim() || isSendingMessage}
+                                        className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+                                      >
+                                        {isSendingMessage ? (
+                                          <span>Enviando respuesta...</span>
+                                        ) : (
+                                          <>
+                                            <span>Enviar respuesta</span>
+                                            <Send className="w-4 h-4 text-[#2D1B4E]" />
+                                          </>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Botón «Concluir e ir a Cierre y retroalimentación» siempre habilitado para no bloquear el acompañamiento */}
+                                {activeMentorship.currentStage === 6 && (
+                                  <div className="pt-2 border-t border-[#493447]/10 flex flex-col sm:flex-row sm:items-center justify-end gap-2.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => advanceStage(7)}
+                                      className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2568] text-[#F7B538] font-bold text-xs rounded-xl transition-all shadow-xs active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
+                                    >
+                                      <span>Concluir e ir a Cierre y retroalimentación (Etapa 7)</span>
+                                      <ArrowRight className="w-3.5 h-3.5 text-[#F7B538]" />
+                                    </button>
+                                  </div>
                                 )}
                               </div>
-
-                              <div className="space-y-3 text-xs">
-                                <div>
-                                  <div className="flex items-center justify-between mb-1">
-                                    <label className="font-bold text-[#2D1B4E]">¿Qué ocurrió después de tu acción?</label>
-                                    <span className="text-[10px] text-[#493447]/60 font-medium">Requerido</span>
-                                  </div>
-                                  <textarea
-                                    value={learningWhatHappened}
-                                    onChange={(e) => setLearningWhatHappened(e.target.value)}
-                                    placeholder="Describe cómo reaccionó la otra persona o el equipo..."
-                                    rows={2}
-                                    className="w-full p-2.5 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
-                                  />
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                  <div>
-                                    <div className="flex items-center justify-between mb-1">
-                                      <label className="font-bold text-[#2D1B4E]">¿Qué funcionó?</label>
-                                      <span className="text-[10px] text-[#493447]/60 font-medium">Requerido</span>
-                                    </div>
-                                    <input
-                                      type="text"
-                                      value={learningWhatWorked}
-                                      onChange={(e) => setLearningWhatWorked(e.target.value)}
-                                      placeholder="Lo que dio buen resultado..."
-                                      className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
-                                    />
-                                  </div>
-                                  <div>
-                                    <div className="flex items-center justify-between mb-1">
-                                      <label className="font-bold text-[#2D1B4E]">¿De qué te das cuenta y qué aprendes?</label>
-                                      <span className="text-[10px] text-[#493447]/60 font-medium">Requerido</span>
-                                    </div>
-                                    <input
-                                      type="text"
-                                      value={learningInsights}
-                                      onChange={(e) => setLearningInsights(e.target.value)}
-                                      placeholder="Tu insight de liderazgo..."
-                                      className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
-                                    />
-                                  </div>
-                                </div>
-
-                                {/* Campo Opcional para Compartir Aprendizajes con Recursos Humanos */}
-                                <div className="mt-3 p-3.5 bg-[#FFF7EF]/80 border border-[#FFD3BF] rounded-xl space-y-1.5">
-                                  <div className="flex items-center justify-between">
-                                    <label className="font-bold text-[#2D1B4E] text-xs">
-                                      ¿Te gustaría compartir con Recursos Humanos algún aprendizaje de este proceso? Puedes escribirlo con tus propias palabras.
-                                    </label>
-                                    <span className="text-[10px] text-[#BF3A1B] font-semibold bg-[#FFD3BF]/60 px-2 py-0.5 rounded-full shrink-0 ml-2">
-                                      Opcional
-                                    </span>
-                                  </div>
-                                  <textarea
-                                    value={learningShareWithHR}
-                                    onChange={(e) => setLearningShareWithHR(e.target.value)}
-                                    placeholder="Escribe aquí voluntariamente el aprendizaje que deseas que el equipo de Recursos Humanos conozca..."
-                                    rows={2}
-                                    className="w-full p-2.5 bg-white border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
-                                  />
-                                  <p className="text-[11px] text-[#4A3F55]/70 leading-normal">
-                                    Este campo es 100% opcional. Si lo dejas vacío, tus reflexiones se mantendrán estrictamente privadas y no se comparte nada con la organización.
-                                  </p>
-                                </div>
-                              </div>
-
-                              {/* Botón «Guardar Reflexión» debajo del formulario */}
-                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-3 border-t border-[#493447]/10">
-                                <button
-                                  type="button"
-                                  disabled={!isLearningsValid || isSavingLearnings}
-                                  onClick={handleSaveLearnings}
-                                  className={`w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                                    !isLearningsValid
-                                      ? 'bg-neutral-200 text-[#493447]/40 border border-neutral-300 cursor-not-allowed shadow-none'
-                                      : justSavedLearnings
-                                      ? 'bg-[#E2F7E1] text-[#246B2A] border border-[#246B2A]/30 font-bold'
-                                      : 'bg-[#BF3A1B] hover:bg-[#a63014] text-white shadow-sm hover:shadow active:scale-98 cursor-pointer'
-                                  }`}
-                                >
-                                  {isSavingLearnings ? (
-                                    <>
-                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                      <span>Guardando...</span>
-                                    </>
-                                  ) : justSavedLearnings ? (
-                                    <>
-                                      <CheckCircle2 className="w-4 h-4 text-[#246B2A]" />
-                                      <span>Reflexión Guardada</span>
-                                    </>
-                                  ) : hasSavedLearnings ? (
-                                    <>
-                                      <CheckCircle2 className="w-3.5 h-3.5" />
-                                      <span>Actualizar Reflexión</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <CheckCircle2 className="w-3.5 h-3.5" />
-                                      <span>Guardar Reflexión</span>
-                                    </>
-                                  )}
-                                </button>
-                                {!isLearningsValid ? (
-                                  <span className="text-[11px] text-[#493447]/60 italic">
-                                    Completa los 3 campos obligatorios de reflexión para habilitar el guardado.
-                                  </span>
-                                ) : hasSavedLearnings && !justSavedLearnings ? (
-                                  <span className="text-[11px] text-[#246B2A] font-medium flex items-center gap-1">
-                                    <CheckCircle2 className="w-3 h-3 text-[#246B2A]" />
-                                    Reflexión registrada. Puedes editar los campos y actualizarla en cualquier momento.
-                                  </span>
-                                ) : null}
-                              </div>
-
-                              {/* Botón «Concluir e ir a Cierre y retroalimentación» al final de la sección, debajo del botón de guardar */}
-                              {activeMentorship.currentStage === 6 && (
-                                <div className="pt-2 border-t border-[#493447]/10 flex flex-col sm:flex-row sm:items-center justify-end gap-2.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => advanceStage(7)}
-                                    className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2568] text-[#F7B538] font-bold text-xs rounded-xl transition-all shadow-xs active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
-                                  >
-                                    <span>Concluir e ir a Cierre y retroalimentación (Etapa 7)</span>
-                                    <ArrowRight className="w-3.5 h-3.5 text-[#F7B538]" />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          )}
+                            );
+                          })()}
 
                           {/* Stage 7: Comprehensive Feedback Report */}
                           {st === 7 && activeMentorship.finalFeedbackReport && (
@@ -2767,7 +3077,14 @@ export const LeaderView: React.FC = () => {
                               </div>
 
                               <div className="p-3 bg-[#FFF7EF] rounded-xl text-center text-xs text-[#4A3F55]/70 space-y-1">
-                                {activeMentorship.finalReportEmailStatus === 'sent' ? (
+                                {activeMentorship.isTestSession ? (
+                                  <div className="text-[#2D1B4E] font-semibold flex items-center justify-center gap-1.5 flex-wrap">
+                                    <FlaskConical className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                                    <span>
+                                      Sesión de prueba QA: el reporte no se envía por correo ni notifica a RH.
+                                    </span>
+                                  </div>
+                                ) : activeMentorship.finalReportEmailStatus === 'sent' ? (
                                   <div className="text-[#246B2A] font-semibold flex items-center justify-center gap-1.5 flex-wrap">
                                     <CheckCircle2 className="w-4 h-4 text-[#246B2A] shrink-0" />
                                     <span>
@@ -2887,56 +3204,64 @@ export const LeaderView: React.FC = () => {
               activeMentorship.status !== 'completed' &&
               (activeMentorship.status as string) !== 'closed' &&
               (activeMentorship.status as string) !== 'concluido' &&
-              !activeMentorship.completedAt && (
-                <div className="p-2.5 sm:p-4 bg-white border-t border-[#493447]/10 shrink-0 no-print">
-                  <form onSubmit={handleSendMessage} className="w-full max-w-screen-xl mx-auto flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                      placeholder={
-                        activeMentorship.currentStage === 4
-                          ? 'Responde a la práctica o simula...'
-                          : `Escribe tu respuesta para la Etapa ${activeMentorship.currentStage || 1}...`
-                      }
-                      className="min-h-[44px] flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 min-w-0 disabled:bg-neutral-100 disabled:text-[#4A3F55]/60"
-                      disabled={isSendingMessage}
-                    />
+              !activeMentorship.completedAt && (() => {
+                const isStage6PendingVerification =
+                  activeMentorship.currentStage === 6 &&
+                  resolveStage6ExecutionStatus(activeMentorship) === 'pending_verification';
 
-                    {/* WhatsApp Voice Recording Button & Dynamic Audio Bar */}
-                    <WhatsAppVoiceRecorder
-                      stageNumber={activeMentorship.currentStage || 1}
-                      stageName={STAGE_META[activeMentorship.currentStage || 1]?.name}
-                      mode="bottom-bar"
-                      disabled={isSendingMessage}
-                      isSending={isSendingMessage}
-                      onTranscript={(text) => {
-                        setInputText((prev) => (prev ? `${prev} ${text}` : text));
-                        setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
-                      }}
-                      onSendDirect={async (text) => {
-                        if (!text.trim() || isSendingMessage) return;
-                        setInputText('');
-                        setStageInputText('');
-                        await sendMessageInActiveSession(text.trim(), activeMentorship.currentStage === 4);
-                        setTimeout(() => {
-                          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-                        }, 150);
-                      }}
-                    />
+                return (
+                  <div className="p-2.5 sm:p-4 bg-white border-t border-[#493447]/10 shrink-0 no-print">
+                    <form onSubmit={handleSendMessage} className="w-full max-w-screen-xl mx-auto flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        placeholder={
+                          isStage6PendingVerification
+                            ? 'Responde primero arriba: ¿Ya ejecutaste tu Plan de Acción? (Sí / No)'
+                            : activeMentorship.currentStage === 4
+                            ? 'Responde a la práctica o simula...'
+                            : `Escribe tu respuesta para la Etapa ${activeMentorship.currentStage || 1}...`
+                        }
+                        className="min-h-[44px] flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 min-w-0 disabled:bg-neutral-100 disabled:text-[#4A3F55]/60"
+                        disabled={isSendingMessage || isStage6PendingVerification}
+                      />
 
-                    {/* Send Button */}
-                    <button
-                      type="submit"
-                      disabled={!inputText.trim() || isSendingMessage}
-                      title="Enviar respuesta escrita"
-                      className="min-h-[44px] min-w-[44px] p-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer shrink-0 flex items-center justify-center active:scale-95"
-                    >
-                      <Send className="w-4 h-4" />
-                    </button>
-                  </form>
-                </div>
-            )}
+                      {/* WhatsApp Voice Recording Button & Dynamic Audio Bar */}
+                      <WhatsAppVoiceRecorder
+                        stageNumber={activeMentorship.currentStage || 1}
+                        stageName={STAGE_META[activeMentorship.currentStage || 1]?.name}
+                        mode="bottom-bar"
+                        disabled={isSendingMessage || isStage6PendingVerification}
+                        isSending={isSendingMessage}
+                        onTranscript={(text) => {
+                          setInputText((prev) => (prev ? `${prev} ${text}` : text));
+                          setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
+                        }}
+                        onSendDirect={async (text) => {
+                          if (!text.trim() || isSendingMessage || isStage6PendingVerification) return;
+                          setInputText('');
+                          setStageInputText('');
+                          await sendMessageInActiveSession(text.trim(), activeMentorship.currentStage === 4);
+                          setTimeout(() => {
+                            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                          }, 150);
+                        }}
+                      />
+
+                      {/* Send Button */}
+                      <button
+                        type="submit"
+                        disabled={!inputText.trim() || isSendingMessage || isStage6PendingVerification}
+                        title="Enviar respuesta escrita"
+                        className="min-h-[44px] min-w-[44px] p-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer shrink-0 flex items-center justify-center active:scale-95"
+                      >
+                        <Send className="w-4 h-4" />
+                      </button>
+                    </form>
+                  </div>
+                );
+              })()}
           </div>
         )}
       </main>
