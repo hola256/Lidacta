@@ -57,7 +57,7 @@ const STAGES_OVERVIEW = [
   {
     num: 1,
     title: 'Detectar qué sucede',
-    desc: 'Comprender el desafío que enfrenta.',
+    desc: 'Comprender el desafío que enfrenta el líder.',
   },
   {
     num: 2,
@@ -67,7 +67,7 @@ const STAGES_OVERVIEW = [
   {
     num: 3,
     title: 'Diseñar alternativas',
-    desc: 'Explorar alternativas de actuación.',
+    desc: 'Explorar alternativas de solución.',
   },
   {
     num: 4,
@@ -363,7 +363,7 @@ export const LoginView: React.FC = () => {
             </div>
 
             <h1 className="font-heading font-extrabold text-3xl sm:text-4xl lg:text-5xl text-white tracking-tight leading-tight">
-              Desarrolla tus habilidades de liderazgo mientras resuelves los desafíos humanos de tu trabajo.
+              Capacitar a los lideres es importante. <span className="text-[#F7B538]">Acompañarlos</span> cuando necesitan ponerlo en <span className="text-[#F7B538]">práctica</span> es el verdadero <span className="text-[#F7B538]">reto</span>.
             </h1>
 
             <div className="max-w-3xl mx-auto space-y-4 text-sm sm:text-base lg:text-lg text-[#FFF7EF]/85 leading-relaxed">
