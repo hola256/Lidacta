@@ -53,7 +53,7 @@ export const INITIAL_COMPANIES: CompanyContext[] = [
 export const DEFAULT_ADMIN_PROFILE: UserProfile = {
   id: 'user_admin_tania',
   name: 'Tania Padierna',
-  email: 'hola@taniapadierna.com',
+  email: 'hola@lidacta.com',
   password: (typeof process !== 'undefined' && process.env?.ADMIN_PASSWORD) || 'Admin_Auth_Secured_2026',
   role: 'admin',
   companyId: 'comp_nexus',
@@ -565,7 +565,7 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     timestamp: '2026-10-02T11:30:00Z',
     read: false,
     emailSimulated: {
-      to: 'hola@taniapadierna.com',
+      to: 'hola@lidacta.com',
       subject: 'Lidacta [Asesoría 1:1]: Roberto Gómez solicita acompañamiento directo',
       bodyText: 'Hola Tania,\n\nEl líder Roberto Gómez (Líder de Línea de Ensamble y Calidad en Nexus Automotriz) ha solicitado una sesión de Asesoría 1:1 directa.\n\n• Caso: Resistencia al cambio en bitácora digital con técnico senior\n• Etapa actual: Etapa 2 (Analizar)\n• Razón: "Me gustaría revisar cómo abordar la resistencia de Ernesto sin que sienta que estoy devaluando sus 15 años en la planta, antes de pasar a la práctica."\n\nPuedes contactarlo directamente vía WhatsApp (+52 55 4321 9876) o agendar desde tu panel de administradora.',
     },
@@ -597,7 +597,7 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     read: false,
     emailSimulated: {
       from: 'Lidacta <notificaciones@taniapadierna.com>',
-      to: 'hola@taniapadierna.com',
+      to: 'hola@lidacta.com',
       replyTo: 'carlos.mendoza@novaretail.com',
       subject: '🚨 Alerta de Inactividad (Día 8): Carlos Mendoza (Retail Nova Grupo Comercial) sin avances en Etapa 5',
       bodyText: 'Estimada Tania,\n\nEl sistema de monitoreo de Lidacta ha detectado que han transcurrido 8 días calendario desde que Carlos Mendoza definió su compromiso en la Etapa 5 sin que haya ingresado a la plataforma ni registrado avances hacia la Etapa 6.\n\n📋 DATOS DEL LÍDER E INACTIVIDAD:\n• Nombre del Líder: Carlos Mendoza\n• Empresa: Retail Nova Grupo Comercial\n• Puesto / Área: Gerente de Sucursal Centro (Operaciones Comerciales y Tiendas)\n• Fecha del último acceso: 12 de octubre de 2026, 14:30 hrs\n• Etapa actual: Etapa 5 (Compromiso y Plan de Acción)\n• Desafío en curso: "Desmotivación del equipo ante metas comerciales agresivas del Q4"\n\n⚠️ RESUMEN BREVE DE SU COMPROMISO NO FINALIZADO:\n• Acción comprometida: Taller de 45 minutos para desglosar la meta trimestral en micro-objetivos semanales por categoría.\n• Fecha prevista: Lunes próximo a las 08:30 hrs antes de apertura.\n• Con quién: Equipo comercial completo (9 asesores de tienda).\n• Aspectos a cuidar: No invalidar su preocupación sobre el número grande; mostrarles cómo se come el elefante a bocados.\n\n📞 DATOS DE CONTACTO DIRECTO:\n• Correo electrónico: carlos.mendoza@novaretail.com\n• WhatsApp: +52 55 9876 5432\n\nRecomendación de intervención: Te sugerimos contactar al líder para apoyarlo a resolver posibles dudas, indagar si enfrentó algún obstáculo no previsto e invitarlo a retomar su proceso en la Etapa 6 de Lidacta.',
@@ -626,7 +626,7 @@ export const INITIAL_SYSTEM_ALERTS: SystemAlertItem[] = [
     timestamp: '2026-10-24T11:42:00Z',
     status: 'Correo Enviado',
     caseSummary: 'Líder planteó cuadro de ansiedad clínica, ataques de pánico recurrentes y dificultades emocionales personales severas que exceden el marco del liderazgo laboral. Se aplicó derivación ética a PAE y apoyo psicológico.',
-    emailRecipient: 'hola@taniapadierna.com',
+    emailRecipient: 'hola@lidacta.com',
     userMessageSnippet: 'Siento que ya no puedo más, me dan ataques de pánico en la noche pensando en la auditoría y creo que necesito ansiolíticos...',
     details: {
       actionTaken: 'Derivación cálida a salud mental / PAE sin bloqueo de plataforma',
@@ -653,7 +653,7 @@ export const INITIAL_SYSTEM_ALERTS: SystemAlertItem[] = [
     timestamp: '2026-10-19T09:15:00Z',
     status: 'Correo Enviado',
     caseSummary: 'Han transcurrido más de 8 días calendario tras definir su compromiso en Etapa 5 (Taller de 45 minutos para desglosar la meta trimestral) sin ingresar a la plataforma.',
-    emailRecipient: 'hola@taniapadierna.com',
+    emailRecipient: 'hola@lidacta.com',
     userMessageSnippet: 'Compromiso registrado en Etapa 5 pendiente de cierre en Etapa 6.',
     details: {
       lastActiveFormatted: '12 de octubre de 2026, 09:30 hrs',

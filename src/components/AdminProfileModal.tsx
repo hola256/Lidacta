@@ -28,7 +28,7 @@ export const AdminProfileModal: React.FC = () => {
   const adminUser = allUsers.find((u) => u.role === 'admin') || currentUser;
 
   const [name, setName] = useState(adminUser.name || 'Tania Padierna');
-  const [email, setEmail] = useState(adminUser.email || 'hola@taniapadierna.com');
+  const [email, setEmail] = useState(adminUser.email || 'hola@lidacta.com');
   const [whatsapp, setWhatsapp] = useState(adminUser.whatsapp || '+52 55 1234 5678');
   const [position, setPosition] = useState(adminUser.position || 'Creadora & Directora de Plataforma');
   const [companyName, setCompanyName] = useState(adminUser.companyName || 'Lidacta · Dirección General');
@@ -65,7 +65,7 @@ export const AdminProfileModal: React.FC = () => {
     }
 
     if (!email.trim() || !email.includes('@') || !email.includes('.')) {
-      setErrorMsg('Por favor ingresa un correo electrónico válido (ej. hola@taniapadierna.com).');
+      setErrorMsg('Por favor ingresa un correo electrónico válido (ej. hola@lidacta.com).');
       return;
     }
 
@@ -178,7 +178,7 @@ export const AdminProfileModal: React.FC = () => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="ejemplo: hola@taniapadierna.com"
+                placeholder="ejemplo: hola@lidacta.com"
                 required
                 className="w-full px-3.5 py-2.5 bg-[#FFF7EF] border border-[#493447]/20 rounded-xl text-xs sm:text-sm text-[#2D1B4E] focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all font-medium"
               />

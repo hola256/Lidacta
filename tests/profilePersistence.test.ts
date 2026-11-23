@@ -221,18 +221,18 @@ describe('User Profile Completion & Persistence Logic', () => {
     assert.ok(leaderEmail.includes('fortalezcan tu autonomía como líder'));
   });
 
-  it('should authenticate administrator account (hola@taniapadierna.com) with official admin password', async () => {
+  it('should authenticate administrator account (hola@lidacta.com) with official admin password and reject legacy email', async () => {
     const { DEFAULT_ADMIN_PROFILE } = await import('../src/data/mockData.js');
     const { ADMIN_OFFICIAL_PASSWORD } = await import('../src/context/LidactaContext.js');
 
-    assert.strictEqual(DEFAULT_ADMIN_PROFILE.email, 'hola@taniapadierna.com');
+    assert.strictEqual(DEFAULT_ADMIN_PROFILE.email, 'hola@lidacta.com');
     assert.strictEqual(DEFAULT_ADMIN_PROFILE.password, ADMIN_OFFICIAL_PASSWORD);
     assert.ok(ADMIN_OFFICIAL_PASSWORD && ADMIN_OFFICIAL_PASSWORD.length >= 6);
 
     // Authentication simulator matching LidactaContext.login logic
     const testLogin = (email: string, passwordInput?: string) => {
       const cleanEmail = email.trim().toLowerCase();
-      const user = cleanEmail === 'hola@taniapadierna.com' ? DEFAULT_ADMIN_PROFILE : null;
+      const user = cleanEmail === 'hola@lidacta.com' ? DEFAULT_ADMIN_PROFILE : null;
       if (!user) return { success: false, message: 'Usuario no encontrado' };
 
       const expected = user.password || ADMIN_OFFICIAL_PASSWORD;
@@ -247,12 +247,16 @@ describe('User Profile Completion & Persistence Logic', () => {
       return { success: true };
     };
 
-    // Valid password
-    const validResult = testLogin('hola@taniapadierna.com', ADMIN_OFFICIAL_PASSWORD);
+    // Valid password with new admin email
+    const validResult = testLogin('hola@lidacta.com', ADMIN_OFFICIAL_PASSWORD);
     assert.strictEqual(validResult.success, true, 'Login with correct admin password must succeed');
 
+    // Old admin email must fail
+    const legacyEmailResult = testLogin('hola@taniapadierna.com', ADMIN_OFFICIAL_PASSWORD);
+    assert.strictEqual(legacyEmailResult.success, false, 'Legacy admin email must not authenticate');
+
     // Invalid password
-    const invalidResult = testLogin('hola@taniapadierna.com', 'WrongPassword123');
+    const invalidResult = testLogin('hola@lidacta.com', 'WrongPassword123');
     assert.strictEqual(invalidResult.success, false, 'Login with incorrect password must fail');
     assert.strictEqual(
       invalidResult.message,
@@ -260,7 +264,7 @@ describe('User Profile Completion & Persistence Logic', () => {
     );
 
     // Empty password
-    const emptyResult = testLogin('hola@taniapadierna.com', '');
+    const emptyResult = testLogin('hola@lidacta.com', '');
     assert.strictEqual(emptyResult.success, false, 'Login with empty password must fail');
   });
 
@@ -286,13 +290,17 @@ describe('User Profile Completion & Persistence Logic', () => {
     };
 
     // Standard login without password should fail
-    const standardWithoutPassword = testLoginRemembered('hola@taniapadierna.com', '');
+    const standardWithoutPassword = testLoginRemembered('hola@lidacta.com', '');
     assert.strictEqual(standardWithoutPassword.success, false);
 
     // 1-Click remembered session for valid user should succeed
-    const rememberedLogin = testLoginRemembered('hola@taniapadierna.com', undefined, true);
+    const rememberedLogin = testLoginRemembered('hola@lidacta.com', undefined, true);
     assert.strictEqual(rememberedLogin.success, true);
-    assert.strictEqual(rememberedLogin.user?.email, 'hola@taniapadierna.com');
+    assert.strictEqual(rememberedLogin.user?.email, 'hola@lidacta.com');
+
+    // Legacy admin email should NOT match in INITIAL_USERS
+    const legacyRemembered = testLoginRemembered('hola@taniapadierna.com', undefined, true);
+    assert.strictEqual(legacyRemembered.success, false);
 
     // 2. Ensure LoginView source code does NOT contain public quick demo buttons
     const loginViewSource = fs.readFileSync('src/components/LoginView.tsx', 'utf-8');

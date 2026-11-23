@@ -274,7 +274,7 @@ export const isTherapeuticText = (text: string): boolean => {
 
 export const ensureAdminPasswordInUsers = (userList: UserProfile[]): UserProfile[] => {
   return userList.map((u) => {
-    if (u.email?.toLowerCase() === 'hola@taniapadierna.com' || u.id === 'user_admin_tania' || u.role === 'admin') {
+    if (u.email?.toLowerCase() === 'hola@lidacta.com' || u.id === 'user_admin_tania' || u.role === 'admin') {
       return {
         ...u,
         password: u.password || ADMIN_OFFICIAL_PASSWORD,
@@ -327,7 +327,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const savedAdminRaw = sessionStorage.getItem(`${STORAGE_KEY_PREFIX}session_user`);
       if (savedAdminRaw) {
         const savedAdmin = JSON.parse(savedAdminRaw);
-        if (savedAdmin && (savedAdmin.role === 'admin' || savedAdmin.email?.toLowerCase() === 'hola@taniapadierna.com')) {
+        if (savedAdmin && (savedAdmin.role === 'admin' || savedAdmin.email?.toLowerCase() === 'hola@lidacta.com')) {
           const rawImp = sessionStorage.getItem(`${STORAGE_KEY_PREFIX}impersonated_user`);
           return rawImp ? JSON.parse(rawImp) : null;
         }
@@ -338,7 +338,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const isImpersonating = Boolean(
     sessionUser &&
-      (sessionUser.role === 'admin' || sessionUser.email?.toLowerCase() === 'hola@taniapadierna.com') &&
+      (sessionUser.role === 'admin' || sessionUser.email?.toLowerCase() === 'hola@lidacta.com') &&
       impersonatedUser
   );
 
@@ -988,7 +988,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const impersonateUser = (userOrId: string | UserProfile) => {
     const isAdmin =
       sessionUser?.role === 'admin' ||
-      sessionUser?.email?.toLowerCase() === 'hola@taniapadierna.com';
+      sessionUser?.email?.toLowerCase() === 'hola@lidacta.com';
     if (!isAdmin) {
       showToast('Acceso denegado: El modo inspector requiere permisos de administración.', 'error');
       return;
@@ -1025,7 +1025,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const impersonateRole = (role: 'leader' | 'hr') => {
     const isAdmin =
       sessionUser?.role === 'admin' ||
-      sessionUser?.email?.toLowerCase() === 'hola@taniapadierna.com';
+      sessionUser?.email?.toLowerCase() === 'hola@lidacta.com';
     if (!isAdmin) return;
 
     if (role === 'hr') {
@@ -1060,7 +1060,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   ): Promise<MentorshipSession | null> => {
     const isAdmin =
       sessionUser?.role === 'admin' ||
-      sessionUser?.email?.toLowerCase() === 'hola@taniapadierna.com';
+      sessionUser?.email?.toLowerCase() === 'hola@lidacta.com';
     if (!isAdmin) {
       showToast('Acceso denegado: El generador de sesiones de prueba es exclusivo para Administradora.', 'error');
       return null;
@@ -1267,7 +1267,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const deleteTestSession = (sessionId: string) => {
     const isAdmin =
       sessionUser?.role === 'admin' ||
-      sessionUser?.email?.toLowerCase() === 'hola@taniapadierna.com';
+      sessionUser?.email?.toLowerCase() === 'hola@lidacta.com';
     if (!isAdmin) return;
 
     const target = mentorships.find((m) => m.id === sessionId);
@@ -1293,7 +1293,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const clearAllTestSessions = (): number => {
     const isAdmin =
       sessionUser?.role === 'admin' ||
-      sessionUser?.email?.toLowerCase() === 'hola@taniapadierna.com';
+      sessionUser?.email?.toLowerCase() === 'hola@lidacta.com';
     if (!isAdmin) return 0;
 
     const testSessions = mentorships.filter((m) => m.isTestSession);
@@ -1327,7 +1327,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const switchUser = (userId: string) => {
-    if (sessionUser && (sessionUser.role === 'admin' || sessionUser.email?.toLowerCase() === 'hola@taniapadierna.com')) {
+    if (sessionUser && (sessionUser.role === 'admin' || sessionUser.email?.toLowerCase() === 'hola@lidacta.com')) {
       impersonateUser(userId);
       return;
     }
@@ -1600,7 +1600,7 @@ El Equipo de Lidacta`;
 
   /**
    * Dispara el protocolo ético y la alerta de caso con naturaleza terapéutica.
-   * Envía correo transaccional vía Resend a hola@taniapadierna.com y registra en la Bitácora de Alertas.
+   * Envía correo transaccional vía Resend a hola@lidacta.com y registra en la Bitácora de Alertas.
    */
   const triggerTherapeuticAlert = async (params: {
     leaderName: string;
@@ -1653,7 +1653,7 @@ El Equipo de Lidacta`;
       typeName: 'Límite Terapéutico',
       status: 'Correo Enviado',
       caseSummary: params.caseSummary,
-      emailRecipient: 'hola@taniapadierna.com',
+      emailRecipient: 'hola@lidacta.com',
       currentStage: stageNum,
       leaderEmail: leaderMail,
       userMessageSnippet: params.userMessageSnippet,
@@ -1663,7 +1663,7 @@ El Equipo de Lidacta`;
       },
     };
 
-    // 1. Despacho real de correo transaccional a hola@taniapadierna.com
+    // 1. Despacho real de correo transaccional a hola@lidacta.com
     try {
       await emailService.sendTherapeuticAlert({
         leaderName: params.leaderName,
@@ -1687,13 +1687,13 @@ El Equipo de Lidacta`;
       recipientRole: 'admin',
       companyId: currentUser?.companyId || 'comp_general',
       title: `🚨 Alerta: Límite Terapéutico detectado (${params.leaderName})`,
-      message: `Lidacta detectó una consulta con naturaleza clínica/terapéutica en la Etapa ${stageNum} de ${params.leaderName} (${compName}). Se notificó a hola@taniapadierna.com.`,
+      message: `Lidacta detectó una consulta con naturaleza clínica/terapéutica en la Etapa ${stageNum} de ${params.leaderName} (${compName}). Se notificó a hola@lidacta.com.`,
       type: 'therapeutic_alert',
       timestamp: nowIso,
       read: false,
       emailSimulated: {
         from: 'Lidacta <notificaciones@taniapadierna.com>',
-        to: 'hola@taniapadierna.com',
+        to: 'hola@lidacta.com',
         replyTo: leaderMail,
         subject: '[ALERTA LIDACTA] Detección de Caso con Naturaleza Terapéutica',
         bodyText: `Estimada Tania:\n\nSe ha activado el Protocolo Ético de Límite Terapéutico en Lidacta.\n\n• Nombre del Líder: ${params.leaderName}\n• Empresa: ${compName}\n• Fecha/Hora: ${formattedDateTime}\n• Etapa actual: Etapa ${stageNum}\n• Resumen contextual: ${params.caseSummary}\n\nAcción realizada en chat: Orientación cálida hacia profesionales de la salud mental / PAE sin bloquear la plataforma.`,
@@ -2659,7 +2659,7 @@ El Equipo de Lidacta`;
 
   /**
    * Procesa de forma automatizada los correos de acompañamiento de Etapa 5 (48h y 5 días)
-   * y despacha la alerta de inactividad de 8 días para la Administradora (hola@taniapadierna.com).
+   * y despacha la alerta de inactividad de 8 días para la Administradora (hola@lidacta.com).
    */
   const checkAndProcessStage5FollowUps = async (options?: {
     simulatedNow?: string;
@@ -2756,7 +2756,7 @@ El Equipo de Lidacta`;
               emailSimulated: {
                 from: 'Lidacta <notificaciones@taniapadierna.com>',
                 to: leaderEmail,
-                replyTo: 'hola@taniapadierna.com',
+                replyTo: 'hola@lidacta.com',
                 subject: 'Apoyo continuo para revisar el primer paso de tu compromiso en Lidacta',
                 bodyText: `¡Hola ${session.leaderName}!\n\nHan transcurrido 48 horas desde que definiste tu plan de acción en Lidacta para tu desafío: "${session.title}".\n\n• ¿Qué harás?: ${session.actionPlan?.what || 'Conversación 1 a 1'}\n• ¿Cuándo?: ${session.actionPlan?.when || 'Esta semana'}\n• ¿Con quién?: ${session.actionPlan?.withWhom || 'Equipo'}\n• ¿Cómo?: ${session.actionPlan?.how || 'Diálogo directo y constructivo'}\n• Qué vas a cuidar: ${session.actionPlan?.careReminders || 'Escucha activa'}\n\nRecuerda: El liderazgo se forja en las conversaciones reales del día a día.`,
                 realEmailSent: true,
@@ -2799,7 +2799,7 @@ El Equipo de Lidacta`;
               emailSimulated: {
                 from: 'Lidacta <notificaciones@taniapadierna.com>',
                 to: leaderEmail,
-                replyTo: 'hola@taniapadierna.com',
+                replyTo: 'hola@lidacta.com',
                 subject: 'Seguimiento de tu plan de acción en Lidacta: consolidando avances hacia la Etapa 6',
                 bodyText: `¡Hola ${session.leaderName}!\n\nHan transcurrido 5 días desde que estableciste tu plan de acción en Lidacta.\n\nEs un excelente momento para hacer una pausa previa: ¿pudiste llevar a cabo la acción acordada? ¿Qué funcionó y qué respuestas observaste en tu equipo?\n\nTe invitamos a ingresar a Lidacta para concluir tu plan y avanzar a la Etapa 6.`,
                 realEmailSent: true,
@@ -2812,7 +2812,7 @@ El Equipo de Lidacta`;
 
         // 3. Alerta de Inactividad para la Administradora (a partir del Día 8):
         // Si transcurren 8 días calendario tras finalizar la Etapa 5 sin que el líder haya ingresado a la plataforma
-        // o interactuado con Lidacta, envía un correo automático de alerta a hola@taniapadierna.com.
+        // o interactuado con Lidacta, envía un correo automático de alerta a hola@lidacta.com.
         // Contenido de la alerta: Nombre del Líder, Empresa, Fecha del último acceso, Etapa actual (Etapa 5) y resumen breve de su compromiso no finalizado.
         const lastActiveTimeMs = new Date(session.lastActiveAt || stage5TimeStr).getTime();
         const daysSinceLastActive = Math.max(0, (currentTimeMs - lastActiveTimeMs) / (1000 * 60 * 60 * 24));
@@ -2862,7 +2862,7 @@ El Equipo de Lidacta`;
               read: false,
               emailSimulated: {
                 from: 'Lidacta <notificaciones@taniapadierna.com>',
-                to: 'hola@taniapadierna.com',
+                to: 'hola@lidacta.com',
                 replyTo: leaderEmail,
                 subject: `🚨 Alerta de Inactividad (Día 8): ${session.leaderName} (${session.companyName}) sin avances en Etapa 5`,
                 bodyText: `Estimada Tania,\n\nEl sistema de monitoreo de Lidacta ha detectado que han transcurrido 8 días calendario desde que ${session.leaderName} definió su compromiso en la Etapa 5 sin que haya ingresado a la plataforma ni registrado avances hacia la Etapa 6.\n\n📋 DATOS DEL LÍDER E INACTIVIDAD:\n• Nombre del Líder: ${session.leaderName}\n• Empresa: ${session.companyName}\n• Puesto / Área: ${leaderPosition} (Área: ${leaderArea})\n• Fecha del último acceso: ${lastActiveFormatted}\n• Etapa actual: Etapa 5 (Compromiso y Plan de Acción)\n• Desafío en curso: "${session.title}"\n\n⚠️ RESUMEN BREVE DE SU COMPROMISO NO FINALIZADO:\n• Acción comprometida: ${session.actionPlan?.what || 'Conversación de liderazgo'}\n• Fecha prevista: ${session.actionPlan?.when || 'No especificada'}\n• Con quién: ${session.actionPlan?.withWhom || 'Equipo'}\n• Cómo: ${session.actionPlan?.how || 'Diálogo constructivo'}\n• Aspectos a cuidar: ${session.actionPlan?.careReminders || 'Foco en hechos objetivos'}\n\n📞 DATOS DE CONTACTO DIRECTO:\n• Correo electrónico: ${leaderEmail}\n• WhatsApp: ${leaderWhatsapp}\n\nRecomendación de intervención: Te sugerimos contactar al líder para apoyarlo a resolver posibles dudas, indagar si enfrentó algún obstáculo no previsto e invitarlo a retomar su proceso en la Etapa 6 de Lidacta.`,
@@ -2880,7 +2880,7 @@ El Equipo de Lidacta`;
               typeName: 'Inactividad Día 8',
               status: 'Correo Enviado',
               caseSummary: `Inactividad de 8 días en Etapa 5 tras definir compromiso "${session.actionPlan?.what || session.title}". Último acceso registrado: ${lastActiveFormatted}.`,
-              emailRecipient: 'hola@taniapadierna.com',
+              emailRecipient: 'hola@lidacta.com',
               currentStage: 5,
               mentorshipId: session.id,
               leaderEmail,
@@ -3201,7 +3201,7 @@ El Equipo de Lidacta`;
     const adminUser = allUsers.find((u) => u.role === 'admin') || {
       id: 'user_admin_tania',
       name: 'Tania Padierna',
-      email: 'hola@taniapadierna.com',
+      email: 'hola@lidacta.com',
       whatsapp: '+52 55 1234 5678',
     };
     const currentStageNum = (activeMentorship?.currentStage || 1) as StageNumber;
@@ -3260,7 +3260,7 @@ El Equipo de Lidacta`;
     }
 
     let simulatedEmailObj = {
-      to: adminUser.email || 'hola@taniapadierna.com',
+      to: adminUser.email || 'hola@lidacta.com',
       subject: `🚨 [URGENTE] Solicitud de Asesoría 1:1: ${currentUser.name} (${currentUser.companyName} · Etapa ${currentStageNum})`,
       bodyText: `Estimada ${adminUser.name || 'Tania Padierna'},\n\nEl líder ${currentUser.name} (${currentUser.position || 'Líder'}) de la empresa "${currentUser.companyName}" ha solicitado una sesión directa de Asesoría 1:1 en Lidacta.\n\n• Reto actual: ${currentCaseTitle}\n• Etapa en curso: Etapa ${currentStageNum} (${stageNames[currentStageNum]})\n• Formato: ${isVoiceAudio ? 'Nota de voz dictada / grabada' : 'Texto escrito'}\n\nMotivo expresado por el líder:\n"${reasonText}"\n\nDatos de contacto directo:\n• Email: ${currentUser.email}\n• WhatsApp: ${currentUser.whatsapp || 'No registrado'}\n• Fecha y hora: ${new Date().toLocaleString('es-MX')}\n\nAtentamente,\nSistema de Notificaciones Lidacta`,
     };
@@ -3280,7 +3280,7 @@ El Equipo de Lidacta`;
           caseTitle: currentCaseTitle,
           reasonText,
           isVoiceAudio,
-          adminEmail: adminUser.email || 'hola@taniapadierna.com',
+          adminEmail: adminUser.email || 'hola@lidacta.com',
           adminWhatsapp: adminUser.whatsapp || '+52 55 1234 5678',
         }),
       });
@@ -3345,7 +3345,7 @@ El Equipo de Lidacta`;
         caseId: activeMentorship.id,
         mentorshipId: activeMentorship.id,
         sender: 'lidacta' as const,
-        text: `He recibido tu solicitud para una Asesoría 1:1, ${currentUser.name}. Se ha notificado inmediatamente a ${adminUser.name || 'Tania Padierna'} (Dirección de Mentoría) por correo electrónico (hola@taniapadierna.com) y WhatsApp (${adminUser.whatsapp || '+52 55 1234 5678'}) con tu contexto de la Etapa ${currentStageNum}. Nos pondremos en contacto contigo a la brevedad. Tu conversación sigue siendo 100% confidencial.`,
+        text: `He recibido tu solicitud para una Asesoría 1:1, ${currentUser.name}. Se ha notificado inmediatamente a ${adminUser.name || 'Tania Padierna'} (Dirección de Mentoría) por correo electrónico (${adminUser.email || 'hola@lidacta.com'}) y WhatsApp (${adminUser.whatsapp || '+52 55 1234 5678'}) con tu contexto de la Etapa ${currentStageNum}. Nos pondremos en contacto contigo a la brevedad. Tu conversación sigue siendo 100% confidencial.`,
         timestamp: new Date().toISOString(),
         stage: currentStageNum,
       };
@@ -3430,7 +3430,7 @@ El Equipo de Lidacta`;
 
     // Determine official password for account
     const isTaniaAdmin =
-      user.email.toLowerCase() === 'hola@taniapadierna.com' ||
+      user.email.toLowerCase() === 'hola@lidacta.com' ||
       user.id === 'user_admin_tania' ||
       user.role === 'admin';
 
@@ -3843,7 +3843,7 @@ El Equipo de Lidacta`;
 
     if (existingUser) {
       const isExistingAdmin =
-        existingUser.email.toLowerCase() === 'hola@taniapadierna.com' ||
+        existingUser.email.toLowerCase() === 'hola@lidacta.com' ||
         existingUser.id === 'user_admin_tania' ||
         existingUser.role === 'admin';
 
@@ -4310,7 +4310,7 @@ El Equipo de Lidacta`;
       emailSimulated: {
         from: 'Lidacta <notificaciones@taniapadierna.com>',
         to: user.email,
-        replyTo: 'hola@taniapadierna.com',
+        replyTo: 'hola@lidacta.com',
         subject,
         bodyText: `¡Hola ${user.name}!\n\nLa administración de ${user.companyName || 'tu empresa'} te ha invitado a formar parte del programa directivo en Lidacta.\n\nPara habilitar tu acceso seguro y comenzar tu proceso de acompañamiento directivo personalizado, por favor ingresa al siguiente enlace y completa los datos de tu entorno operativo (Área, Puesto, WhatsApp y Personas a Cargo):\n\n${directUrl}\n\nDatos de acceso:\nUsuario: ${user.email}\nEmpresa: ${user.companyName || 'Lidacta'}\n\nEl contenido de tus conversaciones es privado y confidencial.\n\nAtentamente,\nEl Equipo de Lidacta`,
         realEmailSent: true,

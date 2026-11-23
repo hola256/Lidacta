@@ -29,7 +29,7 @@ const DEFAULT_USERS: UserProfile[] = [
   {
     id: 'user_admin_tania',
     name: 'Tania Padierna',
-    email: 'hola@taniapadierna.com',
+    email: 'hola@lidacta.com',
     password: process.env.ADMIN_PASSWORD || 'Admin_Auth_Secured_2026',
     role: 'admin',
     companyId: 'comp_nexus',
@@ -290,11 +290,21 @@ async function loadUsers(): Promise<{ users: UserProfile[]; source: string }> {
     }
   }
 
-  // Ensure administrator account (hola@taniapadierna.com) always has valid official password
+  // Ensure administrator account (hola@lidacta.com) always has valid official password and current admin email
   let hasAdmin = false;
   const adminPassword = process.env.ADMIN_PASSWORD || 'Admin_Auth_Secured_2026';
   loadedUsers = loadedUsers.map((u) => {
-    if (u.email.toLowerCase() === 'hola@taniapadierna.com' || u.id === 'user_admin_tania') {
+    if (u.id === 'user_admin_tania') {
+      hasAdmin = true;
+      const updatedEmail =
+        u.email.toLowerCase() === 'hola@taniapadierna.com' ? 'hola@lidacta.com' : u.email;
+      return {
+        ...u,
+        email: updatedEmail || 'hola@lidacta.com',
+        password: u.password || adminPassword,
+      };
+    }
+    if (u.email.toLowerCase() === 'hola@lidacta.com') {
       hasAdmin = true;
       return {
         ...u,
@@ -431,7 +441,7 @@ export default async function handler(req: any, res: any) {
 
       const emailSubject = 'Te invitan a completar tu perfil en Lidacta';
       const fromEmail = 'Lidacta <notificaciones@taniapadierna.com>';
-      const replyToEmail = 'hola@taniapadierna.com';
+      const replyToEmail = 'hola@lidacta.com';
 
       const emailHtml = generateInviteEmailHtml(
         { name: cleanName, email: cleanEmail, companyName: compName },

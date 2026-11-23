@@ -210,7 +210,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
 
       // If email succeeded or bypassed, record Resend details and sync local/central mentorship state
       const resendId = emailDispatchResult.data?.id;
-      const recipient = emailDispatchResult.data?.recipient || 'hola@taniapadierna.com';
+      const recipient = emailDispatchResult.data?.recipient || 'hola@lidacta.com';
 
       if (resendId) {
         setResendSuccess({
@@ -272,7 +272,7 @@ export const RequestMentorModal: React.FC<RequestMentorModalProps> = ({ isOpen, 
       }
 
       const resendId = emailDispatchResult.data?.id;
-      const recipient = emailDispatchResult.data?.recipient || 'hola@taniapadierna.com';
+      const recipient = emailDispatchResult.data?.recipient || 'hola@lidacta.com';
 
       if (resendId) {
         setResendSuccess({

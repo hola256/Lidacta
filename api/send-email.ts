@@ -58,7 +58,7 @@ export default async function handler(req: any, res: any) {
 
     const resendApiKey = process.env.RESEND_API_KEY;
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
-    const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com';
+    const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@lidacta.com';
 
     console.log(`[API /api/send-email] 🚀 Despachando correo a ${targetEmail} (Tipo: "${type || 'standard'}", Asunto: "${subject || 'Notificación Lidacta'}")`);
     console.log(`[API /api/send-email] Remitente: ${fromEmail}, Reply-To: ${replyToEmail}`);
@@ -375,7 +375,7 @@ export default async function handler(req: any, res: any) {
     </tr>
     <tr>
       <td style="background-color: #FFF7EF; padding: 18px 24px; text-align: center; border-top: 1px solid #EADBCE;">
-        <p style="font-size: 11px; color: #4A3F55; margin: 0;">Alerta interna generada automáticamente para la administración · hola@taniapadierna.com</p>
+        <p style="font-size: 11px; color: #4A3F55; margin: 0;">Alerta interna generada automáticamente para la administración · hola@lidacta.com</p>
       </td>
     </tr>
   </table>
@@ -383,7 +383,7 @@ export default async function handler(req: any, res: any) {
 </html>`;
       defaultText = `Estimada Tania:\n\nSe ha detectado inactividad de 8 días calendario tras finalizar la Etapa 5 en Lidacta.\n\n• Nombre del Líder: ${recipientName}\n• Empresa: ${compName}\n• Puesto / Área: ${leaderPosition} (${leaderArea})\n• Fecha del último acceso: ${lastActiveFormatted}\n• Etapa actual: Etapa 5 (Compromiso y Plan de Acción)\n• Desafío en curso: "${challengeTitle}"\n\nResumen breve de su compromiso no finalizado:\n• Acción comprometida: ${actionWhat}\n• Fecha prevista: ${actionWhen}\n• Con quién: ${actionWithWhom}\n• Cómo: ${actionHow || 'No especificado'}\n• Aspectos a cuidar: ${actionCare}\n\nContacto del líder:\n• Email: ${targetLeaderEmail}\n• WhatsApp: ${leaderWhatsapp}\n\nTe sugerimos contactar al líder vía correo o WhatsApp para verificar cómo le fue con su acción, resolver posibles dudas y animarlo a ingresar a Lidacta para concluir su reflexión en la Etapa 6.\n\nAtentamente,\nSistema Automatizado de Monitoreo Lidacta`;
 
-    // 4. ALERTA DE LÍMITE TERAPÉUTICO (A LA ADMINISTRADORA: hola@taniapadierna.com)
+    // 4. ALERTA DE LÍMITE TERAPÉUTICO (A LA ADMINISTRADORA: hola@lidacta.com)
     } else if (type === 'therapeutic_alert') {
       finalSubject = subject || '[ALERTA LIDACTA] Detección de Caso con Naturaleza Terapéutica';
       const stageNameText = body.stageName || (body.currentStage ? `Etapa ${body.currentStage}` : 'Etapa 1');
@@ -448,7 +448,7 @@ export default async function handler(req: any, res: any) {
     </tr>
     <tr>
       <td style="background-color: #FFF7EF; padding: 18px 24px; text-align: center; border-top: 1px solid #EADBCE;">
-        <p style="font-size: 11px; color: #4A3F55; margin: 0;">Alerta confidencial para la administradora · hola@taniapadierna.com</p>
+        <p style="font-size: 11px; color: #4A3F55; margin: 0;">Alerta confidencial para la administradora · hola@lidacta.com</p>
       </td>
     </tr>
   </table>

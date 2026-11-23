@@ -61,7 +61,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const apiKey = process.env.RESEND_API_KEY;
-    const targetEmail = process.env.ADMIN_EMAIL || 'hola@taniapadierna.com';
+    const targetEmail = process.env.ADMIN_EMAIL || 'hola@lidacta.com';
     const effectiveLeaderName = (leaderName || 'Líder').trim();
     const effectiveMessage = (transcript || message || reasonText || '(Sin mensaje especificado)').trim();
     const effectiveDate = date || new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
@@ -154,16 +154,16 @@ export default async function handler(req: any, res: any) {
 </html>
     `;
 
-    const emailTextBody = `🚨 Solicitud de Asesoría 1:1 en Lidacta\n\nLíder: ${effectiveLeaderName}\nFecha: ${effectiveDate}\nEmpresa: ${effectiveCompany}\nEtapa: ${effectiveStage}\nCaso: ${effectiveCase}\n\nMensaje/Transcripción:\n"${effectiveMessage}"\n\nDestinatario: ${targetEmail}\nResponder a: ${process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com'}`;
+    const emailTextBody = `🚨 Solicitud de Asesoría 1:1 en Lidacta\n\nLíder: ${effectiveLeaderName}\nFecha: ${effectiveDate}\nEmpresa: ${effectiveCompany}\nEtapa: ${effectiveStage}\nCaso: ${effectiveCase}\n\nMensaje/Transcripción:\n"${effectiveMessage}"\n\nDestinatario: ${targetEmail}\nResponder a: ${process.env.RESEND_REPLY_TO || 'hola@lidacta.com'}`;
 
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
-    const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com';
+    const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@lidacta.com';
 
     console.log(`[API /api/send (Vercel)] 🚀 Despachando con Resend: De: ${fromEmail}, Para: ${targetEmail}, Reply-To: ${replyToEmail}`);
     const resendResult = await resend.emails.send({
       from: fromEmail,
       to: [targetEmail],
-      replyTo: 'hola@taniapadierna.com',
+      replyTo: 'hola@lidacta.com',
       subject: emailSubject,
       html: emailHtmlBody,
       text: emailTextBody,

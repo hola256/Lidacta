@@ -85,14 +85,14 @@ describe('Notificaciones de Seguimiento en Etapa 5 y Alerta de Inactividad (Día
     assert.ok(responseJson.emailId || responseJson.id);
   });
 
-  it('3. Debe despachar la Alerta de Inactividad (Día 8) dirigida exclusivamente a hola@taniapadierna.com con todos los datos requeridos', async () => {
+  it('3. Debe despachar la Alerta de Inactividad (Día 8) dirigida exclusivamente a hola@lidacta.com con todos los datos requeridos', async () => {
     let responseStatus = 0;
     let responseJson: any = null;
 
     const req: any = {
       method: 'POST',
       body: {
-        to: 'hola@taniapadierna.com',
+        to: 'hola@lidacta.com',
         leaderName: 'Carlos Mendoza',
         companyName: 'Retail Nova Grupo Comercial',
         leaderPosition: 'Gerente de Sucursal Centro',

@@ -33,7 +33,7 @@ function getEnvVar(key: string, defaultValue: string): string {
 }
 
 export const DEFAULT_FROM = getEnvVar('RESEND_FROM_EMAIL', 'Lidacta <notificaciones@taniapadierna.com>');
-export const DEFAULT_REPLY_TO = getEnvVar('RESEND_REPLY_TO', 'hola@taniapadierna.com');
+export const DEFAULT_REPLY_TO = getEnvVar('RESEND_REPLY_TO', 'hola@lidacta.com');
 
 function getApiBaseUrl(): string {
   if (typeof window !== 'undefined' && window.location) {
@@ -84,7 +84,7 @@ export class EmailService {
           companyName: user.companyName || 'Industrias Nexus Automotriz',
           type: 'welcome',
           subject: `¡Te damos la bienvenida a Lidacta, ${user.name || 'Líder'}!`,
-          replyTo: 'hola@taniapadierna.com',
+          replyTo: 'hola@lidacta.com',
         }),
       });
 
@@ -126,7 +126,7 @@ export class EmailService {
         body: JSON.stringify({
           ...options,
           from: DEFAULT_FROM,
-          replyTo: 'hola@taniapadierna.com',
+          replyTo: 'hola@lidacta.com',
         }),
       });
 
@@ -180,7 +180,7 @@ export class EmailService {
           actionPlan: params.actionPlan,
           type: 'stage5_48h',
           subject: 'Apoyo continuo para revisar el primer paso de tu compromiso en Lidacta',
-          replyTo: 'hola@taniapadierna.com',
+          replyTo: 'hola@lidacta.com',
         }),
       });
 
@@ -232,7 +232,7 @@ export class EmailService {
           actionPlan: params.actionPlan,
           type: 'stage5_5d',
           subject: 'Seguimiento de tu plan de acción en Lidacta: consolidando avances hacia la Etapa 6',
-          replyTo: 'hola@taniapadierna.com',
+          replyTo: 'hola@lidacta.com',
         }),
       });
 
@@ -259,7 +259,7 @@ export class EmailService {
   }
 
   /**
-   * Envía alerta de inactividad (Día 8) a la Administradora (hola@taniapadierna.com).
+   * Envía alerta de inactividad (Día 8) a la Administradora (hola@lidacta.com).
    */
   async sendStage5InactivityAlertToAdmin(params: {
     leaderEmail: string;
@@ -281,8 +281,8 @@ export class EmailService {
           Accept: 'application/json',
         },
         body: JSON.stringify({
-          to: 'hola@taniapadierna.com',
-          email: 'hola@taniapadierna.com',
+          to: 'hola@lidacta.com',
+          email: 'hola@lidacta.com',
           leaderEmail: params.leaderEmail,
           leaderName: params.leaderName,
           companyName: params.companyName,
@@ -295,7 +295,7 @@ export class EmailService {
           actionPlan: params.actionPlan,
           type: 'stage5_inactivity_admin',
           subject: `🚨 Alerta de Inactividad (Día 8): ${params.leaderName} (${params.companyName || 'Empresa'}) sin avances en Etapa 5`,
-          replyTo: params.leaderEmail || 'hola@taniapadierna.com',
+          replyTo: params.leaderEmail || 'hola@lidacta.com',
         }),
       });
 
@@ -322,7 +322,7 @@ export class EmailService {
   }
 
   /**
-   * Envía alerta de límite terapéutico a la Administradora (hola@taniapadierna.com).
+   * Envía alerta de límite terapéutico a la Administradora (hola@lidacta.com).
    */
   async sendTherapeuticAlert(params: {
     leaderEmail?: string;
@@ -341,8 +341,8 @@ export class EmailService {
           Accept: 'application/json',
         },
         body: JSON.stringify({
-          to: 'hola@taniapadierna.com',
-          email: 'hola@taniapadierna.com',
+          to: 'hola@lidacta.com',
+          email: 'hola@lidacta.com',
           leaderEmail: params.leaderEmail,
           leaderName: params.leaderName,
           companyName: params.companyName || 'Industrias Nexus Automotriz',
@@ -352,7 +352,7 @@ export class EmailService {
           contextSummary: params.contextSummary,
           type: 'therapeutic_alert',
           subject: '[ALERTA LIDACTA] Detección de Caso con Naturaleza Terapéutica',
-          replyTo: params.leaderEmail || 'hola@taniapadierna.com',
+          replyTo: params.leaderEmail || 'hola@lidacta.com',
         }),
       });
 
@@ -414,7 +414,7 @@ export class EmailService {
           report: params.report,
           type: 'stage7_final_report',
           subject: `Tu Reporte de Retroalimentación de Liderazgo y Autonomía - Lidacta: ${params.leaderName}`,
-          replyTo: 'hola@taniapadierna.com',
+          replyTo: 'hola@lidacta.com',
         }),
       });
 

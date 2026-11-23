@@ -3,7 +3,7 @@
 let adminProfile = {
   id: 'user_admin_tania',
   name: 'Tania Padierna',
-  email: 'hola@taniapadierna.com',
+  email: 'hola@lidacta.com',
   whatsapp: '+52 55 1234 5678',
   position: 'Creadora de la Plataforma & Coach Sr.',
   companyName: 'Lidacta Platform',

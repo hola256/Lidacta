@@ -7,14 +7,21 @@ import { isHumanResourcesRole, isAdminRole, isLeaderRole, getRoleDisplayName } f
 describe('Inspector Mode & Role Impersonation Logic', () => {
   it('should restrict role impersonation exclusively to Administrator sessions', () => {
     const testCanImpersonate = (user: { role: string; email: string }) => {
-      return user.role === 'admin' || user.email.toLowerCase() === 'hola@taniapadierna.com';
+      return user.role === 'admin' || user.email.toLowerCase() === 'hola@lidacta.com';
     };
 
-    // Administrator
+    // Administrator (new official email)
     assert.strictEqual(
-      testCanImpersonate({ role: 'admin', email: 'hola@taniapadierna.com' }),
+      testCanImpersonate({ role: 'admin', email: 'hola@lidacta.com' }),
       true,
-      'Admin should be allowed to use inspector mode'
+      'Admin (hola@lidacta.com) should be allowed to use inspector mode'
+    );
+
+    // Previous admin email must no longer grant admin/inspector access
+    assert.strictEqual(
+      testCanImpersonate({ role: 'leader', email: 'hola@taniapadierna.com' }),
+      false,
+      'Previous email (hola@taniapadierna.com) should NOT be allowed to use inspector mode'
     );
 
     // Regular Leader
@@ -47,7 +54,7 @@ describe('Inspector Mode & Role Impersonation Logic', () => {
     ) => {
       const isImpersonating = Boolean(
         sessionUser &&
-          (sessionUser.role === 'admin' || sessionUser.email.toLowerCase() === 'hola@taniapadierna.com') &&
+          (sessionUser.role === 'admin' || sessionUser.email.toLowerCase() === 'hola@lidacta.com') &&
           impersonatedUser
       );
 

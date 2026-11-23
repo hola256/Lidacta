@@ -27,7 +27,7 @@ const DEFAULT_USERS: UserProfile[] = [
   {
     id: 'user_admin_tania',
     name: 'Tania Padierna',
-    email: 'hola@taniapadierna.com',
+    email: 'hola@lidacta.com',
     password: process.env.ADMIN_PASSWORD || 'Admin_Auth_Secured_2026',
     role: 'admin',
     companyId: 'comp_nexus',
@@ -373,7 +373,7 @@ export default async function handler(req: any, res: any) {
     };
 
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
-    const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@taniapadierna.com';
+    const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@lidacta.com';
 
     console.log(`[API /api/register] ==========================================`);
     console.log(`[API /api/register] 🚀 Iniciando registro de usuario: ${cleanName} (${cleanEmail})`);

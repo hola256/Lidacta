@@ -53,7 +53,7 @@ export const EmailSimulatorDrawer: React.FC = () => {
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#493447]/10 pb-2 gap-1">
                   <span className="font-bold text-[#2D1B4E]">Responder a (Reply-To):</span>
-                  <span className="font-mono text-[#246B2A] font-semibold break-all">{currentEmail.emailSimulated.replyTo || 'hola@taniapadierna.com'}</span>
+                  <span className="font-mono text-[#246B2A] font-semibold break-all">{currentEmail.emailSimulated.replyTo || 'hola@lidacta.com'}</span>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#493447]/10 pb-2 gap-1">
                   <span className="font-bold text-[#2D1B4E]">Asunto:</span>

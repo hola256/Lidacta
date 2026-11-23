@@ -87,7 +87,7 @@ const DEFAULT_USERS: UserProfile[] = [
   {
     id: 'user_admin_tania',
     name: 'Tania Padierna',
-    email: 'hola@taniapadierna.com',
+    email: 'hola@lidacta.com',
     password: process.env.ADMIN_PASSWORD || 'Admin_Auth_Secured_2026',
     role: 'admin',
     companyId: 'comp_nexus',
@@ -367,7 +367,7 @@ export default async function handler(req: any, res: any) {
 
       const emailSubject = 'Te invitan a completar tu perfil en Lidacta';
       const fromEmail = 'Lidacta <notificaciones@taniapadierna.com>';
-      const replyToEmail = 'hola@taniapadierna.com';
+      const replyToEmail = 'hola@lidacta.com';
 
       const emailHtml = generateInviteEmailHtml(
         { name: cleanName, email: cleanEmail, companyName: compName },

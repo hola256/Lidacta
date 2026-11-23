@@ -5,15 +5,15 @@ import { isTherapeuticText } from '../src/context/LidactaContext';
 import { INITIAL_SYSTEM_ALERTS } from '../src/data/mockData';
 
 describe('Implementación Completa de Alerta de Límite Terapéutico y Bitácora en Panel Admin', () => {
-  it('1. Debe despachar exitosamente la Alerta de Límite Terapéutico vía Resend a hola@taniapadierna.com', async () => {
+  it('1. Debe despachar exitosamente la Alerta de Límite Terapéutico vía Resend a hola@lidacta.com', async () => {
     let responseStatus = 0;
     let responseJson: any = null;
 
     const req: any = {
       method: 'POST',
       body: {
-        to: 'hola@taniapadierna.com',
-        email: 'hola@taniapadierna.com',
+        to: 'hola@lidacta.com',
+        email: 'hola@lidacta.com',
         leaderName: 'Roberto Gómez',
         leaderEmail: 'roberto.gomez@nexus-auto.com',
         companyName: 'Industrias Nexus Automotriz',
@@ -67,7 +67,7 @@ describe('Implementación Completa de Alerta de Límite Terapéutico y Bitácora
     assert.ok(therapeuticAlert, 'Debe existir al menos una alerta de límite terapéutico');
     assert.equal(therapeuticAlert.typeName, 'Límite Terapéutico');
     assert.equal(therapeuticAlert.status, 'Correo Enviado');
-    assert.equal(therapeuticAlert.emailRecipient, 'hola@taniapadierna.com');
+    assert.equal(therapeuticAlert.emailRecipient, 'hola@lidacta.com');
     assert.ok(therapeuticAlert.leaderName);
     assert.ok(therapeuticAlert.companyName);
     assert.ok(therapeuticAlert.caseSummary);
@@ -77,7 +77,7 @@ describe('Implementación Completa de Alerta de Límite Terapéutico y Bitácora
     assert.ok(inactivityAlert, 'Debe existir al menos una alerta de inactividad de día 8');
     assert.equal(inactivityAlert.typeName, 'Inactividad Día 8');
     assert.equal(inactivityAlert.status, 'Correo Enviado');
-    assert.equal(inactivityAlert.emailRecipient, 'hola@taniapadierna.com');
+    assert.equal(inactivityAlert.emailRecipient, 'hola@lidacta.com');
     assert.ok(inactivityAlert.leaderName);
     assert.ok(inactivityAlert.companyName);
     assert.ok(inactivityAlert.caseSummary);

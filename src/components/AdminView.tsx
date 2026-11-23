@@ -327,7 +327,7 @@ export const AdminView: React.FC = () => {
         userMessageSnippet: 'Siento demasiada angustia y depresión profunda, no puedo parar de llorar y creo que esto ya rebasa mi trabajo como líder...',
       });
       if (res && res.success) {
-        showToast('¡Alerta de Límite Terapéutico simulada y correo enviado a hola@taniapadierna.com!', 'success');
+        showToast('¡Alerta de Límite Terapéutico simulada y correo enviado a hola@lidacta.com!', 'success');
       } else {
         showToast('Alerta procesada en bitácora.', 'info');
       }
@@ -1034,7 +1034,7 @@ export const AdminView: React.FC = () => {
                   </h3>
                 </div>
                 <p className="text-xs text-[#4A3F55]/80 mt-1">
-                  Acompañamiento programado vía Resend (48 hrs y 5 días) y alertas automáticas a <strong>hola@taniapadierna.com</strong> ante líderes inactivos.
+                  Acompañamiento programado vía Resend (48 hrs y 5 días) y alertas automáticas a <strong>hola@lidacta.com</strong> ante líderes inactivos.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -1086,7 +1086,7 @@ export const AdminView: React.FC = () => {
                         </span>
                       </div>
                       <span className="text-[11px] font-semibold text-[#BF3A1B] bg-white px-2.5 py-1 rounded-lg border border-[#BF3A1B]/30">
-                        Despachado a: <strong>hola@taniapadierna.com</strong>
+                        Despachado a: <strong>hola@lidacta.com</strong>
                       </span>
                     </div>
 
@@ -2771,7 +2771,7 @@ export const AdminView: React.FC = () => {
               </div>
               <div className="flex items-center gap-2 text-[#2D1B4E]">
                 <Mail className="w-3.5 h-3.5 text-[#BF3A1B] shrink-0" />
-                <span className="font-medium text-[11px] truncate max-w-[220px]">{adminProfile.email || 'hola@taniapadierna.com'}</span>
+                <span className="font-medium text-[11px] truncate max-w-[220px]">{adminProfile.email || 'hola@lidacta.com'}</span>
               </div>
               <div className="flex items-center gap-2 text-[#2D1B4E]">
                 <MessageSquare className="w-3.5 h-3.5 text-[#246B2A] shrink-0" />
@@ -3079,7 +3079,7 @@ export const AdminView: React.FC = () => {
                   <ShieldAlert className="w-3 h-3 text-[#BF3A1B]" />
                   Monitoreo Ético & Supervisión
                 </span>
-                <span className="text-[#4A3F55]/60 text-xs">Despacho exclusivo a hola@taniapadierna.com</span>
+                <span className="text-[#4A3F55]/60 text-xs">Despacho exclusivo a hola@lidacta.com</span>
               </div>
               <h2 className="font-heading font-extrabold text-xl sm:text-2xl text-[#2D1B4E] tracking-tight">
                 Bitácora Central de Alertas del Sistema
@@ -3096,7 +3096,7 @@ export const AdminView: React.FC = () => {
                 onClick={handleSimulateTherapeuticAlert}
                 disabled={isSimulatingAlert}
                 className="w-full sm:w-auto min-h-[42px] px-4 py-2 bg-gradient-to-r from-[#BF3A1B] to-[#842029] hover:from-[#A53216] hover:to-[#6C1A22] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
-                title="Ejecutar simulación de alerta de límite terapéutico y despachar correo a hola@taniapadierna.com"
+                title="Ejecutar simulación de alerta de límite terapéutico y despachar correo a hola@lidacta.com"
               >
                 {isSimulatingAlert ? (
                   <RefreshCw className="w-4 h-4 animate-spin text-white" />
@@ -3146,7 +3146,7 @@ export const AdminView: React.FC = () => {
               </div>
               <div className="min-w-0">
                 <span className="text-[10px] uppercase font-bold text-emerald-800 block">Destinatario Oficial</span>
-                <span className="font-bold text-xs text-[#2D1B4E] truncate block">hola@taniapadierna.com</span>
+                <span className="font-bold text-xs text-[#2D1B4E] truncate block">hola@lidacta.com</span>
               </div>
             </div>
           </div>
@@ -3290,8 +3290,8 @@ export const AdminView: React.FC = () => {
                               read: true,
                               emailSimulated: {
                                 from: 'Lidacta <notificaciones@taniapadierna.com>',
-                                to: 'hola@taniapadierna.com',
-                                replyTo: alert.leaderEmail || 'hola@taniapadierna.com',
+                                to: 'hola@lidacta.com',
+                                replyTo: alert.leaderEmail || 'hola@lidacta.com',
                                 subject: isTherap
                                   ? '[ALERTA LIDACTA] Detección de Caso con Naturaleza Terapéutica'
                                   : `🚨 Alerta de Inactividad (Día 8): ${alert.leaderName} (${alert.companyName}) sin avances en Etapa 5`,
@@ -3391,7 +3391,7 @@ export const AdminView: React.FC = () => {
                               {alert.status}
                             </span>
                             <span className="block text-[9px] text-[#4A3F55]/60 mt-0.5">
-                              hola@taniapadierna.com
+                              hola@lidacta.com
                             </span>
                           </td>
 
@@ -3436,8 +3436,8 @@ export const AdminView: React.FC = () => {
                                     read: true,
                                     emailSimulated: {
                                       from: 'Lidacta <notificaciones@taniapadierna.com>',
-                                      to: 'hola@taniapadierna.com',
-                                      replyTo: alert.leaderEmail || 'hola@taniapadierna.com',
+                                      to: 'hola@lidacta.com',
+                                      replyTo: alert.leaderEmail || 'hola@lidacta.com',
                                       subject: isTherap
                                         ? '[ALERTA LIDACTA] Detección de Caso con Naturaleza Terapéutica'
                                         : `🚨 Alerta de Inactividad (Día 8): ${alert.leaderName} (${alert.companyName}) sin avances en Etapa 5`,
@@ -3449,7 +3449,7 @@ export const AdminView: React.FC = () => {
                                   });
                                 }}
                                 className="min-h-[32px] px-2.5 py-1 bg-[#FFF7EF] hover:bg-[#FFD3BF]/50 text-[#BF3A1B] text-xs font-bold rounded-lg border border-[#BF3A1B]/30 transition-all cursor-pointer flex items-center gap-1 shadow-2xs active:scale-95"
-                                title="Ver plantilla de correo electrónico despachada a hola@taniapadierna.com"
+                                title="Ver plantilla de correo electrónico despachada a hola@lidacta.com"
                               >
                                 <Mail className="w-3 h-3 text-[#BF3A1B]" />
                                 <span>Ver Correo</span>
@@ -3538,7 +3538,7 @@ export const AdminView: React.FC = () => {
                   )}
 
                   <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900 text-[11px] leading-relaxed">
-                    <strong>Supervisión Directiva:</strong> Correo de notificación entregado a <code>hola@taniapadierna.com</code> vía Resend. La conversación del líder continuó de forma fluida y empática sin interrumpir la plataforma.
+                    <strong>Supervisión Directiva:</strong> Correo de notificación entregado a <code>hola@lidacta.com</code> vía Resend. La conversación del líder continuó de forma fluida y empática sin interrumpir la plataforma.
                   </div>
                 </div>
 
