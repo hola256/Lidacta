@@ -1,5 +1,72 @@
 import { Resend } from 'resend';
-import { isQaRequestPayload, QA_MENTOR_REQUEST_BLOCKED_MESSAGE } from '../src/utils/qaIsolation';
+
+// Self-contained QA isolation guard to avoid ERR_MODULE_NOT_FOUND in Vercel Node ESM runtime
+const QA_LEADER_ID = 'user_qa_leader';
+const QA_LEADER_EMAIL = 'laura.qa@prueba-lidacta.local';
+const QA_EMAIL_DOMAIN = '@prueba-lidacta.local';
+const QA_SESSION_ID_PREFIX = 'ment_qa_';
+const QA_LEADER_NAME = 'Laura Méndez (Líder QA)';
+const QA_MENTOR_REQUEST_BLOCKED_MESSAGE =
+  'La solicitud de Asesoría 1:1 no está disponible en sesiones de prueba.';
+
+function isQaRequestPayload(payload: any): { isQa: boolean; reason?: string } {
+  if (!payload || typeof payload !== 'object') {
+    return { isQa: false };
+  }
+
+  if (payload.isTestSession === true || payload.isTestSession === 'true') {
+    return { isQa: true, reason: 'isTestSession' };
+  }
+
+  const candidateIds = [
+    payload.leaderId,
+    payload.userId,
+    payload.mentorRequestDetails?.leaderId,
+  ];
+  if (candidateIds.some((id) => typeof id === 'string' && id.trim() === QA_LEADER_ID)) {
+    return { isQa: true, reason: 'QA_TEST_LEADER_ID' };
+  }
+
+  const candidateSessionIds = [
+    payload.sessionId,
+    payload.mentorshipId,
+    payload.caseId,
+    payload.mentorRequestDetails?.sessionId,
+  ];
+  if (
+    candidateSessionIds.some(
+      (sid) => typeof sid === 'string' && sid.trim().startsWith(QA_SESSION_ID_PREFIX)
+    )
+  ) {
+    return { isQa: true, reason: 'ment_qa_sessionId' };
+  }
+
+  const candidateEmails = [
+    payload.leaderEmail,
+    payload.email,
+    payload.to,
+    payload.mentorRequestDetails?.leaderEmail,
+  ];
+  for (const rawEmail of candidateEmails) {
+    if (typeof rawEmail === 'string') {
+      const normalized = rawEmail.trim().toLowerCase();
+      if (normalized === QA_LEADER_EMAIL || normalized.endsWith(QA_EMAIL_DOMAIN)) {
+        return { isQa: true, reason: 'qa_email' };
+      }
+    }
+  }
+
+  const candidateNames = [
+    payload.leaderName,
+    payload.name,
+    payload.mentorRequestDetails?.leaderName,
+  ];
+  if (candidateNames.some((n) => typeof n === 'string' && n.trim() === QA_LEADER_NAME)) {
+    return { isQa: true, reason: 'qa_leader_name' };
+  }
+
+  return { isQa: false };
+}
 
 export const maxDuration = 60; // 60 segundos de timeout
 
