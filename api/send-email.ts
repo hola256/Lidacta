@@ -57,7 +57,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const resendApiKey = process.env.RESEND_API_KEY;
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@lidacta.com>';
     const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@lidacta.com';
 
     console.log(`[API /api/send-email] 🚀 Despachando correo a ${targetEmail} (Tipo: "${type || 'standard'}", Asunto: "${subject || 'Notificación Lidacta'}")`);

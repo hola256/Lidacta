@@ -372,7 +372,7 @@ export default async function handler(req: any, res: any) {
       password: body.password || '',
     };
 
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@taniapadierna.com>';
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Lidacta <notificaciones@lidacta.com>';
     const replyToEmail = process.env.RESEND_REPLY_TO || 'hola@lidacta.com';
 
     console.log(`[API /api/register] ==========================================`);
