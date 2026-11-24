@@ -287,6 +287,7 @@ export const LeaderView: React.FC = () => {
   const [stageInputText, setStageInputText] = useState('');
   const [newChallengePrompt, setNewChallengePrompt] = useState('');
   const [isStartingNew, setIsStartingNew] = useState(false);
+  const isStartingChallengeRef = useRef(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMentorModalOpen, setIsMentorModalOpen] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -651,16 +652,21 @@ export const LeaderView: React.FC = () => {
   };
 
   const handleStartChallenge = async () => {
-    if (!newChallengePrompt.trim()) return;
+    if (!newChallengePrompt.trim() || isStartingNew || isSendingMessage || isStartingChallengeRef.current) return;
+    isStartingChallengeRef.current = true;
     if (isListeningOnboardingMic && onboardingSpeechRecognizer) {
       onboardingSpeechRecognizer.stop();
       setIsListeningOnboardingMic(false);
     }
     setIsStartingNew(true);
-    await startNewMentorship(newChallengePrompt, { priority: newChallengePriority });
-    setNewChallengePrompt('');
-    setNewChallengePriority('media');
-    setIsStartingNew(false);
+    try {
+      await startNewMentorship(newChallengePrompt, { priority: newChallengePriority });
+      setNewChallengePrompt('');
+      setNewChallengePriority('media');
+    } finally {
+      isStartingChallengeRef.current = false;
+      setIsStartingNew(false);
+    }
   };
 
   const handleSendMessage = async (e?: React.FormEvent) => {

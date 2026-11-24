@@ -2206,11 +2206,9 @@ export default async function handler(req: any, res: any) {
         });
       }
       console.error('ERROR: No se detectó ninguna GEMINI_API_KEY en process.env');
-      return res.status(200).json({
+      return res.status(500).json({
         success: false,
-        reply: 'ERROR DE SERVIDOR: No se detectó ninguna GEMINI_API_KEY en process.env',
-        text: 'ERROR DE SERVIDOR: No se detectó ninguna GEMINI_API_KEY en process.env',
-        error: 'No se detectó ninguna GEMINI_API_KEY en process.env',
+        error: 'Configuración de servidor incompleta para procesar la solicitud.',
       });
     }
 
@@ -2423,17 +2421,30 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
 
     const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
     const FALLBACK_MODEL = 'gemini-3.1-flash-lite';
-    const modelsToTry = [
+    const attemptQueue = [
       MODEL_NAME,
       ...(MODEL_NAME !== FALLBACK_MODEL ? [FALLBACK_MODEL] : []),
     ];
+    const FAST_TRANSIENT_ERROR_MS = 5000;
+    const MAX_TOTAL_BUDGET_MS = 55000; // Margen seguro dentro de maxDuration = 60s
+    const requestLoopStartTime = Date.now();
+    let extraRetryUsed = false;
+
     let data: any = null;
     let ok = false;
     let lastStatus = 0;
     let lastErrorText = '';
+    let lastErrorWasTimeout = false;
+    let lastAttemptModel = '';
 
-    for (let i = 0; i < modelsToTry.length; i++) {
-      const modelName = modelsToTry[i];
+    for (let i = 0; i < attemptQueue.length; i++) {
+      const modelName = attemptQueue[i];
+      // Reiniciar estado de error en cada intento para no mezclar resultados entre modelos
+      lastAttemptModel = modelName;
+      lastStatus = 0;
+      lastErrorText = '';
+      lastErrorWasTimeout = false;
+
       const timerScheduledTime = Date.now();
       const controller = new AbortController();
       const timeoutMs = 22000; // 22 segundos de timeout individual
@@ -2443,7 +2454,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
       let headersElapsedMs = 0;
 
       console.log(
-        `[Lidacta Telemetry] [${modelName}] Iniciando petición a Gemini.\n` +
+        `[Lidacta Telemetry] [${modelName}] Iniciando petición a Gemini (intento ${i + 1}/${attemptQueue.length}).\n` +
         `  - Temporizador programado: ${new Date(timerScheduledTime).toISOString()}\n` +
         `  - Inicio fetch: ${new Date(fetchStartTime).toISOString()}\n` +
         `  - Diferencia de arranque: ${fetchStartTime - timerScheduledTime}ms`
@@ -2492,10 +2503,26 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         const bodyReadElapsedMs = Date.now() - bodyReadStartTime;
         console.warn(`[Lidacta Telemetry] [${modelName}] Error HTTP ${response.status} en ${headersElapsedMs}ms (Lectura body error: ${bodyReadElapsedMs}ms, Total: ${totalElapsedMs}ms)`);
 
-        // Si devuelve 503 (saturación) o 429 (límite de tasa), hacemos fallback automático al siguiente modelo
+        const hasMoreModels = i < attemptQueue.length - 1;
+        // Si devuelve 503 (saturación) o 429 (límite de tasa), hacemos fallback automático al siguiente modelo;
+        // si ya estamos en el último modelo y la falla 503/429 fue rápida (<5s), permitimos máximo 1 reintento secuencial con jitter dentro del presupuesto temporal.
         if (response.status === 503 || response.status === 429) {
-          console.warn(`Saturación/límite de tasa detectado (${response.status}) en ${modelName}. Procediendo con fallback automático...`);
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          if (hasMoreModels) {
+            console.warn(`Saturación/límite de tasa detectado (${response.status}) en ${modelName}. Procediendo con fallback automático...`);
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          } else if (!extraRetryUsed && totalElapsedMs <= FAST_TRANSIENT_ERROR_MS) {
+            const jitterDelayMs = 1200 + Math.floor(Math.random() * 600);
+            const projectedTotalMs = (Date.now() - requestLoopStartTime) + jitterDelayMs + timeoutMs;
+            if (projectedTotalMs <= MAX_TOTAL_BUDGET_MS) {
+              extraRetryUsed = true;
+              console.warn(
+                `[Lidacta Telemetry] [${modelName}] Error rápido ${response.status} (${totalElapsedMs}ms). ` +
+                `Ejecutando 1 reintento secuencial tras ${jitterDelayMs}ms (presupuesto proyectado: ${projectedTotalMs}ms/${MAX_TOTAL_BUDGET_MS}ms).`
+              );
+              await new Promise((resolve) => setTimeout(resolve, jitterDelayMs));
+              attemptQueue.push(modelName);
+            }
+          }
         }
       } catch (fetchErr: any) {
         clearTimeout(timeoutId);
@@ -2531,13 +2558,15 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
           lastErrorText.toLowerCase().includes('aborted') ||
           lastErrorText.toLowerCase().includes('timeout');
 
-        const hasMoreModels = i < modelsToTry.length - 1;
+        lastErrorWasTimeout = isTimeout;
+
+        const hasMoreModels = i < attemptQueue.length - 1;
 
         if (isTimeout) {
           if (hasMoreModels) {
             console.warn(
               `[Lidacta Telemetry] [${modelName}] Timeout alcanzado (${timeoutMs}ms). ` +
-              `Activando automáticamente modelo de respaldo (${modelsToTry[i + 1]})...`
+              `Activando automáticamente modelo de respaldo (${attemptQueue[i + 1]})...`
             );
             continue;
           } else {
@@ -2573,11 +2602,26 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         });
       }
       const errorMsg = lastErrorText || 'No se recibió respuesta válida de los candidatos de la API de Gemini.';
-      return res.status(200).json({
+      const errorHttpStatus =
+        lastStatus === 429 || lastStatus === 503
+          ? lastStatus
+          : lastErrorWasTimeout
+          ? 504
+          : lastStatus >= 400 && lastStatus < 600
+          ? lastStatus
+          : 502;
+      console.error(
+        `[Lidacta API] Fallo final en /api/mentor/respond (modelo=${lastAttemptModel}, status=${errorHttpStatus}, ` +
+        `rawStatus=${lastStatus || 'N/A'}, timeout=${lastErrorWasTimeout}): ${errorMsg}`
+      );
+      return res.status(errorHttpStatus).json({
         success: false,
-        reply: `ERROR DE SERVIDOR (Gemini API ${lastStatus || 'Error'}): ${errorMsg}`,
-        text: `ERROR DE SERVIDOR: ${errorMsg}`,
-        error: errorMsg,
+        statusCode: errorHttpStatus,
+        error: lastErrorWasTimeout
+          ? 'Tiempo de espera agotado al procesar la solicitud de mentoría.'
+          : errorHttpStatus === 429 || errorHttpStatus === 503
+          ? 'El servicio de mentoría está temporalmente saturado. Por favor reintenta.'
+          : 'No se pudo procesar la respuesta de mentoría en este momento.',
       });
     }
 
@@ -2779,10 +2823,8 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         data: fallbackStage7,
       });
     }
-    return res.status(200).json({
+    return res.status(500).json({
       success: false,
-      reply: `ERROR DE SERVIDOR: ${error?.message || JSON.stringify(error)}`,
-      text: `ERROR DE SERVIDOR: ${error?.message || JSON.stringify(error)}`,
       error: error?.message || 'Error en servidor',
     });
   }

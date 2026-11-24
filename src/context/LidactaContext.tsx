@@ -42,6 +42,35 @@ import {
   buildTestSessionForStage,
 } from '../utils/testSessionFixtures';
 
+export const MENTOR_TEMPORARY_ERROR_TEXT =
+  'Lidacta no pudo responder en este momento. Por favor reintenta.';
+
+export function isTechnicalErrorMessage(m: any): boolean {
+  if (!m || typeof m !== 'object') return false;
+  const text = String(m.text || m.content || '').toLowerCase();
+  return Boolean(
+    (m.id && String(m.id).includes('_err')) ||
+      m.isError ||
+      text.includes('no pudo responder en este momento') ||
+      text.includes('por favor reintenta') ||
+      text.includes('error de servidor')
+  );
+}
+
+export function isValidMentorApiResponse(
+  response: { ok?: boolean } | null | undefined,
+  data: any,
+  resolvedReply: unknown
+): resolvedReply is string {
+  if (!response?.ok) return false;
+  if (!data || data.success === false) return false;
+  if (typeof resolvedReply !== 'string') return false;
+  const trimmed = resolvedReply.trim();
+  if (!trimmed) return false;
+  if (trimmed.toUpperCase().startsWith('ERROR DE SERVIDOR')) return false;
+  return true;
+}
+
 export function resolveStage6ExecutionStatus(
   session: MentorshipSession | null | undefined
 ): ActionPlanExecutionStatus {
@@ -1129,7 +1158,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       const resolvedReply =
         data.reply ||
         data.text ||
@@ -1137,7 +1166,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
         data.data?.reply ||
         data.data?.replyText;
 
-      if (response.ok && resolvedReply) {
+      if (isValidMentorApiResponse(response, data, resolvedReply)) {
         const coachReply = data.data || {};
         const lidactaMsg = {
           id: `msg_${Date.now()}_lid_qa`,
@@ -1232,6 +1261,27 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
           'success'
         );
         return updatedSessionSnapshot;
+      } else {
+        if (stage === 7) {
+          throw new Error(data?.error || 'Respuesta inválida de mentor en Etapa 7');
+        }
+        const errMsg = {
+          id: `msg_${Date.now()}_err`,
+          caseId: newSession.id,
+          mentorshipId: newSession.id,
+          sender: 'lidacta' as const,
+          text: MENTOR_TEMPORARY_ERROR_TEXT,
+          timestamp: new Date().toISOString(),
+          stage,
+          isError: true,
+        };
+        setMentorships((prev) =>
+          prev.map((m) =>
+            m.id === newSession.id
+              ? { ...m, messages: [...m.messages, errMsg], lastActiveAt: new Date().toISOString() }
+              : m
+          )
+        );
       }
     } catch (err) {
       console.error('Error iniciando sesión QA por etapa:', err);
@@ -1546,14 +1596,14 @@ El Equipo de Lidacta`;
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       const resolvedReply =
         data.reply ||
         data.text ||
         data.response ||
         data.data?.reply ||
         data.data?.replyText;
-      if (response.ok && resolvedReply) {
+      if (isValidMentorApiResponse(response, data, resolvedReply)) {
         const coachReply = data.data || {};
         const replyMsg = {
           id: `msg_${Date.now()}_lid`,
@@ -1586,9 +1636,44 @@ El Equipo de Lidacta`;
               : m
           )
         );
+      } else {
+        const errMsg = {
+          id: `msg_${Date.now()}_err`,
+          caseId: newSessionId,
+          mentorshipId: newSessionId,
+          sender: 'lidacta' as const,
+          text: MENTOR_TEMPORARY_ERROR_TEXT,
+          timestamp: new Date().toISOString(),
+          stage: initialStage,
+          isError: true,
+        };
+        setMentorships((prev) =>
+          prev.map((m) =>
+            m.id === newSessionId
+              ? { ...m, messages: [...m.messages, errMsg], lastActiveAt: new Date().toISOString() }
+              : m
+          )
+        );
       }
     } catch (err) {
       console.error('Error starting mentorship:', err);
+      const errMsg = {
+        id: `msg_${Date.now()}_err`,
+        caseId: newSessionId,
+        mentorshipId: newSessionId,
+        sender: 'lidacta' as const,
+        text: MENTOR_TEMPORARY_ERROR_TEXT,
+        timestamp: new Date().toISOString(),
+        stage: initialStage,
+        isError: true,
+      };
+      setMentorships((prev) =>
+        prev.map((m) =>
+          m.id === newSessionId
+            ? { ...m, messages: [...m.messages, errMsg], lastActiveAt: new Date().toISOString() }
+            : m
+        )
+      );
     } finally {
       setIsSendingMessage(false);
     }
@@ -1717,13 +1802,7 @@ El Equipo de Lidacta`;
       if (!m || typeof m !== 'object') return false;
       const mCase = m.caseId || m.mentorshipId;
       if (mCase && mCase !== currentCaseId) return false;
-      const text = (m.text || m.content || '').toLowerCase();
-      if (
-        (m.id && String(m.id).includes('_err')) ||
-        m.isError ||
-        text.includes('no pudo responder en este momento') ||
-        text.includes('por favor reintenta')
-      ) {
+      if (isTechnicalErrorMessage(m)) {
         return false;
       }
       return true;
@@ -1786,14 +1865,14 @@ El Equipo de Lidacta`;
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       const resolvedReply =
         data.reply ||
         data.text ||
         data.response ||
         data.data?.reply ||
         data.data?.replyText;
-      if (response.ok && resolvedReply) {
+      if (isValidMentorApiResponse(response, data, resolvedReply)) {
         const coachReply = data.data || {};
         const isReadyToAdvance = Boolean(coachReply.readyToAdvance || data.readyToAdvance);
         const stageAdvanceSignal =
@@ -2328,13 +2407,7 @@ El Equipo de Lidacta`;
       if (!m || typeof m !== 'object') return false;
       const mCase = m.caseId || m.mentorshipId;
       if (mCase && mCase !== currentCaseId) return false;
-      const text = (m.text || m.content || '').toLowerCase();
-      if (
-        (m.id && String(m.id).includes('_err')) ||
-        m.isError ||
-        text.includes('no pudo responder en este momento') ||
-        text.includes('por favor reintenta')
-      ) {
+      if (isTechnicalErrorMessage(m)) {
         return false;
       }
       return true;
@@ -2368,14 +2441,14 @@ El Equipo de Lidacta`;
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       const resolvedReply =
         data.reply ||
         data.text ||
         data.response ||
         data.data?.reply ||
         data.data?.replyText;
-      if (response.ok && resolvedReply) {
+      if (isValidMentorApiResponse(response, data, resolvedReply)) {
         const coachReply = data.data || {};
         const introMsg = {
           id: `msg_${Date.now()}_lid`,
@@ -2533,6 +2606,27 @@ El Equipo de Lidacta`;
             autoDetectAndLogResources(nextStage, activeMentorship, `[Avanzando a Etapa ${nextStage}]`, coachReply.replyText);
           }
         }
+      } else {
+        if (nextStage === 7) {
+          throw new Error(data?.error || 'Respuesta inválida de mentor en Etapa 7');
+        }
+        const errMsg = {
+          id: `msg_${Date.now()}_err`,
+          caseId: currentCaseId,
+          mentorshipId: currentCaseId,
+          sender: 'lidacta' as const,
+          text: MENTOR_TEMPORARY_ERROR_TEXT,
+          timestamp: new Date().toISOString(),
+          stage: nextStage,
+          isError: true,
+        };
+        setMentorships((prev) =>
+          prev.map((m) =>
+            m.id === currentCaseId
+              ? { ...m, messages: [...m.messages, errMsg], lastActiveAt: new Date().toISOString() }
+              : m
+          )
+        );
       }
     } catch (err) {
       console.error('Error transitioning stage:', err);
@@ -2581,6 +2675,24 @@ El Equipo de Lidacta`;
             console.error('[LIDACTA 📧] Error no bloqueante despachando reporte final en fallback:', e)
           );
         }
+      } else {
+        const errMsg = {
+          id: `msg_${Date.now()}_err`,
+          caseId: currentCaseId,
+          mentorshipId: currentCaseId,
+          sender: 'lidacta' as const,
+          text: MENTOR_TEMPORARY_ERROR_TEXT,
+          timestamp: new Date().toISOString(),
+          stage: nextStage,
+          isError: true,
+        };
+        setMentorships((prev) =>
+          prev.map((m) =>
+            m.id === currentCaseId
+              ? { ...m, messages: [...m.messages, errMsg], lastActiveAt: new Date().toISOString() }
+              : m
+          )
+        );
       }
     } finally {
       setIsSendingMessage(false);
@@ -2988,13 +3100,7 @@ El Equipo de Lidacta`;
       if (!m || typeof m !== 'object') return false;
       const mCase = m.caseId || m.mentorshipId;
       if (mCase && mCase !== currentCaseId) return false;
-      const msgTxt = (m.text || m.content || '').toLowerCase();
-      if (
-        (m.id && String(m.id).includes('_err')) ||
-        m.isError ||
-        msgTxt.includes('no pudo responder en este momento') ||
-        msgTxt.includes('por favor reintenta')
-      ) {
+      if (isTechnicalErrorMessage(m)) {
         return false;
       }
       return true;
@@ -3074,7 +3180,7 @@ El Equipo de Lidacta`;
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       const resolvedReply =
         data.reply ||
         data.text ||
@@ -3082,7 +3188,9 @@ El Equipo de Lidacta`;
         data.data?.reply ||
         data.data?.replyText;
 
-      const replyText = response.ok && resolvedReply ? resolvedReply : buildFallbackReplyText();
+      const replyText = isValidMentorApiResponse(response, data, resolvedReply)
+        ? resolvedReply
+        : buildFallbackReplyText();
       const lidactaMsg = {
         id: `msg_${Date.now()}_lid`,
         caseId: currentCaseId,
