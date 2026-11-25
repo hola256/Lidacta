@@ -2425,10 +2425,47 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
       MODEL_NAME,
       ...(MODEL_NAME !== FALLBACK_MODEL ? [FALLBACK_MODEL] : []),
     ];
+    const initialQueueLength = attemptQueue.length;
     const FAST_TRANSIENT_ERROR_MS = 5000;
     const MAX_TOTAL_BUDGET_MS = 55000; // Margen seguro dentro de maxDuration = 60s
     const requestLoopStartTime = Date.now();
     let extraRetryUsed = false;
+
+    const requestTraceId =
+      typeof globalThis.crypto?.randomUUID === 'function'
+        ? globalThis.crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    const requestBodyPayload = JSON.stringify({
+      systemInstruction: {
+        parts: [{ text: systemPrompt }],
+      },
+      contents,
+      generationConfig: {
+        responseMimeType: 'application/json',
+        thinkingConfig: {
+          thinkingLevel: 'LOW',
+        },
+      },
+    });
+    const contentsChars = contents.reduce(
+      (acc, turn) =>
+        acc +
+        (Array.isArray(turn?.parts)
+          ? turn.parts.reduce(
+              (partAcc, part) => partAcc + (typeof part?.text === 'string' ? part.text.length : 0),
+              0
+            )
+          : 0),
+      0
+    );
+    const requestStats = {
+      stage: currentStageNum,
+      historyTurns: resolvedHistory.length,
+      contentsTurns: contents.length,
+      systemPromptChars: systemPrompt.length,
+      contentsChars,
+      requestBodyBytes: new TextEncoder().encode(requestBodyPayload).length,
+    };
 
     let data: any = null;
     let ok = false;
@@ -2439,6 +2476,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
 
     for (let i = 0; i < attemptQueue.length; i++) {
       const modelName = attemptQueue[i];
+      const attemptRole = i === 0 ? 'primary' : i < initialQueueLength ? 'fallback' : 'retry';
       // Reiniciar estado de error en cada intento para no mezclar resultados entre modelos
       lastAttemptModel = modelName;
       lastStatus = 0;
@@ -2466,18 +2504,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
-          body: JSON.stringify({
-            systemInstruction: {
-              parts: [{ text: systemPrompt }],
-            },
-            contents,
-            generationConfig: {
-              responseMimeType: 'application/json',
-              thinkingConfig: {
-                thinkingLevel: 'LOW',
-              },
-            },
-          }),
+          body: requestBodyPayload,
         });
 
         headersReceived = true;
@@ -2492,6 +2519,28 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
           const totalElapsedMs = Date.now() - fetchStartTime;
           const bodyReadElapsedMs = Date.now() - bodyReadStartTime;
           console.log(`[Lidacta Telemetry] [${modelName}] Cuerpo JSON leído con éxito. Lectura body: ${bodyReadElapsedMs}ms | Tiempo total: ${totalElapsedMs}ms`);
+          const usage = data?.usageMetadata ?? null;
+          console.log(
+            `[Lidacta Usage] ${JSON.stringify({
+              event: 'gemini_success',
+              traceId: requestTraceId,
+              attempt: i + 1,
+              attemptTotal: attemptQueue.length,
+              attemptRole,
+              model: modelName,
+              modelVersion: typeof data?.modelVersion === 'string' ? data.modelVersion : null,
+              usageMetadataAvailable: Boolean(usage),
+              promptTokenCount: typeof usage?.promptTokenCount === 'number' ? usage.promptTokenCount : null,
+              candidatesTokenCount: typeof usage?.candidatesTokenCount === 'number' ? usage.candidatesTokenCount : null,
+              thoughtsTokenCount: typeof usage?.thoughtsTokenCount === 'number' ? usage.thoughtsTokenCount : null,
+              totalTokenCount: typeof usage?.totalTokenCount === 'number' ? usage.totalTokenCount : null,
+              cachedContentTokenCount: typeof usage?.cachedContentTokenCount === 'number' ? usage.cachedContentTokenCount : null,
+              headersElapsedMs,
+              bodyReadElapsedMs,
+              totalElapsedMs,
+              ...requestStats,
+            })}`
+          );
           ok = true;
           break;
         }
@@ -2502,6 +2551,38 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         const totalElapsedMs = Date.now() - fetchStartTime;
         const bodyReadElapsedMs = Date.now() - bodyReadStartTime;
         console.warn(`[Lidacta Telemetry] [${modelName}] Error HTTP ${response.status} en ${headersElapsedMs}ms (Lectura body error: ${bodyReadElapsedMs}ms, Total: ${totalElapsedMs}ms)`);
+
+        let googleErrorCode: number | null = null;
+        let googleErrorStatus: string | null = null;
+        try {
+          const parsedErr = JSON.parse(lastErrorText);
+          if (typeof parsedErr?.error?.code === 'number') {
+            googleErrorCode = parsedErr.error.code;
+          }
+          if (typeof parsedErr?.error?.status === 'string') {
+            googleErrorStatus = parsedErr.error.status;
+          }
+        } catch {
+          // Ignorar si el cuerpo de error no es JSON
+        }
+
+        console.warn(
+          `[Lidacta Usage] ${JSON.stringify({
+            event: 'gemini_http_error',
+            traceId: requestTraceId,
+            attempt: i + 1,
+            attemptTotal: attemptQueue.length,
+            attemptRole,
+            model: modelName,
+            status: response.status,
+            googleErrorCode,
+            googleErrorStatus,
+            headersElapsedMs,
+            bodyReadElapsedMs,
+            totalElapsedMs,
+            ...requestStats,
+          })}`
+        );
 
         const hasMoreModels = i < attemptQueue.length - 1;
         // Si devuelve 503 (saturación) o 429 (límite de tasa), hacemos fallback automático al siguiente modelo;
@@ -2559,6 +2640,24 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
           lastErrorText.toLowerCase().includes('timeout');
 
         lastErrorWasTimeout = isTimeout;
+
+        console.warn(
+          `[Lidacta Usage] ${JSON.stringify({
+            event: 'gemini_exception',
+            traceId: requestTraceId,
+            attempt: i + 1,
+            attemptTotal: attemptQueue.length,
+            attemptRole,
+            model: modelName,
+            errorName,
+            isTimeout,
+            wasSignalAborted,
+            headersReceived,
+            headersElapsedMs: headersReceived ? headersElapsedMs : null,
+            errorElapsedMs: errorElapsedFromFetch,
+            ...requestStats,
+          })}`
+        );
 
         const hasMoreModels = i < attemptQueue.length - 1;
 
