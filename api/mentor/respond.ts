@@ -2183,6 +2183,7 @@ export default async function handler(req: any, res: any) {
       process.env.GOOGLE_API_KEY ||
       process.env.VITE_GEMINI_API_KEY ||
       process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    console.log('[DIAGNOSTICO] GEMINI_KEY_SUFFIX:', apiKey ? apiKey.trim().slice(-4) : 'MISSING');
 
     if (!apiKey) {
       if (currentStageNum === 7) {
