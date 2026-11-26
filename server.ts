@@ -231,7 +231,7 @@ app.post('/api/mentor/respond', async (req: Request, res: Response) => {
 
     // STRICT CASE ISOLATION & TECHNICAL ERROR FILTERING:
     // Only accept messages that belong to the active caseId / mentorshipId and exclude technical error placeholders
-    let resolvedHistory = rawHistory.filter((m: any) => {
+    resolvedHistory = rawHistory.filter((m: any) => {
       if (!m || typeof m !== 'object') return false;
       const mCase = m.caseId || m.mentorshipId;
       if (targetCaseId && mCase && mCase !== targetCaseId) {
@@ -743,7 +743,139 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
 
         const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
         const FALLBACK_MODEL = 'gemini-3.1-flash-lite';
+        const requestTraceId =
+          typeof globalThis.crypto?.randomUUID === 'function'
+            ? globalThis.crypto.randomUUID()
+            : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        const requestStats = {
+          stage: currentStageNum,
+          historyTurns: resolvedHistory.length,
+          systemPromptChars: systemPrompt.length,
+          contentsChars: prompt.length,
+          requestBodyBytes: new TextEncoder().encode(
+            JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+              generationConfig: {
+                responseMimeType: 'application/json',
+                temperature: 0.7,
+              },
+            })
+          ).length,
+        };
+
+        const extractSafeErrorTelemetry = (err: any) => {
+          const rawMsg = String(err?.message || err || '');
+          let parsedErr: any = null;
+          const jsonStart = rawMsg.indexOf('{');
+          if (jsonStart >= 0) {
+            try {
+              parsedErr = JSON.parse(rawMsg.slice(jsonStart));
+            } catch {
+              // Ignorar si no contiene JSON parseable
+            }
+          }
+          const numericStatus =
+            typeof err?.status === 'number'
+              ? err.status
+              : typeof err?.code === 'number'
+              ? err.code
+              : typeof parsedErr?.error?.code === 'number'
+              ? parsedErr.error.code
+              : (() => {
+                  const m = rawMsg.match(/\b(400|401|403|404|429|500|502|503|504)\b/);
+                  return m ? Number(m[1]) : null;
+                })();
+          const googleErrorStatus =
+            typeof parsedErr?.error?.status === 'string'
+              ? parsedErr.error.status
+              : rawMsg.includes('RESOURCE_EXHAUSTED')
+              ? 'RESOURCE_EXHAUSTED'
+              : rawMsg.includes('UNAVAILABLE')
+              ? 'UNAVAILABLE'
+              : rawMsg.includes('DEADLINE_EXCEEDED')
+              ? 'DEADLINE_EXCEEDED'
+              : null;
+          const isTimeoutErr =
+            rawMsg.includes('timeout') ||
+            rawMsg.includes('Timeout') ||
+            rawMsg.includes('deadline') ||
+            rawMsg.includes('DEADLINE_EXCEEDED');
+          const errorClassification = isTimeoutErr
+            ? 'timeout'
+            : numericStatus === 429 || googleErrorStatus === 'RESOURCE_EXHAUSTED'
+            ? 'rate_limit'
+            : numericStatus === 503 || googleErrorStatus === 'UNAVAILABLE'
+            ? 'unavailable'
+            : numericStatus !== null
+            ? 'http_error'
+            : 'network_or_sdk_error';
+          return {
+            status: numericStatus,
+            googleErrorCode: typeof parsedErr?.error?.code === 'number' ? parsedErr.error.code : numericStatus,
+            googleErrorStatus,
+            errorClassification,
+            isTimeout: isTimeoutErr,
+          };
+        };
+
+        const logUsageSuccess = (
+          resp: any,
+          modelUsed: string,
+          attempt: number,
+          attemptRole: 'primary' | 'fallback',
+          totalElapsedMs: number
+        ) => {
+          const usage = resp?.usageMetadata ?? null;
+          console.log(
+            `[Lidacta Usage] ${JSON.stringify({
+              event: 'gemini_success',
+              traceId: requestTraceId,
+              attempt,
+              attemptRole,
+              model: modelUsed,
+              modelVersion: typeof resp?.modelVersion === 'string' ? resp.modelVersion : null,
+              usageMetadataAvailable: Boolean(usage),
+              promptTokenCount: typeof usage?.promptTokenCount === 'number' ? usage.promptTokenCount : null,
+              candidatesTokenCount: typeof usage?.candidatesTokenCount === 'number' ? usage.candidatesTokenCount : null,
+              thoughtsTokenCount: typeof usage?.thoughtsTokenCount === 'number' ? usage.thoughtsTokenCount : null,
+              totalTokenCount: typeof usage?.totalTokenCount === 'number' ? usage.totalTokenCount : null,
+              cachedContentTokenCount:
+                typeof usage?.cachedContentTokenCount === 'number' ? usage.cachedContentTokenCount : null,
+              totalElapsedMs,
+              ...requestStats,
+            })}`
+          );
+        };
+
+        const logUsageError = (
+          err: any,
+          modelUsed: string,
+          attempt: number,
+          attemptRole: 'primary' | 'fallback',
+          totalElapsedMs: number
+        ) => {
+          const errInfo = extractSafeErrorTelemetry(err);
+          console.warn(
+            `[Lidacta Usage] ${JSON.stringify({
+              event: errInfo.isTimeout ? 'gemini_exception' : 'gemini_http_error',
+              traceId: requestTraceId,
+              attempt,
+              attemptRole,
+              model: modelUsed,
+              status: errInfo.status,
+              googleErrorCode: errInfo.googleErrorCode,
+              googleErrorStatus: errInfo.googleErrorStatus,
+              errorClassification: errInfo.errorClassification,
+              isTimeout: errInfo.isTimeout,
+              totalElapsedMs,
+              ...requestStats,
+            })}`
+          );
+        };
+
         let response: any = null;
+        const primaryStartTime = Date.now();
 
         try {
           const geminiCall = ai.models.generateContent({
@@ -761,7 +893,9 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
           );
 
           response = await Promise.race([geminiCall, timeoutPromise]);
+          logUsageSuccess(response, MODEL_NAME, 1, 'primary', Date.now() - primaryStartTime);
         } catch (initialErr: any) {
+          logUsageError(initialErr, MODEL_NAME, 1, 'primary', Date.now() - primaryStartTime);
           const errStr = String(initialErr?.message || initialErr);
           const isRateOrUnavailable =
             errStr.includes('503') ||
@@ -776,19 +910,26 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
 
           if ((isRateOrUnavailable || isTimeout) && MODEL_NAME !== FALLBACK_MODEL) {
             console.warn(`Incidencia detectada en modelo principal (${errStr}) en ${MODEL_NAME}. Reintentando con fallback ${FALLBACK_MODEL}...`);
-            const fallbackCall = ai.models.generateContent({
-              model: FALLBACK_MODEL,
-              contents: prompt,
-              config: {
-                systemInstruction: systemPrompt,
-                responseMimeType: 'application/json',
-                temperature: 0.7,
-              },
-            });
-            const timeoutFallback = new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('Gemini fallback request timeout')), 30000)
-            );
-            response = await Promise.race([fallbackCall, timeoutFallback]);
+            const fallbackStartTime = Date.now();
+            try {
+              const fallbackCall = ai.models.generateContent({
+                model: FALLBACK_MODEL,
+                contents: prompt,
+                config: {
+                  systemInstruction: systemPrompt,
+                  responseMimeType: 'application/json',
+                  temperature: 0.7,
+                },
+              });
+              const timeoutFallback = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('Gemini fallback request timeout')), 30000)
+              );
+              response = await Promise.race([fallbackCall, timeoutFallback]);
+              logUsageSuccess(response, FALLBACK_MODEL, 2, 'fallback', Date.now() - fallbackStartTime);
+            } catch (fallbackErr: any) {
+              logUsageError(fallbackErr, FALLBACK_MODEL, 2, 'fallback', Date.now() - fallbackStartTime);
+              throw fallbackErr;
+            }
           } else {
             throw initialErr;
           }

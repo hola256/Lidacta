@@ -57,6 +57,13 @@ export function isTechnicalErrorMessage(m: any): boolean {
   );
 }
 
+export function stripSessionMessagesForApi<T extends Record<string, any>>(
+  session: T
+): Omit<T, 'messages'> {
+  const { messages: _omittedMessages, ...sessionWithoutMessages } = session;
+  return sessionWithoutMessages;
+}
+
 export function isValidMentorApiResponse(
   response: { ok?: boolean } | null | undefined,
   data: any,
@@ -1154,7 +1161,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
           message: userMessage,
           identifiedSkills: newSession.identifiedSkills || [],
           skillEntries: newSession.skillEntries || [],
-          sessionData: newSession,
+          sessionData: stripSessionMessagesForApi(newSession),
         }),
       });
 
@@ -1856,10 +1863,9 @@ El Equipo de Lidacta`;
           identifiedSkills: activeMentorship.identifiedSkills || [],
           skillEntries: activeMentorship.skillEntries || [],
           sessionData: {
-            ...activeMentorship,
+            ...stripSessionMessagesForApi(activeMentorship),
             skillEntries: activeMentorship.skillEntries || [],
             identifiedSkills: activeMentorship.identifiedSkills || [],
-            messages: [...isolatedExistingMessages, leaderMsg],
           },
           isPracticeMode: isPractice,
         }),
@@ -2434,7 +2440,7 @@ El Equipo de Lidacta`;
           identifiedSkills: activeMentorship.identifiedSkills || [],
           skillEntries: activeMentorship.skillEntries || [],
           sessionData: {
-            ...activeMentorship,
+            ...stripSessionMessagesForApi(activeMentorship),
             skillEntries: activeMentorship.skillEntries || [],
             identifiedSkills: activeMentorship.identifiedSkills || [],
           },
@@ -3169,13 +3175,12 @@ El Equipo de Lidacta`;
           identifiedSkills: activeMentorship.identifiedSkills || [],
           skillEntries: activeMentorship.skillEntries || [],
           sessionData: {
-            ...activeMentorship,
+            ...stripSessionMessagesForApi(activeMentorship),
             actionPlan: updatedActionPlan || activeMentorship.actionPlan,
             actionPlanExecutionStatus: executionStatus,
             stage6ExecutionVerified: true,
             skillEntries: activeMentorship.skillEntries || [],
             identifiedSkills: activeMentorship.identifiedSkills || [],
-            messages: [...isolatedExistingMessages, leaderMsg],
           },
         }),
       });
