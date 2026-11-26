@@ -2064,6 +2064,26 @@ export default async function handler(req: any, res: any) {
   let sessionData: any = null;
   let resolvedUserMessage = '';
   let resolvedHistory: any[] = [];
+  const requestStartTime = Date.now();
+  const requestTraceId =
+    typeof globalThis.crypto?.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  let usageRequestStats: {
+    stage: number;
+    historyTurns: number;
+    contentsTurns: number;
+    systemPromptChars: number;
+    contentsChars: number;
+    requestBodyBytes: number | null;
+  } = {
+    stage: 1,
+    historyTurns: 0,
+    contentsTurns: 0,
+    systemPromptChars: 0,
+    contentsChars: 0,
+    requestBodyBytes: null,
+  };
 
   try {
     let body = req.body;
@@ -2220,11 +2240,43 @@ export default async function handler(req: any, res: any) {
       process.env.GOOGLE_API_KEY ||
       process.env.VITE_GEMINI_API_KEY ||
       process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-    console.log('[DIAGNOSTICO] GEMINI_KEY_SUFFIX:', apiKey ? apiKey.trim().slice(-4) : 'MISSING');
+
+    usageRequestStats.stage = currentStageNum;
+    usageRequestStats.historyTurns = resolvedHistory.length;
 
     if (!apiKey) {
       if (currentStageNum === 7) {
         console.warn('[Lidacta API] GEMINI_API_KEY no detectada. Activando fallback de Etapa 7 con finalFeedback...');
+        console.warn(
+          `[Lidacta Usage] ${JSON.stringify({
+            event: 'deterministic_fallback',
+            outcome: 'deterministic_fallback',
+            traceId: requestTraceId,
+            attempt: 0,
+            attemptTotal: 0,
+            attemptRole: 'deterministic_fallback',
+            usedFallback: true,
+            fallbackReason: 'missing_api_key',
+            model: 'deterministic_engine',
+            modelVersion: null,
+            usageMetadataAvailable: false,
+            promptTokenCount: null,
+            candidatesTokenCount: null,
+            thoughtsTokenCount: null,
+            totalTokenCount: null,
+            cachedContentTokenCount: null,
+            status: 200,
+            googleErrorCode: null,
+            googleErrorStatus: null,
+            errorClassification: 'missing_api_key',
+            isTimeout: false,
+            headersElapsedMs: null,
+            bodyReadElapsedMs: null,
+            totalElapsedMs: Date.now() - requestStartTime,
+            requestElapsedMs: Date.now() - requestStartTime,
+            ...usageRequestStats,
+          })}`
+        );
         const fallbackStage7 = generateContextualCoachReply(
           7,
           leaderFirstName,
@@ -2244,6 +2296,35 @@ export default async function handler(req: any, res: any) {
         });
       }
       console.error('ERROR: No se detectó ninguna GEMINI_API_KEY en process.env');
+      console.warn(
+        `[Lidacta Usage] ${JSON.stringify({
+          event: 'server_error',
+          outcome: 'config_error',
+          traceId: requestTraceId,
+          attempt: 0,
+          attemptTotal: 0,
+          attemptRole: 'none',
+          usedFallback: false,
+          model: null,
+          modelVersion: null,
+          usageMetadataAvailable: false,
+          promptTokenCount: null,
+          candidatesTokenCount: null,
+          thoughtsTokenCount: null,
+          totalTokenCount: null,
+          cachedContentTokenCount: null,
+          status: 500,
+          googleErrorCode: null,
+          googleErrorStatus: null,
+          errorClassification: 'missing_api_key',
+          isTimeout: false,
+          headersElapsedMs: null,
+          bodyReadElapsedMs: null,
+          totalElapsedMs: Date.now() - requestStartTime,
+          requestElapsedMs: Date.now() - requestStartTime,
+          ...usageRequestStats,
+        })}`
+      );
       return res.status(500).json({
         success: false,
         error: 'Configuración de servidor incompleta para procesar la solicitud.',
@@ -2469,10 +2550,6 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
     const requestLoopStartTime = Date.now();
     let extraRetryUsed = false;
 
-    const requestTraceId =
-      typeof globalThis.crypto?.randomUUID === 'function'
-        ? globalThis.crypto.randomUUID()
-        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     const requestBodyPayload = JSON.stringify({
       systemInstruction: {
         parts: [{ text: systemPrompt }],
@@ -2504,6 +2581,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
       contentsChars,
       requestBodyBytes: new TextEncoder().encode(requestBodyPayload).length,
     };
+    usageRequestStats = requestStats;
 
     let data: any = null;
     let ok = false;
@@ -2561,10 +2639,12 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
           console.log(
             `[Lidacta Usage] ${JSON.stringify({
               event: 'gemini_success',
+              outcome: 'success',
               traceId: requestTraceId,
               attempt: i + 1,
               attemptTotal: attemptQueue.length,
               attemptRole,
+              usedFallback: attemptRole !== 'primary',
               model: modelName,
               modelVersion: typeof data?.modelVersion === 'string' ? data.modelVersion : null,
               usageMetadataAvailable: Boolean(usage),
@@ -2573,9 +2653,15 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
               thoughtsTokenCount: typeof usage?.thoughtsTokenCount === 'number' ? usage.thoughtsTokenCount : null,
               totalTokenCount: typeof usage?.totalTokenCount === 'number' ? usage.totalTokenCount : null,
               cachedContentTokenCount: typeof usage?.cachedContentTokenCount === 'number' ? usage.cachedContentTokenCount : null,
+              status: response.status,
+              googleErrorCode: null,
+              googleErrorStatus: null,
+              errorClassification: 'none',
+              isTimeout: false,
               headersElapsedMs,
               bodyReadElapsedMs,
               totalElapsedMs,
+              requestElapsedMs: Date.now() - requestStartTime,
               ...requestStats,
             })}`
           );
@@ -2604,20 +2690,39 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
           // Ignorar si el cuerpo de error no es JSON
         }
 
+        const httpErrorClassification =
+          response.status === 429 || googleErrorStatus === 'RESOURCE_EXHAUSTED'
+            ? 'rate_limit'
+            : response.status === 503 || googleErrorStatus === 'UNAVAILABLE'
+            ? 'unavailable'
+            : 'http_error';
+
         console.warn(
           `[Lidacta Usage] ${JSON.stringify({
             event: 'gemini_http_error',
+            outcome: 'http_error',
             traceId: requestTraceId,
             attempt: i + 1,
             attemptTotal: attemptQueue.length,
             attemptRole,
+            usedFallback: attemptRole !== 'primary',
             model: modelName,
+            modelVersion: null,
+            usageMetadataAvailable: false,
+            promptTokenCount: null,
+            candidatesTokenCount: null,
+            thoughtsTokenCount: null,
+            totalTokenCount: null,
+            cachedContentTokenCount: null,
             status: response.status,
             googleErrorCode,
             googleErrorStatus,
+            errorClassification: httpErrorClassification,
+            isTimeout: false,
             headersElapsedMs,
             bodyReadElapsedMs,
             totalElapsedMs,
+            requestElapsedMs: Date.now() - requestStartTime,
             ...requestStats,
           })}`
         );
@@ -2682,17 +2787,33 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         console.warn(
           `[Lidacta Usage] ${JSON.stringify({
             event: 'gemini_exception',
+            outcome: isTimeout ? 'timeout' : 'exception',
             traceId: requestTraceId,
             attempt: i + 1,
             attemptTotal: attemptQueue.length,
             attemptRole,
+            usedFallback: attemptRole !== 'primary',
             model: modelName,
+            modelVersion: null,
+            usageMetadataAvailable: false,
+            promptTokenCount: null,
+            candidatesTokenCount: null,
+            thoughtsTokenCount: null,
+            totalTokenCount: null,
+            cachedContentTokenCount: null,
+            status: null,
+            googleErrorCode: null,
+            googleErrorStatus: null,
+            errorClassification: isTimeout ? 'timeout' : 'network_or_sdk_error',
             errorName,
             isTimeout,
             wasSignalAborted,
             headersReceived,
             headersElapsedMs: headersReceived ? headersElapsedMs : null,
+            bodyReadElapsedMs: null,
+            totalElapsedMs: errorElapsedFromFetch,
             errorElapsedMs: errorElapsedFromFetch,
+            requestElapsedMs: Date.now() - requestStartTime,
             ...requestStats,
           })}`
         );
@@ -2721,6 +2842,44 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
     if (!ok || !candidatePartText) {
       if (currentStageNum === 7) {
         console.warn('[Lidacta API] Despachando fallback estructurado para Etapa 7 con finalFeedback...');
+        console.warn(
+          `[Lidacta Usage] ${JSON.stringify({
+            event: 'deterministic_fallback',
+            outcome: 'deterministic_fallback',
+            traceId: requestTraceId,
+            attempt: attemptQueue.length,
+            attemptTotal: attemptQueue.length,
+            attemptRole: 'deterministic_fallback',
+            usedFallback: true,
+            fallbackReason: !ok ? 'gemini_failed' : 'empty_candidate',
+            model: 'deterministic_engine',
+            modelVersion: null,
+            usageMetadataAvailable: false,
+            promptTokenCount: null,
+            candidatesTokenCount: null,
+            thoughtsTokenCount: null,
+            totalTokenCount: null,
+            cachedContentTokenCount: null,
+            status: 200,
+            googleErrorCode: lastStatus || null,
+            googleErrorStatus: null,
+            errorClassification: !ok
+              ? lastErrorWasTimeout
+                ? 'timeout'
+                : lastStatus === 429
+                ? 'rate_limit'
+                : lastStatus === 503
+                ? 'unavailable'
+                : 'http_error'
+              : 'empty_candidate',
+            isTimeout: lastErrorWasTimeout,
+            headersElapsedMs: null,
+            bodyReadElapsedMs: null,
+            totalElapsedMs: Date.now() - requestStartTime,
+            requestElapsedMs: Date.now() - requestStartTime,
+            ...requestStats,
+          })}`
+        );
         const fallbackStage7 = generateContextualCoachReply(
           7,
           leaderFirstName,
@@ -2925,6 +3084,36 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
   } catch (error: any) {
     console.error('Error en mentor respond:', error);
     if (currentStageNum === 7) {
+      console.warn(
+        `[Lidacta Usage] ${JSON.stringify({
+          event: 'deterministic_fallback',
+          outcome: 'deterministic_fallback',
+          traceId: requestTraceId,
+          attempt: 0,
+          attemptTotal: 0,
+          attemptRole: 'deterministic_fallback',
+          usedFallback: true,
+          fallbackReason: 'unhandled_exception',
+          model: 'deterministic_engine',
+          modelVersion: null,
+          usageMetadataAvailable: false,
+          promptTokenCount: null,
+          candidatesTokenCount: null,
+          thoughtsTokenCount: null,
+          totalTokenCount: null,
+          cachedContentTokenCount: null,
+          status: 200,
+          googleErrorCode: null,
+          googleErrorStatus: null,
+          errorClassification: 'unhandled_exception',
+          isTimeout: false,
+          headersElapsedMs: null,
+          bodyReadElapsedMs: null,
+          totalElapsedMs: Date.now() - requestStartTime,
+          requestElapsedMs: Date.now() - requestStartTime,
+          ...usageRequestStats,
+        })}`
+      );
       const fallbackContext = {
         ...(sessionData || {}),
         ...(safeSessionContext || {}),
@@ -2955,6 +3144,35 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         data: fallbackStage7,
       });
     }
+    console.warn(
+      `[Lidacta Usage] ${JSON.stringify({
+        event: 'server_error',
+        outcome: 'server_error',
+        traceId: requestTraceId,
+        attempt: 0,
+        attemptTotal: 0,
+        attemptRole: 'none',
+        usedFallback: false,
+        model: null,
+        modelVersion: null,
+        usageMetadataAvailable: false,
+        promptTokenCount: null,
+        candidatesTokenCount: null,
+        thoughtsTokenCount: null,
+        totalTokenCount: null,
+        cachedContentTokenCount: null,
+        status: 500,
+        googleErrorCode: null,
+        googleErrorStatus: null,
+        errorClassification: 'unhandled_exception',
+        isTimeout: false,
+        headersElapsedMs: null,
+        bodyReadElapsedMs: null,
+        totalElapsedMs: Date.now() - requestStartTime,
+        requestElapsedMs: Date.now() - requestStartTime,
+        ...usageRequestStats,
+      })}`
+    );
     return res.status(500).json({
       success: false,
       error: error?.message || 'Error en servidor',

@@ -198,6 +198,29 @@ app.post('/api/mentor/respond', async (req: Request, res: Response) => {
   let safeSessionContext: any = null;
   let sessionData: any = null;
   let isPracticeMode = false;
+  const requestStartTime = Date.now();
+  const requestTraceId =
+    typeof globalThis.crypto?.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  let usageRequestStats: {
+    stage: number;
+    historyTurns: number;
+    contentsTurns: number;
+    systemPromptChars: number;
+    contentsChars: number;
+    requestBodyBytes: number | null;
+  } = {
+    stage: 1,
+    historyTurns: 0,
+    contentsTurns: 0,
+    systemPromptChars: 0,
+    contentsChars: 0,
+    requestBodyBytes: null,
+  };
+  let plannedAttemptTotal = 0;
+  let lastGeminiAttemptCount = 0;
+  let lastGeminiErrorClassification: string | null = null;
 
   try {
     const body = req.body || {};
@@ -728,6 +751,15 @@ Debes responder SIEMPRE en formato JSON con la siguiente estructura exacta:
 }
 `;
 
+    usageRequestStats = {
+      stage: currentStageNum,
+      historyTurns: resolvedHistory.length,
+      contentsTurns: 0,
+      systemPromptChars: systemPrompt.length,
+      contentsChars: 0,
+      requestBodyBytes: null,
+    };
+
     // Try Gemini API if initialized
     if (ai) {
       try {
@@ -758,13 +790,11 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
 
         const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
         const FALLBACK_MODEL = 'gemini-3.1-flash-lite';
-        const requestTraceId =
-          typeof globalThis.crypto?.randomUUID === 'function'
-            ? globalThis.crypto.randomUUID()
-            : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        plannedAttemptTotal = MODEL_NAME !== FALLBACK_MODEL ? 2 : 1;
         const requestStats = {
           stage: currentStageNum,
           historyTurns: resolvedHistory.length,
+          contentsTurns: 1,
           systemPromptChars: systemPrompt.length,
           contentsChars: prompt.length,
           requestBodyBytes: new TextEncoder().encode(
@@ -778,6 +808,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
             })
           ).length,
         };
+        usageRequestStats = requestStats;
 
         const extractSafeErrorTelemetry = (err: any) => {
           const rawMsg = String(err?.message || err || '');
@@ -841,13 +872,17 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
           attemptRole: 'primary' | 'fallback',
           totalElapsedMs: number
         ) => {
+          lastGeminiAttemptCount = attempt;
           const usage = resp?.usageMetadata ?? null;
           console.log(
             `[Lidacta Usage] ${JSON.stringify({
               event: 'gemini_success',
+              outcome: 'success',
               traceId: requestTraceId,
               attempt,
+              attemptTotal: plannedAttemptTotal,
               attemptRole,
+              usedFallback: attemptRole !== 'primary',
               model: modelUsed,
               modelVersion: typeof resp?.modelVersion === 'string' ? resp.modelVersion : null,
               usageMetadataAvailable: Boolean(usage),
@@ -857,7 +892,15 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
               totalTokenCount: typeof usage?.totalTokenCount === 'number' ? usage.totalTokenCount : null,
               cachedContentTokenCount:
                 typeof usage?.cachedContentTokenCount === 'number' ? usage.cachedContentTokenCount : null,
+              status: 200,
+              googleErrorCode: null,
+              googleErrorStatus: null,
+              errorClassification: 'none',
+              isTimeout: false,
+              headersElapsedMs: null,
+              bodyReadElapsedMs: null,
               totalElapsedMs,
+              requestElapsedMs: Date.now() - requestStartTime,
               ...requestStats,
             })}`
           );
@@ -870,20 +913,35 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
           attemptRole: 'primary' | 'fallback',
           totalElapsedMs: number
         ) => {
+          lastGeminiAttemptCount = attempt;
           const errInfo = extractSafeErrorTelemetry(err);
+          lastGeminiErrorClassification = errInfo.errorClassification;
           console.warn(
             `[Lidacta Usage] ${JSON.stringify({
               event: errInfo.isTimeout ? 'gemini_exception' : 'gemini_http_error',
+              outcome: errInfo.isTimeout ? 'timeout' : 'http_error',
               traceId: requestTraceId,
               attempt,
+              attemptTotal: plannedAttemptTotal,
               attemptRole,
+              usedFallback: attemptRole !== 'primary',
               model: modelUsed,
+              modelVersion: null,
+              usageMetadataAvailable: false,
+              promptTokenCount: null,
+              candidatesTokenCount: null,
+              thoughtsTokenCount: null,
+              totalTokenCount: null,
+              cachedContentTokenCount: null,
               status: errInfo.status,
               googleErrorCode: errInfo.googleErrorCode,
               googleErrorStatus: errInfo.googleErrorStatus,
               errorClassification: errInfo.errorClassification,
               isTimeout: errInfo.isTimeout,
+              headersElapsedMs: null,
+              bodyReadElapsedMs: null,
               totalElapsedMs,
+              requestElapsedMs: Date.now() - requestStartTime,
               ...requestStats,
             })}`
           );
@@ -1144,6 +1202,38 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
     }
 
     // High-quality Deterministic Stage-Specific Coach Engine
+    console.warn(
+      `[Lidacta Usage] ${JSON.stringify({
+        event: 'deterministic_fallback',
+        outcome: 'deterministic_fallback',
+        traceId: requestTraceId,
+        attempt: lastGeminiAttemptCount,
+        attemptTotal: plannedAttemptTotal,
+        attemptRole: 'deterministic_fallback',
+        usedFallback: true,
+        fallbackReason: !ai ? 'missing_api_key' : 'gemini_failed',
+        model: 'deterministic_engine',
+        modelVersion: null,
+        usageMetadataAvailable: false,
+        promptTokenCount: null,
+        candidatesTokenCount: null,
+        thoughtsTokenCount: null,
+        totalTokenCount: null,
+        cachedContentTokenCount: null,
+        status: 200,
+        googleErrorCode: null,
+        googleErrorStatus: null,
+        errorClassification: !ai
+          ? 'missing_api_key'
+          : lastGeminiErrorClassification || 'network_or_sdk_error',
+        isTimeout: lastGeminiErrorClassification === 'timeout',
+        headersElapsedMs: null,
+        bodyReadElapsedMs: null,
+        totalElapsedMs: Date.now() - requestStartTime,
+        requestElapsedMs: Date.now() - requestStartTime,
+        ...usageRequestStats,
+      })}`
+    );
     const fallbackResponse = generateDeterministicCoaching({
       stage: currentStageNum,
       leaderProfile,
@@ -1239,6 +1329,36 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
   } catch (error: any) {
     console.error('Error in /api/mentor/respond:', error);
     if (currentStageNum === 7) {
+      console.warn(
+        `[Lidacta Usage] ${JSON.stringify({
+          event: 'deterministic_fallback',
+          outcome: 'deterministic_fallback',
+          traceId: requestTraceId,
+          attempt: lastGeminiAttemptCount,
+          attemptTotal: plannedAttemptTotal,
+          attemptRole: 'deterministic_fallback',
+          usedFallback: true,
+          fallbackReason: 'unhandled_exception',
+          model: 'deterministic_engine',
+          modelVersion: null,
+          usageMetadataAvailable: false,
+          promptTokenCount: null,
+          candidatesTokenCount: null,
+          thoughtsTokenCount: null,
+          totalTokenCount: null,
+          cachedContentTokenCount: null,
+          status: 200,
+          googleErrorCode: null,
+          googleErrorStatus: null,
+          errorClassification: 'unhandled_exception',
+          isTimeout: false,
+          headersElapsedMs: null,
+          bodyReadElapsedMs: null,
+          totalElapsedMs: Date.now() - requestStartTime,
+          requestElapsedMs: Date.now() - requestStartTime,
+          ...usageRequestStats,
+        })}`
+      );
       const fallbackContext = {
         ...(sessionData || {}),
         ...(safeSessionContext || {}),
@@ -1271,6 +1391,35 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         data: fallbackStage7,
       });
     }
+    console.warn(
+      `[Lidacta Usage] ${JSON.stringify({
+        event: 'server_error',
+        outcome: 'server_error',
+        traceId: requestTraceId,
+        attempt: lastGeminiAttemptCount,
+        attemptTotal: plannedAttemptTotal,
+        attemptRole: 'none',
+        usedFallback: false,
+        model: null,
+        modelVersion: null,
+        usageMetadataAvailable: false,
+        promptTokenCount: null,
+        candidatesTokenCount: null,
+        thoughtsTokenCount: null,
+        totalTokenCount: null,
+        cachedContentTokenCount: null,
+        status: 500,
+        googleErrorCode: null,
+        googleErrorStatus: null,
+        errorClassification: 'unhandled_exception',
+        isTimeout: false,
+        headersElapsedMs: null,
+        bodyReadElapsedMs: null,
+        totalElapsedMs: Date.now() - requestStartTime,
+        requestElapsedMs: Date.now() - requestStartTime,
+        ...usageRequestStats,
+      })}`
+    );
     res.status(500).json({
       success: false,
       error: 'Error procesando la mentoría de Lidacta',
