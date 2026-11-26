@@ -590,17 +590,13 @@ describe('Bloque 2: Integridad Metodológica de Etapa 7 (stageTwoSkills)', () =>
       if (prevGoogleKey !== undefined) process.env.GOOGLE_API_KEY = prevGoogleKey;
     }
 
-    assert.equal(prodFallbackRes.statusCode, 200);
-    assert.equal(devFallbackRes.statusCode, 200);
-    for (const fb of [
-      prodFallbackRes.body.data.finalFeedback,
-      devFallbackRes.body.data.finalFeedback,
-    ]) {
-      assert.ok(Array.isArray(fb.detectedStrengths));
-      assert.deepEqual(fb.stageTwoSkills, [INSUFFICIENT_EVIDENCE_MESSAGE]);
-      assert.ok(Array.isArray(fb.chosenActions) && fb.chosenActions.length > 0);
-      assert.ok(Array.isArray(fb.stageSixLearnings) && fb.stageSixLearnings.length > 0);
-      assert.ok(Array.isArray(fb.recommendationsForAutonomy) && fb.recommendationsForAutonomy.length > 0);
+    assert.equal(prodFallbackRes.statusCode, 500);
+    assert.equal(devFallbackRes.statusCode, 500);
+    for (const resBody of [prodFallbackRes.body, devFallbackRes.body]) {
+      assert.equal(resBody.success, false);
+      assert.equal(resBody.responseSource, 'error');
+      assert.equal(resBody.isGeminiVerified, false);
+      assert.equal(resBody.data?.finalFeedback, undefined);
     }
 
     // Ruta 3: Compatibilidad con flujo de envío de correo en modo simulado (sin envío real)

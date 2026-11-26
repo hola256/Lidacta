@@ -99,16 +99,53 @@ describe('Calibración de detectedStrengths (Bloque: respond.ts y skillsConsolid
       }),
     };
 
-    await mentorRespondHandler(req, res);
+    const originalFetch = globalThis.fetch;
+    const prevKey = process.env.GEMINI_API_KEY;
+    process.env.GEMINI_API_KEY = 'test-strengths-calibration-key';
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      replyText: 'Gracias por concluir tu proceso de acompañamiento, Mateo.',
+                      readyToAdvance: false,
+                      identifiedSkills: [],
+                      finalFeedback: {
+                        detectedStrengths: [],
+                        stageTwoSkills: ['Comunicación Asertiva y Firmeza Empática'],
+                        chosenActions: ['Aplicar escucha directa en reunión semanal'],
+                        stageSixLearnings: ['Evitar engancharse mejora la conversación'],
+                        recommendationsForAutonomy: ['Sostener preguntas abiertas en cada seguimiento'],
+                      },
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )) as any;
+
+    try {
+      await mentorRespondHandler(req, res);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (prevKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = prevKey;
+    }
 
     assert.ok(responseData);
+    assert.equal(responseData.success, true);
+    assert.equal(responseData.isGeminiVerified, true);
     const feedback = responseData.data?.finalFeedback || responseData.finalFeedback;
     assert.ok(feedback, 'Debe incluir finalFeedback en Etapa 7');
     assert.ok(Array.isArray(feedback.detectedStrengths), 'detectedStrengths debe ser un arreglo');
-    assert.ok(
-      feedback.detectedStrengths.length <= 4,
-      'detectedStrengths no debe exceder 4 elementos'
-    );
+    assert.equal(feedback.detectedStrengths.length, 0, 'Debe conservar [] sin forzar frases genéricas');
     // Verificar que no contiene las frases genéricas hardcodeadas anteriores
     assert.ok(
       !feedback.detectedStrengths.includes(

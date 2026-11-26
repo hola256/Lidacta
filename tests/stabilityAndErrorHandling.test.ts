@@ -163,7 +163,7 @@ describe('Estabilidad y Manejo de Errores en Producción (api/mentor/respond.ts 
     assert.ok(gapBeforeExtraRetry >= 1100, `Espera con jitter esperada >=1100ms, fue ${gapBeforeExtraRetry}ms`);
   });
 
-  it('3. Si fallan todos los intentos en Etapas 1-6, devuelve HTTP de error limpio (sin HTTP 200 ni reply técnico) y mantiene intacta Etapa 7', async () => {
+  it('3. Si fallan todos los intentos en Etapas 1-7, devuelve HTTP de error limpio (sin HTTP 200 falso, sin reply técnico y sin cierre fallback en Etapa 7)', async () => {
     const failedAll503 = await runWithMockFetch(baseReqBody, async () => ({
       ok: false,
       status: 503,
@@ -178,7 +178,7 @@ describe('Estabilidad y Manejo de Errores en Producción (api/mentor/respond.ts 
     assert.equal(failedAll503.res.body.text, undefined, 'No debe enviar texto de error en text');
     assert.ok(!JSON.stringify(failedAll503.res.body).includes('ERROR DE SERVIDOR'));
 
-    // Etapa 7 conserva su comportamiento especial sin modificaciones
+    // Etapa 7 también debe rechazar el fallo sin fallback HTTP 200 ni reporte fabricado
     const stage7Run = await runWithMockFetch(
       { ...baseReqBody, stage: 7, activeStage: 7 },
       async () => ({
@@ -187,9 +187,11 @@ describe('Estabilidad y Manejo de Errores en Producción (api/mentor/respond.ts 
         text: async () => 'UNAVAILABLE',
       })
     );
-    assert.equal(stage7Run.res.statusCode, 200);
-    assert.equal(stage7Run.res.body.success, true);
-    assert.ok(stage7Run.res.body.data?.finalFeedback);
+    assert.equal(stage7Run.res.statusCode, 503);
+    assert.equal(stage7Run.res.body.success, false);
+    assert.equal(stage7Run.res.body.responseSource, 'error');
+    assert.equal(stage7Run.res.body.isGeminiVerified, false);
+    assert.equal(stage7Run.res.body.data?.finalFeedback, undefined);
   });
 
   it('4. Timeout / AbortError no activa reintento adicional y no mezcla el HTTP 503 del modelo previo con el aborto del fallback', async () => {

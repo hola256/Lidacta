@@ -233,7 +233,7 @@ describe('Envío Automático del Reporte Final de Etapa 7 (Lidacta & Resend)', (
     assert.equal(mentorship.finalFeedbackReport.detectedStrengths.length, 3);
   });
 
-  it('7. api/mentor/respond.ts debe retornar finalFeedback en Etapa 7 con las cinco secciones requeridas', async () => {
+  it('7. api/mentor/respond.ts debe retornar finalFeedback verificado de Gemini en Etapa 7 y rechazar falta de API Key', async () => {
     let responseStatus = 0;
     let responseData: any = null;
 
@@ -262,7 +262,7 @@ describe('Envío Automático del Reporte Final de Etapa 7 (Lidacta & Resend)', (
       },
     };
 
-    const res: any = {
+    const makeRes = () => ({
       setHeader: () => {},
       status: (code: number) => {
         responseStatus = code;
@@ -273,12 +273,67 @@ describe('Envío Automático del Reporte Final de Etapa 7 (Lidacta & Resend)', (
           },
         };
       },
-    };
+    });
 
-    await mentorRespondHandler(req, res);
+    const originalFetch = globalThis.fetch;
+    const prevKey = process.env.GEMINI_API_KEY;
+    const prevApi = process.env.API_KEY;
+    const prevGoogle = process.env.GOOGLE_API_KEY;
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.API_KEY;
+    delete process.env.GOOGLE_API_KEY;
+
+    try {
+      await mentorRespondHandler(req, makeRes());
+      assert.equal(responseStatus, 500);
+      assert.equal(responseData.success, false);
+      assert.equal(responseData.isGeminiVerified, false);
+
+      process.env.GEMINI_API_KEY = 'test-stage7-email-key';
+      globalThis.fetch = (async () =>
+        new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      text: JSON.stringify({
+                        replyText: 'Excelente cierre Carlos.',
+                        readyToAdvance: false,
+                        identifiedSkills: [],
+                        finalFeedback: {
+                          detectedStrengths: ['Apertura para desglosar metas con el equipo'],
+                          stageTwoSkills: ['Motivación y Desarrollo de Equipos'],
+                          chosenActions: ['Taller de 45 minutos para desglosar la meta trimestral en micro-objetivos semanales'],
+                          stageSixLearnings: ['Cuando las metas se desglosan en pasos alcanzables el equipo recupera la autoconfianza'],
+                          recommendationsForAutonomy: ['Sostener revisiones semanales de micro-objetivos'],
+                        },
+                      }),
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )) as any;
+
+      await mentorRespondHandler(req, makeRes());
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (prevKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = prevKey;
+      if (prevApi === undefined) delete process.env.API_KEY;
+      else process.env.API_KEY = prevApi;
+      if (prevGoogle === undefined) delete process.env.GOOGLE_API_KEY;
+      else process.env.GOOGLE_API_KEY = prevGoogle;
+    }
 
     assert.equal(responseStatus, 200);
     assert.equal(responseData.success, true);
+    assert.equal(responseData.isGeminiVerified, true);
+    assert.equal(responseData.responseSource, 'gemini');
     assert.ok(responseData.data);
 
     const report = responseData.data.finalFeedback;
@@ -289,64 +344,42 @@ describe('Envío Automático del Reporte Final de Etapa 7 (Lidacta & Resend)', (
     assert.ok(Array.isArray(report.stageSixLearnings) && report.stageSixLearnings.length > 0, 'stageSixLearnings debe ser un array no vacío');
     assert.ok(Array.isArray(report.recommendationsForAutonomy) && report.recommendationsForAutonomy.length > 0, 'recommendationsForAutonomy debe ser un array no vacío');
 
-    // Comprobar que toma las habilidades y acción reales de la sesión
-    assert.ok(report.stageTwoSkills.some((s: string) => s.includes('Liderazgo Inspiracional') || s.includes('Desglose Táctico') || s.includes('Comunicación')));
-    assert.ok(report.chosenActions[0].includes('Taller de 45 minutos') || report.chosenActions[0].includes('Conversación 1 a 1'));
+    assert.ok(report.stageTwoSkills.some((s: string) => s.includes('Motivación') || s.includes('Liderazgo') || s.includes('Comunicación')));
+    assert.ok(report.chosenActions[0].includes('Taller de 45 minutos'));
   });
 
-  it('8. LidactaContext fallback: debe construir el reporte usando exclusivamente datos reales de la sesión si la IA no devuelve finalFeedback', () => {
-    const session: Partial<MentorshipSession> = {
-      id: 'ment_fallback_real_data',
-      leaderName: 'Carlos Mendoza',
-      identifiedSkills: ['Gestión de Acuerdos Operativos', 'Escucha Asertiva'],
-      actionPlan: {
-        what: 'Reunión privada de 15 minutos para revisar el reporte de entregas',
-        when: 'Viernes 10:00 hrs',
-        withWhom: 'Supervisor de Turno',
-        how: 'Enfoque en hechos',
-        careReminders: 'No juzgar',
+  it('8. LidactaContext no debe fabricar reporte fallback cuando Gemini no devuelve finalFeedback válido y acepta evidencia insuficiente parcial sin inventar', async () => {
+    const { buildStage7FinalFeedbackReport } = await import('../src/context/LidactaContext');
+    assert.equal(buildStage7FinalFeedbackReport(undefined, [], []), undefined);
+    assert.equal(
+      buildStage7FinalFeedbackReport(
+        {
+          detectedStrengths: [],
+          stageTwoSkills: [],
+          chosenActions: [],
+          stageSixLearnings: [],
+          recommendationsForAutonomy: [],
+          deliveredAt: new Date().toISOString(),
+        },
+        [],
+        []
+      ),
+      undefined
+    );
+    const partialReport = buildStage7FinalFeedbackReport(
+      {
+        detectedStrengths: [],
+        stageTwoSkills: ['Comunicación Asertiva y Firmeza Empática'],
+        chosenActions: [],
+        stageSixLearnings: ['Aprendizaje válido'],
+        recommendationsForAutonomy: ['Recomendación válida'],
+        deliveredAt: new Date().toISOString(),
       },
-      learnings: {
-        whatHappened: 'El colaborador expuso que no tenía los insumos completos',
-        whatWorked: 'El ambiente privado sin interrupciones',
-        whatDidnt: 'Llegar con prisa',
-        insights: 'Preguntar antes de asumir resuelve el 80% de las fricciones operativas',
-        futureAdjustments: 'Revisar insumos al inicio de semana',
-      },
-    };
-
-    // Lógica del fallback implementada en LidactaContext
-    const realSkills = Array.isArray(session.identifiedSkills) && session.identifiedSkills.length > 0
-      ? session.identifiedSkills
-      : ['Comunicación Asertiva'];
-    const realActions = session.actionPlan?.what ? [session.actionPlan.what] : ['Conversación 1 a 1'];
-    const realLearnings = [
-      session.learnings?.insights || 'Aprendizaje clave',
-      session.learnings?.whatHappened || 'Resultado observable',
-    ];
-
-    const fallbackReport: FinalFeedbackReport = {
-      detectedStrengths: [
-        'Proactividad para abordar situaciones complejas de liderazgo sin postergarlas',
-        'Disposición para el autoanálisis y reconocimiento de áreas de oportunidad',
-        'Capacidad de generar acuerdos basados en empatía y claridad operativa',
-      ],
-      stageTwoSkills: realSkills,
-      chosenActions: realActions,
-      stageSixLearnings: realLearnings,
-      recommendationsForAutonomy: [
-        'Practicar la retroalimentación continua en lugar de esperar a revisiones formales',
-        'Documentar los acuerdos de forma breve y visible para el equipo',
-        'Mantener el hábito de analizar el contexto y las perspectivas antes de reaccionar',
-      ],
-      deliveredAt: new Date().toISOString(),
-    };
-
-    assert.equal(fallbackReport.stageTwoSkills[0], 'Gestión de Acuerdos Operativos');
-    assert.equal(fallbackReport.chosenActions[0], 'Reunión privada de 15 minutos para revisar el reporte de entregas');
-    assert.ok(fallbackReport.stageSixLearnings[0].includes('Preguntar antes de asumir'));
-    assert.equal(fallbackReport.detectedStrengths.length, 3);
-    assert.equal(fallbackReport.recommendationsForAutonomy.length, 3);
+      [],
+      ['Comunicación Asertiva y Firmeza Empática']
+    );
+    assert.ok(partialReport);
+    assert.deepEqual(partialReport?.chosenActions, []);
   });
 
   it('9. Regla estricta de correo real: no inventar correos y marcar error explícito si no está registrado', async () => {

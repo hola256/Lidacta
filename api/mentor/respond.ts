@@ -2039,6 +2039,125 @@ export function extractGeminiCandidateText(data: any): string {
   return typeof fallbackFirstPart === 'string' ? fallbackFirstPart : '';
 }
 
+function isCleanStage7String(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  const upper = trimmed.toUpperCase();
+  const lower = trimmed.toLowerCase();
+  if (
+    upper.startsWith('ERROR DE SERVIDOR') ||
+    lower.includes('error de servidor') ||
+    lower.includes('no pudo responder en este momento') ||
+    lower.includes('por favor reintenta')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function isStage7InsufficientPlaceholder(value: string): boolean {
+  const norm = value.trim().toLowerCase();
+  return (
+    norm === INSUFFICIENT_EVIDENCE_MESSAGE.toLowerCase() ||
+    norm === INSUFFICIENT_STRENGTHS_MESSAGE.toLowerCase() ||
+    norm.startsWith('no se cuenta con evidencia suficiente')
+  );
+}
+
+function extractRegisteredStage5Actions(sessionData: any): string[] {
+  const what = sessionData?.actionPlan?.what;
+  return isCleanStage7String(what) ? [what.trim()] : [];
+}
+
+function extractRegisteredStage6Learnings(sessionData: any): string[] {
+  const learnings = sessionData?.learnings;
+  if (!learnings || typeof learnings !== 'object') return [];
+  const rawFields = [
+    learnings.insights,
+    learnings.whatHappened,
+    learnings.whatWorked,
+    learnings.futureAdjustments,
+  ];
+  const seen = new Set<string>();
+  const collected: string[] = [];
+  for (const field of rawFields) {
+    if (!isCleanStage7String(field)) continue;
+    const trimmed = field.trim();
+    if (isStage7InsufficientPlaceholder(trimmed)) continue;
+    const key = trimmed.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      collected.push(trimmed);
+    }
+  }
+  return collected;
+}
+
+function hasSubstantiveStage7Items(arr: unknown): boolean {
+  return (
+    Array.isArray(arr) &&
+    arr.some((item) => isCleanStage7String(item) && !isStage7InsufficientPlaceholder(item))
+  );
+}
+
+function isValidStage7FinalFeedbackPayload(
+  finalFeedback: any,
+  options?: {
+    hasSessionSkills?: boolean;
+    hasRegisteredActions?: boolean;
+    hasRegisteredLearnings?: boolean;
+  }
+): { valid: boolean; reason?: string } {
+  if (!finalFeedback || typeof finalFeedback !== 'object' || Array.isArray(finalFeedback)) {
+    return { valid: false, reason: 'missing_final_feedback' };
+  }
+  if (
+    !Array.isArray(finalFeedback.detectedStrengths) ||
+    !finalFeedback.detectedStrengths.every(isCleanStage7String)
+  ) {
+    return { valid: false, reason: 'invalid_detected_strengths' };
+  }
+  if (
+    finalFeedback.stageTwoSkills !== undefined &&
+    (!Array.isArray(finalFeedback.stageTwoSkills) ||
+      !finalFeedback.stageTwoSkills.every(isCleanStage7String))
+  ) {
+    return { valid: false, reason: 'invalid_stage_two_skills' };
+  }
+  const isCleanStringArray = (arr: unknown) =>
+    Array.isArray(arr) && arr.every(isCleanStage7String);
+  if (!isCleanStringArray(finalFeedback.chosenActions)) {
+    return { valid: false, reason: 'invalid_chosen_actions' };
+  }
+  if (!isCleanStringArray(finalFeedback.stageSixLearnings)) {
+    return { valid: false, reason: 'invalid_stage_six_learnings' };
+  }
+  if (!isCleanStringArray(finalFeedback.recommendationsForAutonomy)) {
+    return { valid: false, reason: 'invalid_recommendations_for_autonomy' };
+  }
+
+  const hasAuthoritativeSkills =
+    options?.hasSessionSkills !== undefined
+      ? Boolean(options.hasSessionSkills)
+      : hasSubstantiveStage7Items(finalFeedback.stageTwoSkills);
+
+  const hasAnySubstantiveContent =
+    hasSubstantiveStage7Items(finalFeedback.detectedStrengths) ||
+    hasAuthoritativeSkills ||
+    hasSubstantiveStage7Items(finalFeedback.chosenActions) ||
+    Boolean(options?.hasRegisteredActions) ||
+    hasSubstantiveStage7Items(finalFeedback.stageSixLearnings) ||
+    Boolean(options?.hasRegisteredLearnings) ||
+    hasSubstantiveStage7Items(finalFeedback.recommendationsForAutonomy);
+
+  if (!hasAnySubstantiveContent) {
+    return { valid: false, reason: 'empty_final_feedback' };
+  }
+
+  return { valid: true };
+}
+
 export const maxDuration = 60; // 60 segundos de timeout
 
 export default async function handler(req: any, res: any) {
@@ -2245,56 +2364,6 @@ export default async function handler(req: any, res: any) {
     usageRequestStats.historyTurns = resolvedHistory.length;
 
     if (!apiKey) {
-      if (currentStageNum === 7) {
-        console.warn('[Lidacta API] GEMINI_API_KEY no detectada. Activando fallback de Etapa 7 con finalFeedback...');
-        console.warn(
-          `[Lidacta Usage] ${JSON.stringify({
-            event: 'deterministic_fallback',
-            outcome: 'deterministic_fallback',
-            traceId: requestTraceId,
-            attempt: 0,
-            attemptTotal: 0,
-            attemptRole: 'deterministic_fallback',
-            usedFallback: true,
-            fallbackReason: 'missing_api_key',
-            model: 'deterministic_engine',
-            modelVersion: null,
-            usageMetadataAvailable: false,
-            promptTokenCount: null,
-            candidatesTokenCount: null,
-            thoughtsTokenCount: null,
-            totalTokenCount: null,
-            cachedContentTokenCount: null,
-            status: 200,
-            googleErrorCode: null,
-            googleErrorStatus: null,
-            errorClassification: 'missing_api_key',
-            isTimeout: false,
-            headersElapsedMs: null,
-            bodyReadElapsedMs: null,
-            totalElapsedMs: Date.now() - requestStartTime,
-            requestElapsedMs: Date.now() - requestStartTime,
-            ...usageRequestStats,
-          })}`
-        );
-        const fallbackStage7 = generateContextualCoachReply(
-          7,
-          leaderFirstName,
-          resolvedUserMessage,
-          resolvedHistory,
-          sessionData || safeSessionContext
-        );
-        return res.status(200).json({
-          success: true,
-          reply: fallbackStage7.replyText,
-          text: fallbackStage7.replyText,
-          data: {
-            ...fallbackStage7,
-            reply: fallbackStage7.replyText,
-            replyText: fallbackStage7.replyText,
-          },
-        });
-      }
       console.error('ERROR: No se detectó ninguna GEMINI_API_KEY en process.env');
       console.warn(
         `[Lidacta Usage] ${JSON.stringify({
@@ -2327,6 +2396,9 @@ export default async function handler(req: any, res: any) {
       );
       return res.status(500).json({
         success: false,
+        responseSource: 'error',
+        isFallback: false,
+        isGeminiVerified: false,
         error: 'Configuración de servidor incompleta para procesar la solicitud.',
       });
     }
@@ -2401,9 +2473,9 @@ ETAPA 7: CIERRE Y RETROALIMENTACIÓN
 - OBLIGATORIO EN ETAPA 7: En el JSON incluye el objeto "finalFeedback" con las 5 secciones:
   * detectedStrengths: Array de 0 a 4 fortalezas basadas EXCLUSIVAMENTE en conductas observables demostradas por el líder durante la mentoría (etapas 1 a 6) (ej. honestidad diagnóstica en el autoanálisis, agudeza para distinguir dinámicas del equipo, precisión operativa en los acuerdos, madurez reflexiva sin buscar culpables). Si no se observaron conductas concretas que destaquen con evidencia, dejar el arreglo vacío []. Queda PROHIBIDO atribuir capacidades permanentes, dominio en piso o cambios no demostrados. REGLA CONCEPTUAL DE EXCLUSIÓN: Queda estrictamente prohibido atribuir como fortaleza el dominio o maestría de una habilidad que el líder necesita desarrollar (habilidades presentes en "Habilidades ya identificadas en la sesión"); sin embargo, sí es válido reconocer conductas del proceso asociadas (por ejemplo: reconocer que se tiene dificultad para regular una reacción demuestra autoconciencia y apertura reflexiva, pero NO autorregulación emocional).
   * stageTwoSkills: Array con las habilidades consolidadas que el líder necesita fortalecer (identificadas en etapas 2, 3 y 4) acompañadas de su evidencia concreta de progreso observada en la conversación o práctica. Si no hay evidencia suficiente, incluir únicamente: 'No se cuenta con evidencia suficiente en este proceso para identificar habilidades específicas por fortalecer.'
-  * chosenActions: Array con la acción concreta comprometida en Etapa 5.
-  * stageSixLearnings: Array con aprendizajes y reflexiones consolidadas en Etapa 6.
-  * recommendationsForAutonomy: Array con recomendaciones para el fortalecimiento de la autonomía.
+  * chosenActions: Array con las acciones concretas comprometidas en Etapa 5. Si no se registró Plan de Acción en Etapa 5 ni hubo compromisos verificables, dejar el arreglo vacío []. PROHIBIDO inventar acciones que el líder no haya registrado.
+  * stageSixLearnings: Array con aprendizajes y reflexiones reales consolidados en Etapa 6. Si el plan no se ejecutó (not_executed) o no existen aprendizajes reales registrados en el diálogo o en Etapa 6, dejar el arreglo vacío []. PROHIBIDO inventar aprendizajes o resultados de ejecución que no ocurrieron.
+  * recommendationsForAutonomy: Array con recomendaciones concretas para el fortalecimiento de la autonomía basadas exclusivamente en el caso trabajado; si no existe evidencia suficiente en el proceso para emitir recomendaciones específicas, dejar el arreglo vacío [] sin inventar frases genéricas de relleno.
 
 REGLAS OBLIGATORIAS DE HABILIDADES Y RECONSIDERACIÓN:
 - La ausencia de mención NUNCA elimina una habilidad previamente identificada.
@@ -2420,6 +2492,7 @@ Contexto de la sesión:
 - Habilidades ya identificadas en la sesión: ${existingSessionSkills.join(', ') || 'Ninguna aún'}
 - Plan de Acción (Etapa 5): ${sessionData?.actionPlan?.what ? `${sessionData.actionPlan.what}${sessionData.actionPlan.when ? ` | Cuándo: ${sessionData.actionPlan.when}` : ''}${sessionData.actionPlan.withWhom ? ` | Con quién: ${sessionData.actionPlan.withWhom}` : ''}` : 'No registrado aún'}
 - Estado de ejecución del Plan de Acción (Etapa 6): ${sessionData?.actionPlanExecutionStatus || 'Sin verificar'}
+- Reflexiones y aprendizajes registrados (Etapa 6): ${extractRegisteredStage6Learnings(sessionData).join(' | ') || 'Sin reflexiones registradas aún'}
 
 CRITERIOS ESTRICTOS PARA EL CAMPO "readyToAdvance":
 - En Etapa 1: Debe ser true ÚNICAMENTE cuando ya se haya entregado previamente la síntesis con las 3 viñetas (**Hechos y situación**, **Dilema del líder**, **Impacto y reto principal**) Y el mensaje actual del líder confirme o valide dicha síntesis (ej. "de acuerdo", "sí", "si estoy lista", "totalmente", "correcto"). Si el líder corrige, pregunta, duda o aporta nuevos datos, DEBE ser false.
@@ -2447,9 +2520,9 @@ Responde SIEMPRE en JSON estricto con esta estructura:
   "finalFeedback": {
     "detectedStrengths": [], // De 0 a 4 fortalezas demostradas en la sesión; dejar [] si no hay evidencia observable suficiente
     "stageTwoSkills": ["Habilidad a fortalecer — Evidencia observable: Observación concreta"],
-    "chosenActions": ["Acción comprometida en etapa 5"],
-    "stageSixLearnings": ["Aprendizaje consolidado en etapa 6"],
-    "recommendationsForAutonomy": ["Recomendación para autonomía"]
+    "chosenActions": [], // Acción comprometida en etapa 5; dejar [] si no se registró ni hubo compromiso real (no inventar)
+    "stageSixLearnings": [], // Aprendizaje real consolidado en etapa 6; dejar [] si no se ejecutó o no hay aprendizajes reales (no inventar)
+    "recommendationsForAutonomy": [] // Recomendaciones basadas en el caso; dejar [] si no hay evidencia suficiente (no inventar)
   }
 }`;
 
@@ -2840,19 +2913,30 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
 
     const candidatePartText = extractGeminiCandidateText(data);
     if (!ok || !candidatePartText) {
+      const errorMsg = lastErrorText || 'No se recibió respuesta válida de los candidatos de la API de Gemini.';
+      const errorHttpStatus =
+        lastStatus === 429 || lastStatus === 503
+          ? lastStatus
+          : lastErrorWasTimeout
+          ? 504
+          : lastStatus >= 400 && lastStatus < 600
+          ? lastStatus
+          : 502;
+      console.error(
+        `[Lidacta API] Fallo final en /api/mentor/respond (stage=${currentStageNum}, modelo=${lastAttemptModel}, status=${errorHttpStatus}, ` +
+        `rawStatus=${lastStatus || 'N/A'}, timeout=${lastErrorWasTimeout}): ${errorMsg}`
+      );
       if (currentStageNum === 7) {
-        console.warn('[Lidacta API] Despachando fallback estructurado para Etapa 7 con finalFeedback...');
         console.warn(
           `[Lidacta Usage] ${JSON.stringify({
-            event: 'deterministic_fallback',
-            outcome: 'deterministic_fallback',
+            event: 'stage7_closure_error',
+            outcome: 'stage7_aborted',
             traceId: requestTraceId,
             attempt: attemptQueue.length,
             attemptTotal: attemptQueue.length,
-            attemptRole: 'deterministic_fallback',
-            usedFallback: true,
-            fallbackReason: !ok ? 'gemini_failed' : 'empty_candidate',
-            model: 'deterministic_engine',
+            attemptRole: 'none',
+            usedFallback: false,
+            model: lastAttemptModel || null,
             modelVersion: null,
             usageMetadataAvailable: false,
             promptTokenCount: null,
@@ -2860,7 +2944,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
             thoughtsTokenCount: null,
             totalTokenCount: null,
             cachedContentTokenCount: null,
-            status: 200,
+            status: errorHttpStatus,
             googleErrorCode: lastStatus || null,
             googleErrorStatus: null,
             errorClassification: !ok
@@ -2880,39 +2964,12 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
             ...requestStats,
           })}`
         );
-        const fallbackStage7 = generateContextualCoachReply(
-          7,
-          leaderFirstName,
-          resolvedUserMessage,
-          resolvedHistory,
-          sessionData || safeSessionContext
-        );
-        return res.status(200).json({
-          success: true,
-          reply: fallbackStage7.replyText,
-          text: fallbackStage7.replyText,
-          data: {
-            ...fallbackStage7,
-            reply: fallbackStage7.replyText,
-            replyText: fallbackStage7.replyText,
-          },
-        });
       }
-      const errorMsg = lastErrorText || 'No se recibió respuesta válida de los candidatos de la API de Gemini.';
-      const errorHttpStatus =
-        lastStatus === 429 || lastStatus === 503
-          ? lastStatus
-          : lastErrorWasTimeout
-          ? 504
-          : lastStatus >= 400 && lastStatus < 600
-          ? lastStatus
-          : 502;
-      console.error(
-        `[Lidacta API] Fallo final en /api/mentor/respond (modelo=${lastAttemptModel}, status=${errorHttpStatus}, ` +
-        `rawStatus=${lastStatus || 'N/A'}, timeout=${lastErrorWasTimeout}): ${errorMsg}`
-      );
       return res.status(errorHttpStatus).json({
         success: false,
+        responseSource: 'error',
+        isFallback: false,
+        isGeminiVerified: false,
         statusCode: errorHttpStatus,
         error: lastErrorWasTimeout
           ? 'Tiempo de espera agotado al procesar la solicitud de mentoría.'
@@ -2935,7 +2992,46 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
       parsed = null;
     }
 
-    if (!parsed || typeof parsed !== 'object') {
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      if (currentStageNum === 7) {
+        console.warn(
+          `[Lidacta Usage] ${JSON.stringify({
+            event: 'stage7_invalid_response',
+            outcome: 'invalid_json',
+            traceId: requestTraceId,
+            attempt: attemptQueue.length,
+            attemptTotal: attemptQueue.length,
+            attemptRole: 'none',
+            usedFallback: false,
+            model: lastAttemptModel || MODEL_NAME,
+            modelVersion: typeof data?.modelVersion === 'string' ? data.modelVersion : null,
+            usageMetadataAvailable: false,
+            promptTokenCount: null,
+            candidatesTokenCount: null,
+            thoughtsTokenCount: null,
+            totalTokenCount: null,
+            cachedContentTokenCount: null,
+            status: 502,
+            googleErrorCode: null,
+            googleErrorStatus: null,
+            errorClassification: 'invalid_stage7_json',
+            isTimeout: false,
+            headersElapsedMs: null,
+            bodyReadElapsedMs: null,
+            totalElapsedMs: Date.now() - requestStartTime,
+            requestElapsedMs: Date.now() - requestStartTime,
+            ...requestStats,
+          })}`
+        );
+        return res.status(502).json({
+          success: false,
+          responseSource: 'error',
+          isFallback: false,
+          isGeminiVerified: false,
+          statusCode: 502,
+          error: 'La respuesta de Gemini para el cierre de Etapa 7 no tiene formato JSON válido.',
+        });
+      }
       parsed = {
         replyText: cleanConversationalText(candidatePartText || rawText),
         readyToAdvance: false,
@@ -3000,23 +3096,11 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
       finalSkillEntries = existingSessionSkillEntries;
     }
 
-    // 2. En Etapa 7, asegurar que finalFeedback con las 5 secciones siempre esté presente
-    // y recuperar exclusivamente las habilidades activas consolidadas existentes con sus evidencias reales.
+    // 2. En Etapa 7, validar estrictamente la respuesta y finalFeedback generados por Gemini
+    // sin generar fallbacks genéricos ni ocultar respuestas incompletas o malformadas,
+    // recuperando exclusivamente las habilidades activas consolidadas existentes con sus evidencias reales.
     if (currentStageNum === 7) {
-      if (
-        !parsed.finalFeedback ||
-        !Array.isArray(parsed.finalFeedback.detectedStrengths)
-      ) {
-        const fallbackStage7 = generateContextualCoachReply(
-          7,
-          leaderFirstName,
-          resolvedUserMessage,
-          resolvedHistory,
-          sessionData || safeSessionContext
-        );
-        parsed.finalFeedback = fallbackStage7.finalFeedback;
-      }
-
+      const candidateStage7Reply = cleanConversationalText(parsed?.replyText || parsed?.reply || '');
       // Requisito D: Recuperar exclusivamente las habilidades activas consolidadas y sus evidencias reales
       let skillsToReport: (LeadershipSkillEntry | string)[] = [];
       const activeEntries = getActiveSkillEntries(finalSkillEntries);
@@ -3029,48 +3113,109 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         skillsToReport = [];
       }
 
+      const registeredChosenActions = extractRegisteredStage5Actions(sessionData);
+      const registeredStage6Learnings = extractRegisteredStage6Learnings(sessionData);
+
+      const feedbackValidation = isValidStage7FinalFeedbackPayload(parsed.finalFeedback, {
+        hasSessionSkills: skillsToReport.length > 0,
+        hasRegisteredActions: registeredChosenActions.length > 0,
+        hasRegisteredLearnings: registeredStage6Learnings.length > 0,
+      });
+
+      if (!isCleanStage7String(candidateStage7Reply) || !feedbackValidation.valid) {
+        console.warn(
+          `[Lidacta Usage] ${JSON.stringify({
+            event: 'stage7_invalid_response',
+            outcome: 'invalid_final_feedback',
+            traceId: requestTraceId,
+            attempt: attemptQueue.length,
+            attemptTotal: attemptQueue.length,
+            attemptRole: 'none',
+            usedFallback: false,
+            model: lastAttemptModel || MODEL_NAME,
+            modelVersion: typeof data?.modelVersion === 'string' ? data.modelVersion : null,
+            usageMetadataAvailable: false,
+            promptTokenCount: null,
+            candidatesTokenCount: null,
+            thoughtsTokenCount: null,
+            totalTokenCount: null,
+            cachedContentTokenCount: null,
+            status: 502,
+            googleErrorCode: null,
+            googleErrorStatus: null,
+            errorClassification: !isCleanStage7String(candidateStage7Reply)
+              ? 'invalid_stage7_reply'
+              : feedbackValidation.reason || 'invalid_final_feedback',
+            isTimeout: false,
+            headersElapsedMs: null,
+            bodyReadElapsedMs: null,
+            totalElapsedMs: Date.now() - requestStartTime,
+            requestElapsedMs: Date.now() - requestStartTime,
+            ...usageRequestStats,
+          })}`
+        );
+        return res.status(502).json({
+          success: false,
+          responseSource: 'error',
+          isFallback: false,
+          isGeminiVerified: false,
+          statusCode: 502,
+          error: 'No se recibió un reporte de cierre válido y completo de Gemini para concluir la Etapa 7.',
+        });
+      }
+
       // Formatear stageTwoSkills con la evidencia real observada o el mensaje de insuficiencia
       const formattedStageTwoSkills = formatStageTwoSkillsWithEvidence(skillsToReport);
 
-      // Garantizar la estructura de las 5 secciones intacta sin agregar una sexta sección
+      const cleanChosenActions = parsed.finalFeedback.chosenActions
+        .map((s: string) => s.trim())
+        .filter((s: string) => !isStage7InsufficientPlaceholder(s));
+      const cleanStageSixLearnings = parsed.finalFeedback.stageSixLearnings
+        .map((s: string) => s.trim())
+        .filter((s: string) => !isStage7InsufficientPlaceholder(s));
+      const cleanRecommendations = parsed.finalFeedback.recommendationsForAutonomy
+        .map((s: string) => s.trim())
+        .filter((s: string) => !isStage7InsufficientPlaceholder(s));
+
+      // Garantizar la estructura de las 5 secciones conservando acciones/reflexiones reales sin inventar datos faltantes
       parsed.finalFeedback = {
-        detectedStrengths: sanitizeDetectedStrengths(parsed.finalFeedback?.detectedStrengths),
+        detectedStrengths: sanitizeDetectedStrengths(parsed.finalFeedback.detectedStrengths),
         stageTwoSkills: formattedStageTwoSkills,
         chosenActions:
-          Array.isArray(parsed.finalFeedback.chosenActions) && parsed.finalFeedback.chosenActions.length > 0
-            ? parsed.finalFeedback.chosenActions
-            : [
-                sessionData?.actionPlan?.what ||
-                  sessionData?.chosenAlternative ||
-                  'Conversación 1 a 1 de alineación operativa con compromisos claros',
-              ],
+          cleanChosenActions.length > 0 ? cleanChosenActions : registeredChosenActions,
         stageSixLearnings:
-          Array.isArray(parsed.finalFeedback.stageSixLearnings) && parsed.finalFeedback.stageSixLearnings.length > 0
-            ? parsed.finalFeedback.stageSixLearnings
-            : [
-                sessionData?.learnings?.insights ||
-                  sessionData?.learnings?.whatHappened ||
-                  'La claridad temprana en los acuerdos previene fricciones y fortalece la confianza mutua.',
-              ],
-        recommendationsForAutonomy:
-          Array.isArray(parsed.finalFeedback.recommendationsForAutonomy) &&
-          parsed.finalFeedback.recommendationsForAutonomy.length > 0
-            ? parsed.finalFeedback.recommendationsForAutonomy
-            : [
-                'Mantener conversaciones de alineación periódicas antes de que los desvíos escalen',
-                'Registrar los acuerdos por escrito de forma breve para asegurar entendimiento común',
-                'Reconocer los avances del equipo de manera oportuna y fundamentada en hechos',
-              ],
+          cleanStageSixLearnings.length > 0
+            ? cleanStageSixLearnings
+            : registeredStage6Learnings,
+        recommendationsForAutonomy: cleanRecommendations,
       };
     }
 
-    const rawReply = parsed?.replyText || parsed?.reply || rawText || candidatePartText;
+    const rawReply =
+      currentStageNum === 7
+        ? parsed?.replyText || parsed?.reply || ''
+        : parsed?.replyText || parsed?.reply || rawText || candidatePartText;
     const responseText = cleanConversationalText(rawReply);
+    if (!responseText) {
+      return res.status(502).json({
+        success: false,
+        responseSource: 'error',
+        isFallback: false,
+        isGeminiVerified: false,
+        statusCode: 502,
+        error: 'Gemini devolvió una respuesta vacía.',
+      });
+    }
     parsed.reply = responseText;
     parsed.replyText = responseText;
+    const verifiedModel = lastAttemptModel || MODEL_NAME;
 
     return res.status(200).json({
       success: true,
+      responseSource: 'gemini',
+      isFallback: false,
+      isGeminiVerified: true,
+      model: verifiedModel,
       reply: responseText,
       text: responseText,
       readyToAdvance: Boolean(parsed.readyToAdvance),
@@ -3079,71 +3224,14 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         ...parsed,
         reply: responseText,
         replyText: responseText,
+        responseSource: 'gemini',
+        isFallback: false,
+        isGeminiVerified: true,
+        model: verifiedModel,
       },
     });
   } catch (error: any) {
     console.error('Error en mentor respond:', error);
-    if (currentStageNum === 7) {
-      console.warn(
-        `[Lidacta Usage] ${JSON.stringify({
-          event: 'deterministic_fallback',
-          outcome: 'deterministic_fallback',
-          traceId: requestTraceId,
-          attempt: 0,
-          attemptTotal: 0,
-          attemptRole: 'deterministic_fallback',
-          usedFallback: true,
-          fallbackReason: 'unhandled_exception',
-          model: 'deterministic_engine',
-          modelVersion: null,
-          usageMetadataAvailable: false,
-          promptTokenCount: null,
-          candidatesTokenCount: null,
-          thoughtsTokenCount: null,
-          totalTokenCount: null,
-          cachedContentTokenCount: null,
-          status: 200,
-          googleErrorCode: null,
-          googleErrorStatus: null,
-          errorClassification: 'unhandled_exception',
-          isTimeout: false,
-          headersElapsedMs: null,
-          bodyReadElapsedMs: null,
-          totalElapsedMs: Date.now() - requestStartTime,
-          requestElapsedMs: Date.now() - requestStartTime,
-          ...usageRequestStats,
-        })}`
-      );
-      const fallbackContext = {
-        ...(sessionData || {}),
-        ...(safeSessionContext || {}),
-        skillEntries:
-          safeSessionContext?.skillEntries && safeSessionContext.skillEntries.length > 0
-            ? safeSessionContext.skillEntries
-            : Array.isArray(sessionData?.skillEntries)
-            ? sessionData.skillEntries
-            : [],
-        identifiedSkills:
-          safeSessionContext?.identifiedSkills && safeSessionContext.identifiedSkills.length > 0
-            ? safeSessionContext.identifiedSkills
-            : Array.isArray(sessionData?.identifiedSkills)
-            ? sessionData.identifiedSkills
-            : [],
-      };
-      const fallbackStage7 = generateContextualCoachReply(
-        7,
-        leaderFirstName,
-        resolvedUserMessage || '',
-        resolvedHistory || [],
-        fallbackContext
-      );
-      return res.status(200).json({
-        success: true,
-        reply: fallbackStage7.replyText,
-        text: fallbackStage7.replyText,
-        data: fallbackStage7,
-      });
-    }
     console.warn(
       `[Lidacta Usage] ${JSON.stringify({
         event: 'server_error',
@@ -3175,6 +3263,9 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
     );
     return res.status(500).json({
       success: false,
+      responseSource: 'error',
+      isFallback: false,
+      isGeminiVerified: false,
       error: error?.message || 'Error en servidor',
     });
   }

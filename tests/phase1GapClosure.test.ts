@@ -62,8 +62,11 @@ describe('Fase 1: Cierre de brechas Producción / Desarrollo (Shadowing, session
 
     let capturedStatus = 200;
     let capturedJson: any = null;
+    const capturedWarnings: string[] = [];
     const origError = console.error;
+    const origWarn = console.warn;
     console.error = () => {};
+    console.warn = (...args: any[]) => capturedWarnings.push(args.join(' '));
     try {
       await routeHandler(
         {
@@ -106,18 +109,18 @@ describe('Fase 1: Cierre de brechas Producción / Desarrollo (Shadowing, session
       );
     } finally {
       console.error = origError;
+      console.warn = origWarn;
     }
 
-    assert.equal(capturedStatus, 200);
-    assert.equal(capturedJson?.success, true);
-    assert.ok(capturedJson?.data?.finalFeedback, 'El catch global de Etapa 7 debe devolver finalFeedback');
-    assert.ok(
-      Array.isArray(capturedJson?.data?.finalFeedback?.stageTwoSkills) &&
-        capturedJson.data.finalFeedback.stageTwoSkills.some((s: string) =>
-          s.includes('Comunicación Asertiva')
-        ),
-      'El fallback de Etapa 7 debe conservar la información de habilidades de la sesión'
-    );
+    assert.equal(capturedStatus, 500);
+    assert.equal(capturedJson?.success, false);
+    assert.equal(capturedJson?.responseSource, 'error');
+    assert.equal(capturedJson?.isGeminiVerified, false);
+    assert.equal(capturedJson?.data?.finalFeedback, undefined, 'El catch global de Etapa 7 no debe fabricar reporte fallback');
+    const usageLine = capturedWarnings.find((line) => line.startsWith('[Lidacta Usage] '));
+    assert.ok(usageLine, 'El catch global debe emitir [Lidacta Usage]');
+    const parsedUsage = JSON.parse(usageLine.replace('[Lidacta Usage] ', ''));
+    assert.equal(parsedUsage.historyTurns, 2, 'resolvedHistory externo debe conservar los 2 mensajes válidos filtrados sin shadowing');
   });
 
   it('2. stripSessionMessagesForApi elimina messages sin mutar el estado y LidactaContext conserva history/conversationHistory', () => {

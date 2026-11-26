@@ -232,9 +232,13 @@ describe('Generador de Sesiones de Prueba por Etapa (1 a 7) - Modo Inspector', (
     // Contexto: bloqueo de correos, alertas terapéuticas, seguimientos, recursos y notificaciones RH
     assert.ok(contextSrc.includes('if (targetMentorship.isTestSession)'), 'Bloqueo de email Etapa 7 en sesiones QA');
     assert.ok(contextSrc.includes('if (session.isTestSession) return session;'), 'Exclusión en checkAndProcessStage5FollowUps');
-    assert.ok(contextSrc.includes('!activeMentorship.isTestSession'), 'Guardias en avance/mensajes/plan');
     assert.ok(
-      contextSrc.includes('isTherapeutic && !activeMentorship.isTestSession && currentUser.id !== QA_TEST_LEADER_ID'),
+      contextSrc.includes('!sessionForPostCommit.isTestSession') &&
+        contextSrc.includes('!resolvedTargetSession.isTestSession'),
+      'Guardias en avance y mensajes usando sesión confirmada'
+    );
+    assert.ok(
+      contextSrc.includes('isTherapeutic && !resolvedTargetSession.isTestSession && currentUser.id !== QA_TEST_LEADER_ID'),
       'Alerta de límite terapéutico debe omitirse en sesiones QA'
     );
     assert.ok(contextSrc.includes('!isQaSession'), 'Sin notificación a RH al crear sesión QA');
