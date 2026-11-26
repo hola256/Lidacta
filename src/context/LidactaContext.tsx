@@ -31,6 +31,7 @@ import { safeString, extractErrorMessage } from '../utils/safeError';
 import { isHumanResourcesRole } from '../utils/roleUtils';
 import {
   formatStageTwoSkillsWithEvidence,
+  resolveConsolidatedStageTwoSkills,
   normalizeExistingSessionSkills,
   getActiveSkillEntries,
   getActiveSkillNames,
@@ -62,6 +63,21 @@ export function stripSessionMessagesForApi<T extends Record<string, any>>(
 ): Omit<T, 'messages'> {
   const { messages: _omittedMessages, ...sessionWithoutMessages } = session;
   return sessionWithoutMessages;
+}
+
+export function buildStage7FinalFeedbackReport(
+  coachFinalFeedback: FinalFeedbackReport | undefined,
+  skillEntries?: LeadershipSkillEntry[] | null,
+  legacyIdentifiedSkills?: string[] | null,
+  deliveredAt: string = new Date().toISOString()
+): FinalFeedbackReport | undefined {
+  if (!coachFinalFeedback) return undefined;
+  return {
+    ...coachFinalFeedback,
+    detectedStrengths: sanitizeDetectedStrengths(coachFinalFeedback.detectedStrengths),
+    stageTwoSkills: resolveConsolidatedStageTwoSkills(skillEntries, legacyIdentifiedSkills),
+    deliveredAt,
+  };
 }
 
 export function isValidMentorApiResponse(
@@ -1192,16 +1208,11 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         let generatedReport: FinalFeedbackReport | undefined =
           stage === 7 && coachReply.finalFeedback
-            ? {
-                ...coachReply.finalFeedback,
-                detectedStrengths: sanitizeDetectedStrengths(coachReply.finalFeedback.detectedStrengths),
-                stageTwoSkills: formatStageTwoSkillsWithEvidence(
-                  coachReply.finalFeedback.stageTwoSkills && coachReply.finalFeedback.stageTwoSkills.length > 0
-                    ? coachReply.finalFeedback.stageTwoSkills
-                    : activeEntriesOrSkills
-                ),
-                deliveredAt: new Date().toISOString(),
-              }
+            ? buildStage7FinalFeedbackReport(
+                coachReply.finalFeedback,
+                newSession.skillEntries,
+                newSession.identifiedSkills
+              )
             : undefined;
 
         if (stage === 7 && !generatedReport) {
@@ -1242,7 +1253,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const activeNames =
               updatedSkillEntries.length > 0 ? getActiveSkillNames(updatedSkillEntries) : [];
             const updatedIdentifiedSkills =
-              activeNames.length > 0
+              updatedSkillEntries.length > 0
                 ? activeNames
                 : [2, 3, 4].includes(stage) &&
                   Array.isArray(coachReply.identifiedSkills) &&
@@ -1907,7 +1918,13 @@ El Equipo de Lidacta`;
             let newSkillEntries: LeadershipSkillEntry[] = m.skillEntries || [];
             if ([2, 3, 4].includes(currentStage) && Array.isArray(coachReply.skillEntries)) {
               newSkillEntries = coachReply.skillEntries;
-            } else if ((!m.skillEntries || m.skillEntries.length === 0) && Array.isArray(coachReply.skillEntries) && coachReply.skillEntries.length > 0) {
+            } else if (
+              (!m.skillEntries || m.skillEntries.length === 0) &&
+              Array.isArray(m.identifiedSkills) &&
+              m.identifiedSkills.length > 0 &&
+              Array.isArray(coachReply.skillEntries) &&
+              coachReply.skillEntries.length > 0
+            ) {
               newSkillEntries = coachReply.skillEntries;
             }
 
@@ -1916,7 +1933,7 @@ El Equipo de Lidacta`;
             // Si no hay skillEntries, recurrimos a coachReply.identifiedSkills (en 2, 3, 4) o mantenemos m.identifiedSkills.
             const activeSkillNamesFromEntries = newSkillEntries.length > 0 ? getActiveSkillNames(newSkillEntries) : [];
             const newSkills =
-              activeSkillNamesFromEntries.length > 0
+              newSkillEntries.length > 0
                 ? activeSkillNamesFromEntries
                 : [2, 3, 4].includes(currentStage) && Array.isArray(coachReply.identifiedSkills)
                 ? normalizeExistingSessionSkills(coachReply.identifiedSkills)
@@ -1924,29 +1941,20 @@ El Equipo de Lidacta`;
                 ? normalizeExistingSessionSkills(m.identifiedSkills)
                 : [];
 
-            const skillsForReport =
-              newSkillEntries.length > 0
-                ? newSkillEntries
-                : newSkills.length > 0
-                ? newSkills
-                : m.skillEntries && m.skillEntries.length > 0
-                ? m.skillEntries
-                : m.identifiedSkills || [];
+            const authoritativeEntries =
+              newSkillEntries.length > 0 ? newSkillEntries : m.skillEntries;
+            const authoritativeLegacySkills =
+              newSkills.length > 0 ? newSkills : m.identifiedSkills;
 
             // In Stage 5, the leader personally writes and owns their Action Plan.
             // Any suggestions or drafts provided by Lidacta in the conversation remain in the chat only
             // and are NEVER automatically populated into m.actionPlan.
             const newFinalFeedback = coachReply.finalFeedback
-              ? {
-                  ...coachReply.finalFeedback,
-                  detectedStrengths: sanitizeDetectedStrengths(coachReply.finalFeedback.detectedStrengths),
-                  stageTwoSkills: formatStageTwoSkillsWithEvidence(
-                    coachReply.finalFeedback.stageTwoSkills && coachReply.finalFeedback.stageTwoSkills.length > 0
-                      ? coachReply.finalFeedback.stageTwoSkills
-                      : skillsForReport
-                  ),
-                  deliveredAt: new Date().toISOString(),
-                }
+              ? buildStage7FinalFeedbackReport(
+                  coachReply.finalFeedback,
+                  authoritativeEntries,
+                  authoritativeLegacySkills
+                )
               : m.finalFeedbackReport;
 
             return {
@@ -1971,16 +1979,11 @@ El Equipo de Lidacta`;
             : (activeMentorship.identifiedSkills || []);
 
         let generatedStage7Report: FinalFeedbackReport | undefined = coachReply.finalFeedback
-          ? {
-              ...coachReply.finalFeedback,
-              detectedStrengths: sanitizeDetectedStrengths(coachReply.finalFeedback.detectedStrengths),
-              stageTwoSkills: formatStageTwoSkillsWithEvidence(
-                coachReply.finalFeedback.stageTwoSkills && coachReply.finalFeedback.stageTwoSkills.length > 0
-                  ? coachReply.finalFeedback.stageTwoSkills
-                  : activeEntriesOrSkills
-              ),
-              deliveredAt: new Date().toISOString(),
-            }
+          ? buildStage7FinalFeedbackReport(
+              coachReply.finalFeedback,
+              activeMentorship.skillEntries,
+              activeMentorship.identifiedSkills
+            )
           : undefined;
 
         if (currentStage === 7 && !generatedStage7Report && !activeMentorship.finalFeedbackReport) {
@@ -2472,16 +2475,11 @@ El Equipo de Lidacta`;
             : (activeMentorship.identifiedSkills || []);
 
         let generatedReport: FinalFeedbackReport | undefined = coachReply.finalFeedback
-          ? {
-              ...coachReply.finalFeedback,
-              detectedStrengths: sanitizeDetectedStrengths(coachReply.finalFeedback.detectedStrengths),
-              stageTwoSkills: formatStageTwoSkillsWithEvidence(
-                coachReply.finalFeedback.stageTwoSkills && coachReply.finalFeedback.stageTwoSkills.length > 0
-                  ? coachReply.finalFeedback.stageTwoSkills
-                  : activeEntriesOrSkills
-              ),
-              deliveredAt: new Date().toISOString(),
-            }
+          ? buildStage7FinalFeedbackReport(
+              coachReply.finalFeedback,
+              activeMentorship.skillEntries,
+              activeMentorship.identifiedSkills
+            )
           : undefined;
 
         // Si la respuesta de la IA no contiene finalFeedback y avanzamos a Etapa 7,
@@ -2546,14 +2544,20 @@ El Equipo de Lidacta`;
             let updatedSkillEntries: LeadershipSkillEntry[] = m.skillEntries || [];
             if ([2, 3, 4].includes(nextStage) && Array.isArray(coachReply.skillEntries)) {
               updatedSkillEntries = coachReply.skillEntries;
-            } else if ((!m.skillEntries || m.skillEntries.length === 0) && Array.isArray(coachReply.skillEntries) && coachReply.skillEntries.length > 0) {
+            } else if (
+              (!m.skillEntries || m.skillEntries.length === 0) &&
+              Array.isArray(m.identifiedSkills) &&
+              m.identifiedSkills.length > 0 &&
+              Array.isArray(coachReply.skillEntries) &&
+              coachReply.skillEntries.length > 0
+            ) {
               updatedSkillEntries = coachReply.skillEntries;
             }
 
             // Sincronización de identifiedSkills para retrocompatibilidad:
             const activeSkillNames = updatedSkillEntries.length > 0 ? getActiveSkillNames(updatedSkillEntries) : [];
             const updatedIdentifiedSkills =
-              activeSkillNames.length > 0
+              updatedSkillEntries.length > 0
                 ? activeSkillNames
                 : [2, 3, 4].includes(nextStage) && Array.isArray(coachReply.identifiedSkills)
                 ? normalizeExistingSessionSkills(coachReply.identifiedSkills)

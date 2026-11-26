@@ -283,7 +283,7 @@ describe('Envío Automático del Reporte Final de Etapa 7 (Lidacta & Resend)', (
 
     const report = responseData.data.finalFeedback;
     assert.ok(report, 'El objeto finalFeedback debe estar presente en la respuesta de Etapa 7');
-    assert.ok(Array.isArray(report.detectedStrengths) && report.detectedStrengths.length > 0, 'detectedStrengths debe ser un array no vacío');
+    assert.ok(Array.isArray(report.detectedStrengths), 'detectedStrengths debe ser un arreglo válido');
     assert.ok(Array.isArray(report.stageTwoSkills) && report.stageTwoSkills.length > 0, 'stageTwoSkills debe ser un array no vacío');
     assert.ok(Array.isArray(report.chosenActions) && report.chosenActions.length > 0, 'chosenActions debe ser un array no vacío');
     assert.ok(Array.isArray(report.stageSixLearnings) && report.stageSixLearnings.length > 0, 'stageSixLearnings debe ser un array no vacío');

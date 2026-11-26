@@ -223,7 +223,7 @@ export function mapToCanonicalSkill(rawSkill: string): { canonicalName: string; 
   const rawClean = (rawSkill || '').trim();
   if (!rawClean) return null;
 
-  // Filtrar textos genéricos o vacíos
+  // Filtrar textos genéricos, vacíos o mensajes de estado oficial
   const normalized = normalizeText(rawClean);
   if (
     normalized.length < 3 ||
@@ -232,7 +232,8 @@ export function mapToCanonicalSkill(rawSkill: string): { canonicalName: string; 
     normalized === 'habilidad 1' ||
     normalized === 'habilidad 2' ||
     normalized === 'habilidad' ||
-    normalized === 'habilidades'
+    normalized === 'habilidades' ||
+    isInsufficientEvidenceMessage(rawClean)
   ) {
     return null;
   }
@@ -285,6 +286,16 @@ export const INSUFFICIENT_EVIDENCE_MESSAGE =
 
 export const INSUFFICIENT_STRENGTHS_MESSAGE =
   'No se cuenta con evidencia suficiente en este proceso para identificar fortalezas observables específicas.';
+
+export function isInsufficientEvidenceMessage(text: string): boolean {
+  if (typeof text !== 'string') return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  return (
+    trimmed === INSUFFICIENT_EVIDENCE_MESSAGE ||
+    normalizeText(trimmed) === normalizeText(INSUFFICIENT_EVIDENCE_MESSAGE)
+  );
+}
 
 /**
  * Sanea y valida el arreglo de fortalezas detectadas:
@@ -722,8 +733,17 @@ export function formatStageTwoSkillsWithEvidence(
     (item): item is string => typeof item === 'string'
   );
 
+  // Proteger explícitamente el mensaje oficial de evidencia insuficiente como mensaje de estado
+  const nonStatusStrings = stringSkills.filter(
+    (s) => s.trim().length > 0 && !isInsufficientEvidenceMessage(s)
+  );
+
+  if (nonStatusStrings.length === 0) {
+    return [INSUFFICIENT_EVIDENCE_MESSAGE];
+  }
+
   // Si las cadenas ya vienen con formato de evidencia previo o histórico, conservarlas directamente
-  const hasPreformatted = stringSkills.some(
+  const hasPreformatted = nonStatusStrings.some(
     (s) =>
       s.includes('— Evidencia') ||
       s.includes('— Habilidad previamente identificada') ||
@@ -731,11 +751,11 @@ export function formatStageTwoSkillsWithEvidence(
   );
 
   if (hasPreformatted) {
-    const cleaned = stringSkills.map((s) => s.trim()).filter(Boolean);
+    const cleaned = nonStatusStrings.map((s) => s.trim()).filter(Boolean);
     return cleaned.length > 0 ? cleaned : [INSUFFICIENT_EVIDENCE_MESSAGE];
   }
 
-  const normalized = normalizeExistingSessionSkills(stringSkills);
+  const normalized = normalizeExistingSessionSkills(nonStatusStrings);
 
   if (normalized.length === 0) {
     return [INSUFFICIENT_EVIDENCE_MESSAGE];
@@ -752,4 +772,23 @@ export function formatStageTwoSkillsWithEvidence(
     // Sesión histórica sin catálogo estático inventado
     return `${skill} — Habilidad previamente identificada (sin registro de evidencia textual conservado).`;
   });
+}
+
+/**
+ * Resuelve de forma autoritativa las habilidades de Etapa 7 (`stageTwoSkills`)
+ * exclusivamente a partir de las entradas consolidadas de Etapas 2–4 o, en sesiones
+ * legadas sin `skillEntries`, de `identifiedSkills` previas. Nunca incorpora habilidades
+ * generadas en Etapa 7 ni transforma `INSUFFICIENT_EVIDENCE_MESSAGE` en habilidad.
+ */
+export function resolveConsolidatedStageTwoSkills(
+  skillEntries?: LeadershipSkillEntry[] | null,
+  legacyIdentifiedSkills?: string[] | null
+): string[] {
+  if (Array.isArray(skillEntries) && skillEntries.length > 0) {
+    return formatStageTwoSkillsWithEvidence(skillEntries);
+  }
+  if (Array.isArray(legacyIdentifiedSkills) && legacyIdentifiedSkills.length > 0) {
+    return formatStageTwoSkillsWithEvidence(legacyIdentifiedSkills);
+  }
+  return [INSUFFICIENT_EVIDENCE_MESSAGE];
 }

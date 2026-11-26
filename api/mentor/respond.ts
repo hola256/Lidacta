@@ -221,7 +221,8 @@ function mapToCanonicalSkill(rawSkill: string): { canonicalName: string; cluster
     normalized === 'habilidad 1' ||
     normalized === 'habilidad 2' ||
     normalized === 'habilidad' ||
-    normalized === 'habilidades'
+    normalized === 'habilidades' ||
+    isInsufficientEvidenceMessage(rawClean)
   ) {
     return null;
   }
@@ -264,6 +265,16 @@ const INSUFFICIENT_EVIDENCE_MESSAGE =
 
 const INSUFFICIENT_STRENGTHS_MESSAGE =
   'No se cuenta con evidencia suficiente en este proceso para identificar fortalezas observables específicas.';
+
+function isInsufficientEvidenceMessage(text: string): boolean {
+  if (typeof text !== 'string') return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  return (
+    trimmed === INSUFFICIENT_EVIDENCE_MESSAGE ||
+    normalizeText(trimmed) === normalizeText(INSUFFICIENT_EVIDENCE_MESSAGE)
+  );
+}
 
 function sanitizeDetectedStrengths(rawStrengths: any): string[] {
   if (!Array.isArray(rawStrengths)) return [];
@@ -585,7 +596,15 @@ function formatStageTwoSkillsWithEvidence(
     (item): item is string => typeof item === 'string'
   );
 
-  const hasPreformatted = stringSkills.some(
+  const nonStatusStrings = stringSkills.filter(
+    (s) => s.trim().length > 0 && !isInsufficientEvidenceMessage(s)
+  );
+
+  if (nonStatusStrings.length === 0) {
+    return [INSUFFICIENT_EVIDENCE_MESSAGE];
+  }
+
+  const hasPreformatted = nonStatusStrings.some(
     (s) =>
       s.includes('— Evidencia') ||
       s.includes('— Habilidad previamente identificada') ||
@@ -593,11 +612,11 @@ function formatStageTwoSkillsWithEvidence(
   );
 
   if (hasPreformatted) {
-    const cleaned = stringSkills.map((s) => s.trim()).filter(Boolean);
+    const cleaned = nonStatusStrings.map((s) => s.trim()).filter(Boolean);
     return cleaned.length > 0 ? cleaned : [INSUFFICIENT_EVIDENCE_MESSAGE];
   }
 
-  const normalized = normalizeExistingSessionSkills(stringSkills);
+  const normalized = normalizeExistingSessionSkills(nonStatusStrings);
 
   if (normalized.length === 0) {
     return [INSUFFICIENT_EVIDENCE_MESSAGE];
@@ -2847,11 +2866,6 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         skillsToReport = activeEntries;
       } else if (existingSessionSkills.length > 0) {
         skillsToReport = existingSessionSkills;
-      } else if (
-        Array.isArray(parsed.finalFeedback?.stageTwoSkills) &&
-        parsed.finalFeedback.stageTwoSkills.length > 0
-      ) {
-        skillsToReport = normalizeExistingSessionSkills(parsed.finalFeedback.stageTwoSkills);
       } else {
         skillsToReport = [];
       }
