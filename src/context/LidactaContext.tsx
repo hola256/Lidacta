@@ -94,6 +94,542 @@ export function isValidMentorApiResponse(
   return true;
 }
 
+export type CaseOperationKind = 'advance' | 'message';
+
+export function acquireCaseOperationLock(
+  opsMap: Map<string, CaseOperationKind>,
+  caseId: string,
+  operation: CaseOperationKind
+): boolean {
+  if (!caseId || opsMap.has(caseId)) {
+    return false;
+  }
+  opsMap.set(caseId, operation);
+  return true;
+}
+
+export function releaseCaseOperationLock(
+  opsMap: Map<string, CaseOperationKind>,
+  caseId: string
+): void {
+  if (!caseId) return;
+  opsMap.delete(caseId);
+}
+
+export interface ValidatedMentorApiResponse {
+  valid: boolean;
+  data: any;
+  resolvedReply?: string;
+  reason?: 'http_error' | 'invalid_json' | 'invalid_payload';
+}
+
+export async function parseAndValidateMentorApiResponse(
+  response: Pick<Response, 'ok' | 'status' | 'json'> | null | undefined
+): Promise<ValidatedMentorApiResponse> {
+  if (!response || !response.ok) {
+    return { valid: false, data: {}, reason: 'http_error' };
+  }
+
+  let data: any;
+  try {
+    data = await response.json();
+  } catch {
+    return { valid: false, data: {}, reason: 'invalid_json' };
+  }
+
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return { valid: false, data: {}, reason: 'invalid_json' };
+  }
+
+  const resolvedReply =
+    data.reply ||
+    data.text ||
+    data.response ||
+    data.data?.reply ||
+    data.data?.replyText;
+
+  if (
+    !isValidMentorApiResponse(response, data, resolvedReply) ||
+    isTechnicalErrorMessage({ text: resolvedReply })
+  ) {
+    return { valid: false, data, reason: 'invalid_payload' };
+  }
+
+  return { valid: true, data, resolvedReply };
+}
+
+export interface ExecuteTransactionalStageTransitionParams {
+  activeCaseId: string;
+  targetStage?: StageNumber;
+  getSessionById: (caseId: string) => MentorshipSession | undefined;
+  commitMentorships: (
+    updater: (prev: MentorshipSession[]) => MentorshipSession[]
+  ) => MentorshipSession[];
+  activeCaseOperationsRef: { current: Map<string, CaseOperationKind> };
+  setCaseAdvancing: (caseId: string, advancing: boolean) => void;
+  companies: CompanyContext[];
+  currentUser: UserProfile;
+  setNotifications: (
+    updater: (prev: NotificationItem[]) => NotificationItem[]
+  ) => void;
+  dispatchFinalFeedbackReportEmail: (
+    session: MentorshipSession,
+    report: FinalFeedbackReport
+  ) => Promise<{ success: boolean; message?: string; emailId?: string }>;
+  recordResourceRecommendation: (
+    resource: Omit<RecommendedResourceItem, 'id' | 'recommendedAt'>
+  ) => void;
+  autoDetectAndLogResources: (
+    stage: StageNumber,
+    session: MentorshipSession,
+    text: string,
+    coachReplyText?: string
+  ) => void;
+  showToast: (
+    message: any,
+    type?: 'success' | 'info' | 'warning' | 'error'
+  ) => void;
+  setIsSendingMessage?: (sending: boolean) => void;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}
+
+const STAGE_NAMES_MAP: Record<StageNumber, string> = {
+  1: 'Detectar qué sucede',
+  2: 'Analizar perspectivas y habilidades',
+  3: 'Diseñar alternativas',
+  4: 'Practicar antes de actuar',
+  5: 'Actuar (Plan de Acción)',
+  6: 'Aprender y reflexionar',
+  7: 'Cierre y retroalimentación',
+};
+
+function computeNextStageHistory(
+  existingHistory: MentorshipSession['stageHistory'],
+  currentStage: StageNumber,
+  nextStage: StageNumber,
+  now: string,
+  isReopen: boolean
+): MentorshipSession['stageHistory'] {
+  const safeHistory = Array.isArray(existingHistory) ? existingHistory : [];
+  const updatedHistory = isReopen
+    ? safeHistory.map((item) => ({ ...item }))
+    : safeHistory.map((item) => {
+        if (item.stage === currentStage && !item.completedAt) {
+          const entered = new Date(item.enteredAt).getTime();
+          const diffMinutes = Math.round((new Date(now).getTime() - entered) / (1000 * 60));
+          return {
+            ...item,
+            completedAt: now,
+            durationMinutes: Math.max(1, diffMinutes),
+          };
+        }
+        return item;
+      });
+
+  if (!updatedHistory.some((h) => h.stage === nextStage)) {
+    updatedHistory.push({
+      stage: nextStage,
+      stageName: STAGE_NAMES_MAP[nextStage],
+      enteredAt: now,
+    });
+  }
+
+  return updatedHistory;
+}
+
+export async function executeTransactionalStageTransition({
+  activeCaseId,
+  targetStage,
+  getSessionById,
+  commitMentorships,
+  activeCaseOperationsRef,
+  setCaseAdvancing,
+  companies,
+  currentUser,
+  setNotifications,
+  dispatchFinalFeedbackReportEmail,
+  recordResourceRecommendation,
+  autoDetectAndLogResources,
+  showToast,
+  setIsSendingMessage = () => {},
+  fetchImpl = fetch,
+  timeoutMs = 65000,
+}: ExecuteTransactionalStageTransitionParams): Promise<boolean> {
+  const initialSession = getSessionById(activeCaseId);
+  if (!initialSession) return false;
+
+  if (!acquireCaseOperationLock(activeCaseOperationsRef.current, activeCaseId, 'advance')) {
+    return false;
+  }
+
+  setCaseAdvancing(activeCaseId, true);
+  setIsSendingMessage(true);
+
+  try {
+    const latestSession = getSessionById(activeCaseId);
+    if (!latestSession) return false;
+
+    const current = latestSession.currentStage;
+    const nextStage = (targetStage || (current < 7 ? ((current + 1) as StageNumber) : 7)) as StageNumber;
+    const isReopen = nextStage < current;
+    const isCompletion = nextStage === 7;
+    const isEnteringStage5 = nextStage === 5;
+    const isEnteringStage6 = nextStage === 6;
+
+    const existingStage6Status = latestSession.actionPlanExecutionStatus;
+    const nextStage6Status: ActionPlanExecutionStatus | undefined = isEnteringStage6
+      ? existingStage6Status === 'executed' || existingStage6Status === 'not_executed'
+        ? existingStage6Status
+        : 'pending_verification'
+      : latestSession.actionPlanExecutionStatus;
+
+    // Rama especial autorizada: entrada inicial a Etapa 6 con pending_verification (local, sin fetch)
+    if (isEnteringStage6 && nextStage6Status === 'pending_verification') {
+      const now = new Date().toISOString();
+      const alreadyHasStage6VerificationPrompt = (latestSession.messages || []).some(
+        (m) =>
+          (m.stage || 1) === 6 &&
+          m.sender === 'lidacta' &&
+          (m.text || '').includes('¿Ya ejecutaste tu Plan de Acción?')
+      );
+
+      const stage6Plan = latestSession.actionPlan;
+      const stage6PlanContext =
+        stage6Plan?.what?.trim()
+          ? `\n\nTu compromiso registrado en la Etapa 5 fue:\n• **Acción:** ${stage6Plan.what.trim()}${
+              stage6Plan.when?.trim() ? `\n• **Momento:** ${stage6Plan.when.trim()}` : ''
+            }${
+              stage6Plan.withWhom?.trim() ? `\n• **Con quién:** ${stage6Plan.withWhom.trim()}` : ''
+            }`
+          : '';
+
+      const stage6VerificationIntroMsg = !alreadyHasStage6VerificationPrompt
+        ? {
+            id: `msg_${Date.now()}_lid`,
+            caseId: activeCaseId,
+            mentorshipId: activeCaseId,
+            sender: 'lidacta' as const,
+            text: `Llegamos a la Etapa 6: Aprender y reflexionar.${stage6PlanContext}\n\nAntes de comenzar con las preguntas de reflexión, quiero verificar cómo te fue con tu compromiso:\n\n**¿Ya ejecutaste tu Plan de Acción?**`,
+            timestamp: now,
+            stage: 6 as StageNumber,
+          }
+        : null;
+
+      commitMentorships((prev) =>
+        prev.map((m) =>
+          m.id === activeCaseId
+            ? {
+                ...m,
+                currentStage: 6 as StageNumber,
+                stageReadyToAdvance: null,
+                status: 'active',
+                stageHistory: computeNextStageHistory(m.stageHistory, current, 6, now, isReopen),
+                actionPlanExecutionStatus: nextStage6Status,
+                stage6ExecutionVerified: false,
+                messages: stage6VerificationIntroMsg
+                  ? [...m.messages, stage6VerificationIntroMsg]
+                  : m.messages,
+                lastActiveAt: now,
+              }
+            : m
+        )
+      );
+
+      return true;
+    }
+
+    // Todas las demás transiciones (avance ordinario, reingreso a Etapa 6 verificada, Etapa 7 o reapertura)
+    // NO mutan currentStage, status, stageHistory ni notificaciones antes de validar la respuesta del servidor.
+    const isolatedMessages = (latestSession.messages || []).filter((m: any) => {
+      if (!m || typeof m !== 'object') return false;
+      const mCase = m.caseId || m.mentorshipId;
+      if (mCase && mCase !== activeCaseId) return false;
+      if (isTechnicalErrorMessage(m)) {
+        return false;
+      }
+      return true;
+    });
+
+    const company = companies.find((c) => c.id === latestSession.companyId) || companies[0];
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetchImpl('/api/mentor/respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          caseId: activeCaseId,
+          mentorshipId: activeCaseId,
+          stage: nextStage,
+          activeStage: nextStage,
+          leaderProfile: currentUser,
+          companyContext: company,
+          conversationHistory: isolatedMessages,
+          history: isolatedMessages,
+          userMessage: `[Avanzando a Etapa ${nextStage}]`,
+          currentMessage: `[Avanzando a Etapa ${nextStage}]`,
+          message: `[Avanzando a Etapa ${nextStage}]`,
+          identifiedSkills: latestSession.identifiedSkills || [],
+          skillEntries: latestSession.skillEntries || [],
+          sessionData: {
+            ...stripSessionMessagesForApi(latestSession),
+            skillEntries: latestSession.skillEntries || [],
+            identifiedSkills: latestSession.identifiedSkills || [],
+          },
+        }),
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    const validation = await parseAndValidateMentorApiResponse(response);
+    if (!validation.valid || !validation.resolvedReply) {
+      showToast(MENTOR_TEMPORARY_ERROR_TEXT, 'error');
+      return false;
+    }
+
+    const data = validation.data;
+    const resolvedReply = validation.resolvedReply;
+    const coachReply = data.data || {};
+    const commitNow = new Date().toISOString();
+
+    const introMsg = {
+      id: `msg_${Date.now()}_lid`,
+      caseId: activeCaseId,
+      mentorshipId: activeCaseId,
+      sender: 'lidacta' as const,
+      text: resolvedReply,
+      timestamp: commitNow,
+      stage: nextStage,
+    };
+
+    const activeEntriesOrSkills =
+      latestSession.skillEntries && latestSession.skillEntries.length > 0
+        ? latestSession.skillEntries
+        : latestSession.identifiedSkills || [];
+
+    let generatedReport: FinalFeedbackReport | undefined = coachReply.finalFeedback
+      ? buildStage7FinalFeedbackReport(
+          coachReply.finalFeedback,
+          latestSession.skillEntries,
+          latestSession.identifiedSkills
+        )
+      : undefined;
+
+    if (nextStage === 7 && !generatedReport) {
+      if (latestSession.finalFeedbackReport) {
+        generatedReport = latestSession.finalFeedbackReport;
+      } else {
+        const realSkills = formatStageTwoSkillsWithEvidence(activeEntriesOrSkills);
+
+        const realActions: string[] = [];
+        if (latestSession.actionPlan?.what && latestSession.actionPlan.what.trim()) {
+          realActions.push(latestSession.actionPlan.what.trim());
+        } else if (latestSession.chosenAlternative && latestSession.chosenAlternative.trim()) {
+          realActions.push(latestSession.chosenAlternative.trim());
+        } else {
+          realActions.push('Conversación 1 a 1 de alineación operativa y seguimiento de compromisos');
+        }
+
+        const realLearnings: string[] = [];
+        if (latestSession.learnings?.whatHappened && latestSession.learnings.whatHappened.trim()) {
+          realLearnings.push(latestSession.learnings.whatHappened.trim());
+        }
+        if (latestSession.learnings?.whatWorked && latestSession.learnings.whatWorked.trim()) {
+          realLearnings.push(`Lo que funcionó: ${latestSession.learnings.whatWorked.trim()}`);
+        }
+        if (latestSession.learnings?.insights && latestSession.learnings.insights.trim()) {
+          realLearnings.push(latestSession.learnings.insights.trim());
+        }
+        if (
+          latestSession.learnings?.sharedReflectionToHR &&
+          latestSession.learnings.sharedReflectionToHR.trim()
+        ) {
+          realLearnings.push(latestSession.learnings.sharedReflectionToHR.trim());
+        }
+        if (realLearnings.length === 0) {
+          realLearnings.push(
+            'La claridad temprana en los acuerdos previene fricciones y fortalece la confianza mutua.'
+          );
+          realLearnings.push(
+            'Escuchar activamente a los colaboradores incrementa sustancialmente su nivel de corresponsabilidad.'
+          );
+        }
+
+        generatedReport = {
+          detectedStrengths: [],
+          stageTwoSkills: realSkills,
+          chosenActions: realActions,
+          stageSixLearnings: realLearnings,
+          recommendationsForAutonomy: [
+            'Practicar la retroalimentación continua en lugar de esperar a revisiones formales',
+            'Documentar los acuerdos de forma breve y visible para el equipo',
+            'Mantener el hábito de analizar el contexto y las perspectivas antes de reaccionar',
+          ],
+          deliveredAt: commitNow,
+        };
+      }
+    }
+
+    const newStatus = isCompletion ? 'completed' : isEnteringStage5 ? 'in_action' : 'active';
+    let committedSession: MentorshipSession | undefined;
+
+    // Confirmación transaccional basada estrictamente en el estado vivo (prev), nunca en snapshot obsoleto
+    commitMentorships((prev) =>
+      prev.map((m) => {
+        if (m.id !== activeCaseId) return m;
+
+        let updatedSkillEntries: LeadershipSkillEntry[] = m.skillEntries || [];
+        if (!isReopen) {
+          if ([2, 3, 4].includes(nextStage) && Array.isArray(coachReply.skillEntries)) {
+            updatedSkillEntries = coachReply.skillEntries;
+          } else if (
+            (!m.skillEntries || m.skillEntries.length === 0) &&
+            Array.isArray(m.identifiedSkills) &&
+            m.identifiedSkills.length > 0 &&
+            Array.isArray(coachReply.skillEntries) &&
+            coachReply.skillEntries.length > 0
+          ) {
+            updatedSkillEntries = coachReply.skillEntries;
+          }
+        } else if (
+          (!m.skillEntries || m.skillEntries.length === 0) &&
+          Array.isArray(coachReply.skillEntries) &&
+          coachReply.skillEntries.length > 0
+        ) {
+          updatedSkillEntries = coachReply.skillEntries;
+        }
+
+        const activeSkillNames =
+          updatedSkillEntries.length > 0 ? getActiveSkillNames(updatedSkillEntries) : [];
+        const updatedIdentifiedSkills =
+          updatedSkillEntries.length > 0
+            ? activeSkillNames
+            : !isReopen &&
+              [2, 3, 4].includes(nextStage) &&
+              Array.isArray(coachReply.identifiedSkills)
+            ? normalizeExistingSessionSkills(coachReply.identifiedSkills)
+            : m.identifiedSkills || [];
+
+        const updatedSession: MentorshipSession = {
+          ...m,
+          currentStage: nextStage,
+          stageReadyToAdvance: null,
+          status: newStatus,
+          stageHistory: computeNextStageHistory(m.stageHistory, current, nextStage, commitNow, isReopen),
+          completedAt: isCompletion ? m.completedAt || commitNow : m.completedAt,
+          stage5EnteredAt: isEnteringStage5 ? m.stage5EnteredAt || commitNow : m.stage5EnteredAt,
+          actionPlanExecutionStatus: isEnteringStage6
+            ? nextStage6Status
+            : m.actionPlanExecutionStatus,
+          stage6ExecutionVerified: isEnteringStage6
+            ? nextStage6Status === 'executed' || nextStage6Status === 'not_executed'
+            : m.stage6ExecutionVerified,
+          messages: [...m.messages, introMsg],
+          skillEntries: updatedSkillEntries,
+          identifiedSkills: updatedIdentifiedSkills,
+          finalFeedbackReport: isCompletion
+            ? generatedReport || m.finalFeedbackReport
+            : m.finalFeedbackReport,
+          lastActiveAt: commitNow,
+        };
+
+        committedSession = updatedSession;
+        return updatedSession;
+      })
+    );
+
+    const sessionForPostCommit = committedSession || latestSession;
+
+    // Notificación a RH y correo de Etapa 7 exclusivamente tras confirmar la transición
+    if (isCompletion && !sessionForPostCommit.isTestSession) {
+      const activeSkillsList =
+        (sessionForPostCommit.skillEntries && sessionForPostCommit.skillEntries.length > 0
+          ? getActiveSkillNames(sessionForPostCommit.skillEntries)
+          : sessionForPostCommit.identifiedSkills || []
+        ).join(', ') || 'Liderazgo operativo';
+
+      const hrNotification: NotificationItem = {
+        id: `notif_${Date.now()}_case_completed`,
+        recipientRole: 'hr',
+        companyId: sessionForPostCommit.companyId,
+        title: 'Proceso de acompañamiento concluido',
+        message: `${sessionForPostCommit.leaderName} terminó su proceso de acompañamiento o mentoría con Lidacta, puedes ver los indicadores en la plataforma.`,
+        type: 'case_completed',
+        timestamp: commitNow,
+        read: false,
+        emailSimulated: {
+          to: `recursos.humanos@${sessionForPostCommit.companyName.toLowerCase().replace(/\s+/g, '')}.com`,
+          subject: `Lidacta: ${sessionForPostCommit.leaderName} terminó su proceso de acompañamiento`,
+          bodyText: `Estimada responsable de Recursos Humanos,\n\n${sessionForPostCommit.leaderName} concluyó satisfactoriamente las 7 etapas de desarrollo en Lidacta.\n\nYa puedes consultar los indicadores clave en tu panel:\n• Tema abordado: ${sessionForPostCommit.theme}\n• Habilidades desarrolladas: ${activeSkillsList}\n• Acción implementada: ${sessionForPostCommit.actionPlan?.what || 'Conversación 1 a 1'}\n\nGracias por impulsar el liderazgo en acción.\n\nAtentamente,\nEquipo Lidacta`,
+        },
+      };
+
+      setNotifications((prev) => [hrNotification, ...prev]);
+
+      const reportToSend = generatedReport || sessionForPostCommit.finalFeedbackReport;
+      if (reportToSend) {
+        dispatchFinalFeedbackReportEmail(sessionForPostCommit, reportToSend).catch((e) =>
+          console.error('[LIDACTA 📧] Error no bloqueante al despachar reporte final por email:', e)
+        );
+      }
+    }
+
+    if (!sessionForPostCommit.isTestSession) {
+      if (
+        coachReply.recommendedResources &&
+        Array.isArray(coachReply.recommendedResources) &&
+        coachReply.recommendedResources.length > 0
+      ) {
+        coachReply.recommendedResources.forEach((res: any) => {
+          recordResourceRecommendation({
+            resourceTitle: res.title || res.resourceTitle,
+            origin: res.origin || 'internal',
+            categoryOrTool: res.category || res.categoryOrTool || 'Biblioteca Interna (Bloque 3)',
+            sourceOrAuthor:
+              res.sourceOrAuthor ||
+              (res.origin === 'internal'
+                ? 'Biblioteca Interna Lidacta (Bloque 3)'
+                : 'Fuente Externa Delimitada'),
+            urlOrRef: res.urlOrRef,
+            leaderId: sessionForPostCommit.leaderId,
+            leaderName: sessionForPostCommit.leaderName,
+            leaderEmail: currentUser.email || `${sessionForPostCommit.leaderId}@empresa.com`,
+            companyId: sessionForPostCommit.companyId,
+            companyName: sessionForPostCommit.companyName,
+            mentorshipId: sessionForPostCommit.id,
+            challengeTitle: sessionForPostCommit.title,
+            theme: sessionForPostCommit.theme || 'Desarrollo de Liderazgo',
+            stage: nextStage,
+            stageName: `Etapa ${nextStage}`,
+          });
+        });
+      } else {
+        autoDetectAndLogResources(
+          nextStage,
+          sessionForPostCommit,
+          `[Avanzando a Etapa ${nextStage}]`,
+          coachReply.replyText
+        );
+      }
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Error transitioning stage:', err);
+    showToast(MENTOR_TEMPORARY_ERROR_TEXT, 'error');
+    return false;
+  } finally {
+    setIsSendingMessage(false);
+    releaseCaseOperationLock(activeCaseOperationsRef.current, activeCaseId);
+    setCaseAdvancing(activeCaseId, false);
+  }
+}
+
 export function resolveStage6ExecutionStatus(
   session: MentorshipSession | null | undefined
 ): ActionPlanExecutionStatus {
@@ -137,6 +673,7 @@ interface LidactaContextType {
     userMessageSnippet?: string;
   }) => Promise<{ success: boolean; alertItem?: SystemAlertItem; error?: string }>;
   isSendingMessage: boolean;
+  isAdvancingStage: boolean;
   isEmailDrawerOpen: boolean;
   selectedEmailForPreview: NotificationItem | null;
   showNewUserModal: boolean;
@@ -250,9 +787,9 @@ interface LidactaContextType {
     }
   ) => Promise<MentorshipSession>;
   sendMessageInActiveSession: (text: string, isPractice?: boolean) => Promise<void>;
-  advanceStage: (targetStage?: StageNumber) => Promise<void>;
+  advanceStage: (targetStage?: StageNumber) => Promise<boolean>;
   setStageReadyToAdvance: (stage: StageNumber | null) => void;
-  updateActionPlan: (plan: MentorshipSession['actionPlan']) => void;
+  updateActionPlan: (plan: MentorshipSession['actionPlan']) => boolean;
   markActionCompleted: () => void;
   respondStage6ExecutionCheck: (executed: boolean) => Promise<void>;
   saveLearnings: (learnings: NonNullable<MentorshipSession['learnings']>) => void;
@@ -715,6 +1252,44 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }));
   });
 
+  const mentorshipsRef = useRef<MentorshipSession[]>(mentorships);
+  const activeCaseOperationsRef = useRef<Map<string, CaseOperationKind>>(new Map());
+  const [advancingCaseIds, setAdvancingCaseIds] = useState<Record<string, boolean>>({});
+  const [sendingCaseIds, setSendingCaseIds] = useState<Record<string, boolean>>({});
+
+  const commitMentorships = (
+    updater: (prev: MentorshipSession[]) => MentorshipSession[]
+  ): MentorshipSession[] => {
+    const next = updater(mentorshipsRef.current);
+    mentorshipsRef.current = next;
+    setMentorships(updater);
+    return next;
+  };
+
+  const setCaseAdvancing = (caseId: string, advancing: boolean) => {
+    setAdvancingCaseIds((prev) => {
+      if (Boolean(prev[caseId]) === advancing) return prev;
+      if (!advancing) {
+        const next = { ...prev };
+        delete next[caseId];
+        return next;
+      }
+      return { ...prev, [caseId]: true };
+    });
+  };
+
+  const setCaseSending = (caseId: string, sending: boolean) => {
+    setSendingCaseIds((prev) => {
+      if (Boolean(prev[caseId]) === sending) return prev;
+      if (!sending) {
+        const next = { ...prev };
+        delete next[caseId];
+        return next;
+      }
+      return { ...prev, [caseId]: true };
+    });
+  };
+
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}notifications`);
     return saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
@@ -903,7 +1478,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return 'ment_roberto_2';
   });
 
-  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [isSendingGlobal, setIsSendingMessage] = useState(false);
   const [isEmailDrawerOpen, setIsEmailDrawerOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isLeaderProfileModalOpen, setIsLeaderProfileModalOpen] = useState(false);
@@ -979,6 +1554,7 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [companies]);
 
   useEffect(() => {
+    mentorshipsRef.current = mentorships;
     localStorage.setItem(`${STORAGE_KEY_PREFIX}mentorships`, JSON.stringify(mentorships));
   }, [mentorships]);
 
@@ -1032,6 +1608,14 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
         mentorships.find((m) => m.leaderId === currentUser.id && !m.isTestSession && m.status !== 'completed') ||
         mentorships.find((m) => m.leaderId === currentUser.id && !m.isTestSession) ||
         null;
+
+  const isSendingMessage = activeMentorship?.id
+    ? Boolean(sendingCaseIds[activeMentorship.id]) ||
+      (isSendingGlobal && activeCaseOperationsRef.current.size === 0)
+    : isSendingGlobal;
+  const isAdvancingStage = Boolean(
+    activeMentorship?.id && advancingCaseIds[activeMentorship.id]
+  );
 
   const unreadNotificationsCount = notifications.filter(
     (n) => !n.read && (n.recipientRole === currentUser.role || (n.recipientUserId && n.recipientUserId === currentUser.id))
@@ -1566,7 +2150,7 @@ El Equipo de Lidacta`;
       ...(isQaSession ? { isTestSession: true, testScenarioLabel: `Etapa ${initialStage} (QA)` } : {}),
     };
 
-    setMentorships((prev) => [newSession, ...prev]);
+    commitMentorships((prev) => [newSession, ...prev]);
     setActiveMentorshipIdState(newSessionId);
 
     // Notify HR about new case started (only for real sessions, never QA test sessions)
@@ -1590,6 +2174,8 @@ El Equipo de Lidacta`;
     }
 
     // Send first message to API with explicit caseId isolation
+    acquireCaseOperationLock(activeCaseOperationsRef.current, newSessionId, 'message');
+    setCaseSending(newSessionId, true);
     setIsSendingMessage(true);
     try {
       const response = await fetch('/api/mentor/respond', {
@@ -1694,6 +2280,8 @@ El Equipo de Lidacta`;
       );
     } finally {
       setIsSendingMessage(false);
+      releaseCaseOperationLock(activeCaseOperationsRef.current, newSessionId);
+      setCaseSending(newSessionId, false);
     }
 
     return newSession;
@@ -1812,50 +2400,55 @@ El Equipo de Lidacta`;
     if (!activeMentorship || !text.trim()) return;
 
     const currentCaseId = activeMentorship.id;
-    const currentStage = activeMentorship.currentStage;
-    const company = companies.find((c) => c.id === activeMentorship.companyId) || companies[0];
+    const targetSession =
+      mentorshipsRef.current.find((m) => m.id === currentCaseId) || activeMentorship;
+    if (!acquireCaseOperationLock(activeCaseOperationsRef.current, currentCaseId, 'message')) {
+      return;
+    }
 
-    // Filter strictly to ensure no foreign messages or technical error messages are passed to Gemini
-    const isolatedExistingMessages = (activeMentorship.messages || []).filter((m: any) => {
-      if (!m || typeof m !== 'object') return false;
-      const mCase = m.caseId || m.mentorshipId;
-      if (mCase && mCase !== currentCaseId) return false;
-      if (isTechnicalErrorMessage(m)) {
-        return false;
-      }
-      return true;
-    });
+    const currentStage = targetSession.currentStage;
+    const company = companies.find((c) => c.id === targetSession.companyId) || companies[0];
 
-    const leaderMsg = {
-      id: `msg_${Date.now()}_lead`,
-      caseId: currentCaseId,
-      mentorshipId: currentCaseId,
-      sender: 'leader' as const,
-      text: text.trim(),
-      timestamp: new Date().toISOString(),
-      stage: currentStage,
-      isLeaderVoiceQuote: text.length < 140, // Format short insights nicely
-    };
-
-    // UI state: preserve all accumulated messages (including technical error notifications and retries) in chronological order
-    const updatedUiMessages = [...(activeMentorship.messages || []), leaderMsg];
-
-    setMentorships((prev) =>
-      prev.map((m) =>
-        m.id === currentCaseId
-          ? {
-              ...m,
-              stageReadyToAdvance: null,
-              messages: updatedUiMessages,
-              lastActiveAt: new Date().toISOString(),
-            }
-          : m
-      )
-    );
-
+    setCaseSending(currentCaseId, true);
     setIsSendingMessage(true);
 
     try {
+      // Filter strictly to ensure no foreign messages or technical error messages are passed to Gemini
+      const isolatedExistingMessages = (targetSession.messages || []).filter((m: any) => {
+        if (!m || typeof m !== 'object') return false;
+        const mCase = m.caseId || m.mentorshipId;
+        if (mCase && mCase !== currentCaseId) return false;
+        if (isTechnicalErrorMessage(m)) {
+          return false;
+        }
+        return true;
+      });
+
+      const leaderMsg = {
+        id: `msg_${Date.now()}_lead`,
+        caseId: currentCaseId,
+        mentorshipId: currentCaseId,
+        sender: 'leader' as const,
+        text: text.trim(),
+        timestamp: new Date().toISOString(),
+        stage: currentStage,
+        isLeaderVoiceQuote: text.length < 140, // Format short insights nicely
+      };
+
+      // UI state: preserve all accumulated messages (including technical error notifications and retries) in chronological order
+      commitMentorships((prev) =>
+        prev.map((m) =>
+          m.id === currentCaseId
+            ? {
+                ...m,
+                stageReadyToAdvance: null,
+                messages: [...(m.messages || []), leaderMsg],
+                lastActiveAt: new Date().toISOString(),
+              }
+            : m
+        )
+      );
+
       const response = await fetch('/api/mentor/respond', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1871,12 +2464,12 @@ El Equipo de Lidacta`;
           conversationHistory: isolatedExistingMessages,
           userMessage: text,
           currentMessage: text,
-          identifiedSkills: activeMentorship.identifiedSkills || [],
-          skillEntries: activeMentorship.skillEntries || [],
+          identifiedSkills: targetSession.identifiedSkills || [],
+          skillEntries: targetSession.skillEntries || [],
           sessionData: {
-            ...stripSessionMessagesForApi(activeMentorship),
-            skillEntries: activeMentorship.skillEntries || [],
-            identifiedSkills: activeMentorship.identifiedSkills || [],
+            ...stripSessionMessagesForApi(targetSession),
+            skillEntries: targetSession.skillEntries || [],
+            identifiedSkills: targetSession.identifiedSkills || [],
           },
           isPracticeMode: isPractice,
         }),
@@ -1907,9 +2500,9 @@ El Equipo de Lidacta`;
           stage: currentStage,
         };
 
-        setMentorships((prev) =>
+        commitMentorships((prev) =>
           prev.map((m) => {
-            if (m.id !== activeMentorship.id) return m;
+            if (m.id !== currentCaseId) return m;
 
             // Manejo estructurado de skillEntries:
             // En etapas 2, 3 y 4: cuando el backend devuelve un arreglo en coachReply.skillEntries,
@@ -2085,9 +2678,9 @@ El Equipo de Lidacta`;
           stage: currentStage,
           isError: true,
         };
-        setMentorships((prev) =>
+        commitMentorships((prev) =>
           prev.map((m) =>
-            m.id === activeMentorship.id
+            m.id === currentCaseId
               ? { ...m, messages: [...m.messages, errMsg], lastActiveAt: new Date().toISOString() }
               : m
           )
@@ -2105,15 +2698,17 @@ El Equipo de Lidacta`;
         stage: currentStage,
         isError: true,
       };
-      setMentorships((prev) =>
+      commitMentorships((prev) =>
         prev.map((m) =>
-          m.id === activeMentorship.id
+          m.id === currentCaseId
             ? { ...m, messages: [...m.messages, errMsg], lastActiveAt: new Date().toISOString() }
             : m
         )
       );
     } finally {
       setIsSendingMessage(false);
+      releaseCaseOperationLock(activeCaseOperationsRef.current, currentCaseId);
+      setCaseSending(currentCaseId, false);
     }
   };
 
@@ -2273,447 +2868,32 @@ El Equipo de Lidacta`;
     return dispatchFinalFeedbackReportEmail(target, target.finalFeedbackReport);
   };
 
-  const advanceStage = async (targetStage?: StageNumber) => {
-    if (!activeMentorship) return;
-
-    const current = activeMentorship.currentStage;
-    const nextStage = (targetStage || (current < 7 ? (current + 1 as StageNumber) : 7)) as StageNumber;
-    const currentCaseId = activeMentorship.id;
-
-    const now = new Date().toISOString();
-
-    const stageNames: Record<StageNumber, string> = {
-      1: 'Detectar qué sucede',
-      2: 'Analizar perspectivas y habilidades',
-      3: 'Diseñar alternativas',
-      4: 'Practicar antes de actuar',
-      5: 'Actuar (Plan de Acción)',
-      6: 'Aprender y reflexionar',
-      7: 'Cierre y retroalimentación',
-    };
-
-    const updatedHistory = activeMentorship.stageHistory.map((item) => {
-      if (item.stage === current && !item.completedAt) {
-        const entered = new Date(item.enteredAt).getTime();
-        const diffMinutes = Math.round((new Date(now).getTime() - entered) / (1000 * 60));
-        return {
-          ...item,
-          completedAt: now,
-          durationMinutes: Math.max(1, diffMinutes),
-        };
-      }
-      return item;
+  const advanceStage = async (targetStage?: StageNumber): Promise<boolean> => {
+    if (!activeMentorship) return false;
+    return executeTransactionalStageTransition({
+      activeCaseId: activeMentorship.id,
+      targetStage,
+      getSessionById: (caseId) => mentorshipsRef.current.find((m) => m.id === caseId),
+      commitMentorships,
+      activeCaseOperationsRef,
+      setCaseAdvancing,
+      companies,
+      currentUser,
+      setNotifications,
+      dispatchFinalFeedbackReportEmail,
+      recordResourceRecommendation,
+      autoDetectAndLogResources,
+      showToast,
+      setIsSendingMessage,
     });
-
-    if (!updatedHistory.some((h) => h.stage === nextStage)) {
-      updatedHistory.push({
-        stage: nextStage,
-        stageName: stageNames[nextStage],
-        enteredAt: now,
-      });
-    }
-
-    const isCompletion = nextStage === 7;
-    const isEnteringStage5 = nextStage === 5;
-    const isEnteringStage6 = nextStage === 6;
-    const newStatus = isCompletion ? 'completed' : isEnteringStage5 ? 'in_action' : 'active';
-
-    const existingStage6Status = activeMentorship.actionPlanExecutionStatus;
-    const nextStage6Status: ActionPlanExecutionStatus | undefined = isEnteringStage6
-      ? existingStage6Status === 'executed' || existingStage6Status === 'not_executed'
-        ? existingStage6Status
-        : 'pending_verification'
-      : activeMentorship.actionPlanExecutionStatus;
-
-    const alreadyHasStage6VerificationPrompt =
-      isEnteringStage6 &&
-      (activeMentorship.messages || []).some(
-        (m) =>
-          (m.stage || 1) === 6 &&
-          m.sender === 'lidacta' &&
-          (m.text || '').includes('¿Ya ejecutaste tu Plan de Acción?')
-      );
-
-    const stage6Plan = activeMentorship.actionPlan;
-    const stage6PlanContext =
-      stage6Plan?.what?.trim()
-        ? `\n\nTu compromiso registrado en la Etapa 5 fue:\n• **Acción:** ${stage6Plan.what.trim()}${
-            stage6Plan.when?.trim() ? `\n• **Momento:** ${stage6Plan.when.trim()}` : ''
-          }${
-            stage6Plan.withWhom?.trim() ? `\n• **Con quién:** ${stage6Plan.withWhom.trim()}` : ''
-          }`
-        : '';
-
-    const stage6VerificationIntroMsg =
-      isEnteringStage6 &&
-      nextStage6Status === 'pending_verification' &&
-      !alreadyHasStage6VerificationPrompt
-        ? {
-            id: `msg_${Date.now()}_lid`,
-            caseId: currentCaseId,
-            mentorshipId: currentCaseId,
-            sender: 'lidacta' as const,
-            text: `Llegamos a la Etapa 6: Aprender y reflexionar.${stage6PlanContext}\n\nAntes de comenzar con las preguntas de reflexión, quiero verificar cómo te fue con tu compromiso:\n\n**¿Ya ejecutaste tu Plan de Acción?**`,
-            timestamp: now,
-            stage: 6 as StageNumber,
-          }
-        : null;
-
-    setMentorships((prev) =>
-      prev.map((m) =>
-        m.id === activeMentorship.id
-          ? {
-              ...m,
-              currentStage: nextStage,
-              stageReadyToAdvance: null,
-              status: newStatus,
-              stageHistory: updatedHistory,
-              completedAt: isCompletion ? now : m.completedAt,
-              stage5EnteredAt: isEnteringStage5 ? (m.stage5EnteredAt || now) : m.stage5EnteredAt,
-              actionPlanExecutionStatus: nextStage6Status,
-              stage6ExecutionVerified: isEnteringStage6
-                ? nextStage6Status === 'executed' || nextStage6Status === 'not_executed'
-                : m.stage6ExecutionVerified,
-              messages: stage6VerificationIntroMsg ? [...m.messages, stage6VerificationIntroMsg] : m.messages,
-              lastActiveAt: now,
-            }
-          : m
-      )
-    );
-
-    if (isEnteringStage6 && nextStage6Status === 'pending_verification') {
-      return;
-    }
-
-    // If reached Stage 7, notify HR that leader completed mentorship (never for QA test sessions)
-    if (isCompletion && !activeMentorship.isTestSession) {
-      const activeSkillsList = (activeMentorship.skillEntries && activeMentorship.skillEntries.length > 0
-        ? getActiveSkillNames(activeMentorship.skillEntries)
-        : activeMentorship.identifiedSkills || []
-      ).join(', ') || 'Liderazgo operativo';
-
-      const hrNotification: NotificationItem = {
-        id: `notif_${Date.now()}_case_completed`,
-        recipientRole: 'hr',
-        companyId: activeMentorship.companyId,
-        title: 'Proceso de acompañamiento concluido',
-        message: `${activeMentorship.leaderName} terminó su proceso de acompañamiento o mentoría con Lidacta, puedes ver los indicadores en la plataforma.`,
-        type: 'case_completed',
-        timestamp: now,
-        read: false,
-        emailSimulated: {
-          to: `recursos.humanos@${activeMentorship.companyName.toLowerCase().replace(/\s+/g, '')}.com`,
-          subject: `Lidacta: ${activeMentorship.leaderName} terminó su proceso de acompañamiento`,
-          bodyText: `Estimada responsable de Recursos Humanos,\n\n${activeMentorship.leaderName} concluyó satisfactoriamente las 7 etapas de desarrollo en Lidacta.\n\nYa puedes consultar los indicadores clave en tu panel:\n• Tema abordado: ${activeMentorship.theme}\n• Habilidades desarrolladas: ${activeSkillsList}\n• Acción implementada: ${activeMentorship.actionPlan?.what || 'Conversación 1 a 1'}\n\nGracias por impulsar el liderazgo en acción.\n\nAtentamente,\nEquipo Lidacta`,
-        },
-      };
-
-      setNotifications((prev) => [hrNotification, ...prev]);
-    }
-
-    // Trigger mentor introduction for new stage with case isolation
-    const isolatedMessages = (activeMentorship.messages || []).filter((m: any) => {
-      if (!m || typeof m !== 'object') return false;
-      const mCase = m.caseId || m.mentorshipId;
-      if (mCase && mCase !== currentCaseId) return false;
-      if (isTechnicalErrorMessage(m)) {
-        return false;
-      }
-      return true;
-    });
-
-    const company = companies.find((c) => c.id === activeMentorship.companyId) || companies[0];
-    setIsSendingMessage(true);
-    try {
-      const response = await fetch('/api/mentor/respond', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          caseId: currentCaseId,
-          mentorshipId: currentCaseId,
-          stage: nextStage,
-          activeStage: nextStage,
-          leaderProfile: currentUser,
-          companyContext: company,
-          conversationHistory: isolatedMessages,
-          history: isolatedMessages,
-          userMessage: `[Avanzando a Etapa ${nextStage}]`,
-          currentMessage: `[Avanzando a Etapa ${nextStage}]`,
-          message: `[Avanzando a Etapa ${nextStage}]`,
-          identifiedSkills: activeMentorship.identifiedSkills || [],
-          skillEntries: activeMentorship.skillEntries || [],
-          sessionData: {
-            ...stripSessionMessagesForApi(activeMentorship),
-            skillEntries: activeMentorship.skillEntries || [],
-            identifiedSkills: activeMentorship.identifiedSkills || [],
-          },
-        }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-      const resolvedReply =
-        data.reply ||
-        data.text ||
-        data.response ||
-        data.data?.reply ||
-        data.data?.replyText;
-      if (isValidMentorApiResponse(response, data, resolvedReply)) {
-        const coachReply = data.data || {};
-        const introMsg = {
-          id: `msg_${Date.now()}_lid`,
-          caseId: currentCaseId,
-          mentorshipId: currentCaseId,
-          sender: 'lidacta' as const,
-          text: resolvedReply,
-          timestamp: new Date().toISOString(),
-          stage: nextStage,
-        };
-
-        const activeEntriesOrSkills =
-          (activeMentorship.skillEntries && activeMentorship.skillEntries.length > 0)
-            ? activeMentorship.skillEntries
-            : (activeMentorship.identifiedSkills || []);
-
-        let generatedReport: FinalFeedbackReport | undefined = coachReply.finalFeedback
-          ? buildStage7FinalFeedbackReport(
-              coachReply.finalFeedback,
-              activeMentorship.skillEntries,
-              activeMentorship.identifiedSkills
-            )
-          : undefined;
-
-        // Si la respuesta de la IA no contiene finalFeedback y avanzamos a Etapa 7,
-        // construir un reporte de respaldo utilizando EXCLUSIVAMENTE los datos reales disponibles en la sesión
-        if (nextStage === 7 && !generatedReport) {
-          if (activeMentorship.finalFeedbackReport) {
-            generatedReport = activeMentorship.finalFeedbackReport;
-          } else {
-            const realSkills = formatStageTwoSkillsWithEvidence(
-              activeEntriesOrSkills
-            );
-
-            const realActions: string[] = [];
-            if (activeMentorship.actionPlan?.what && activeMentorship.actionPlan.what.trim()) {
-              realActions.push(activeMentorship.actionPlan.what.trim());
-            } else if (activeMentorship.chosenAlternative && activeMentorship.chosenAlternative.trim()) {
-              realActions.push(activeMentorship.chosenAlternative.trim());
-            } else {
-              realActions.push('Conversación 1 a 1 de alineación operativa y seguimiento de compromisos');
-            }
-
-            const realLearnings: string[] = [];
-            if (activeMentorship.learnings?.whatHappened && activeMentorship.learnings.whatHappened.trim()) {
-              realLearnings.push(activeMentorship.learnings.whatHappened.trim());
-            }
-            if (activeMentorship.learnings?.whatWorked && activeMentorship.learnings.whatWorked.trim()) {
-              realLearnings.push(`Lo que funcionó: ${activeMentorship.learnings.whatWorked.trim()}`);
-            }
-            if (activeMentorship.learnings?.insights && activeMentorship.learnings.insights.trim()) {
-              realLearnings.push(activeMentorship.learnings.insights.trim());
-            }
-            if (activeMentorship.learnings?.sharedReflectionToHR && activeMentorship.learnings.sharedReflectionToHR.trim()) {
-              realLearnings.push(activeMentorship.learnings.sharedReflectionToHR.trim());
-            }
-            if (realLearnings.length === 0) {
-              realLearnings.push('La claridad temprana en los acuerdos previene fricciones y fortalece la confianza mutua.');
-              realLearnings.push('Escuchar activamente a los colaboradores incrementa sustancialmente su nivel de corresponsabilidad.');
-            }
-
-            generatedReport = {
-              detectedStrengths: [],
-              stageTwoSkills: realSkills,
-              chosenActions: realActions,
-              stageSixLearnings: realLearnings,
-              recommendationsForAutonomy: [
-                'Practicar la retroalimentación continua en lugar de esperar a revisiones formales',
-                'Documentar los acuerdos de forma breve y visible para el equipo',
-                'Mantener el hábito de analizar el contexto y las perspectivas antes de reaccionar',
-              ],
-              deliveredAt: new Date().toISOString(),
-            };
-          }
-        }
-
-        setMentorships((prev) =>
-          prev.map((m) => {
-            if (m.id !== currentCaseId) return m;
-
-            // Manejo estructurado de skillEntries al avanzar de etapa:
-            // En etapas 2, 3 y 4: adoptar coachReply.skillEntries si viene definido por el backend.
-            // En etapas 1, 5, 6 y 7: conservar intactas las entradas existentes de la sesión (m.skillEntries).
-            let updatedSkillEntries: LeadershipSkillEntry[] = m.skillEntries || [];
-            if ([2, 3, 4].includes(nextStage) && Array.isArray(coachReply.skillEntries)) {
-              updatedSkillEntries = coachReply.skillEntries;
-            } else if (
-              (!m.skillEntries || m.skillEntries.length === 0) &&
-              Array.isArray(m.identifiedSkills) &&
-              m.identifiedSkills.length > 0 &&
-              Array.isArray(coachReply.skillEntries) &&
-              coachReply.skillEntries.length > 0
-            ) {
-              updatedSkillEntries = coachReply.skillEntries;
-            }
-
-            // Sincronización de identifiedSkills para retrocompatibilidad:
-            const activeSkillNames = updatedSkillEntries.length > 0 ? getActiveSkillNames(updatedSkillEntries) : [];
-            const updatedIdentifiedSkills =
-              updatedSkillEntries.length > 0
-                ? activeSkillNames
-                : [2, 3, 4].includes(nextStage) && Array.isArray(coachReply.identifiedSkills)
-                ? normalizeExistingSessionSkills(coachReply.identifiedSkills)
-                : m.identifiedSkills || [];
-
-            return {
-              ...m,
-              messages: [...m.messages, introMsg],
-              skillEntries: updatedSkillEntries,
-              identifiedSkills: updatedIdentifiedSkills,
-              finalFeedbackReport: generatedReport || m.finalFeedbackReport,
-              lastActiveAt: new Date().toISOString(),
-            };
-          })
-        );
-
-        // Despacho automático de correo para Etapa 7 al generarse el reporte final (omitir en sesiones QA)
-        if (nextStage === 7 && !activeMentorship.isTestSession) {
-          const reportToSend = generatedReport || activeMentorship.finalFeedbackReport;
-          if (reportToSend) {
-            const sessionSnapshot: MentorshipSession = {
-              ...activeMentorship,
-              currentStage: 7,
-              status: 'completed',
-              finalFeedbackReport: reportToSend,
-            };
-            dispatchFinalFeedbackReportEmail(sessionSnapshot, reportToSend).catch((e) =>
-              console.error('[LIDACTA 📧] Error no bloqueante al despachar reporte final por email:', e)
-            );
-          }
-        }
-
-        // Silent and automatic resource tracking in background upon advancing stage (omitir en sesiones QA)
-        if (!activeMentorship.isTestSession) {
-          if (coachReply.recommendedResources && Array.isArray(coachReply.recommendedResources) && coachReply.recommendedResources.length > 0) {
-            coachReply.recommendedResources.forEach((res: any) => {
-              recordResourceRecommendation({
-                resourceTitle: res.title || res.resourceTitle,
-                origin: res.origin || 'internal',
-                categoryOrTool: res.category || res.categoryOrTool || 'Biblioteca Interna (Bloque 3)',
-                sourceOrAuthor: res.sourceOrAuthor || (res.origin === 'internal' ? 'Biblioteca Interna Lidacta (Bloque 3)' : 'Fuente Externa Delimitada'),
-                urlOrRef: res.urlOrRef,
-                leaderId: activeMentorship.leaderId,
-                leaderName: activeMentorship.leaderName,
-                leaderEmail: currentUser.email || `${activeMentorship.leaderId}@empresa.com`,
-                companyId: activeMentorship.companyId,
-                companyName: activeMentorship.companyName,
-                mentorshipId: activeMentorship.id,
-                challengeTitle: activeMentorship.title,
-                theme: activeMentorship.theme || 'Desarrollo de Liderazgo',
-                stage: nextStage,
-                stageName: `Etapa ${nextStage}`,
-              });
-            });
-          } else {
-            autoDetectAndLogResources(nextStage, activeMentorship, `[Avanzando a Etapa ${nextStage}]`, coachReply.replyText);
-          }
-        }
-      } else {
-        if (nextStage === 7) {
-          throw new Error(data?.error || 'Respuesta inválida de mentor en Etapa 7');
-        }
-        const errMsg = {
-          id: `msg_${Date.now()}_err`,
-          caseId: currentCaseId,
-          mentorshipId: currentCaseId,
-          sender: 'lidacta' as const,
-          text: MENTOR_TEMPORARY_ERROR_TEXT,
-          timestamp: new Date().toISOString(),
-          stage: nextStage,
-          isError: true,
-        };
-        setMentorships((prev) =>
-          prev.map((m) =>
-            m.id === currentCaseId
-              ? { ...m, messages: [...m.messages, errMsg], lastActiveAt: new Date().toISOString() }
-              : m
-          )
-        );
-      }
-    } catch (err) {
-      console.error('Error transitioning stage:', err);
-      if (nextStage === 7) {
-        // En caso de fallo de red al avanzar a Etapa 7, asegurar que la mentoría concluya y el reporte final se genere y despache
-        const activeEntriesOrSkills =
-          (activeMentorship.skillEntries && activeMentorship.skillEntries.length > 0)
-            ? activeMentorship.skillEntries
-            : (activeMentorship.identifiedSkills || []);
-        const fallbackSkills = formatStageTwoSkillsWithEvidence(
-          activeEntriesOrSkills
-        );
-        const fallbackAction = activeMentorship.actionPlan?.what || activeMentorship.chosenAlternative || 'Conversación 1 a 1 de alineación operativa';
-        const fallbackLearnings = [
-          activeMentorship.learnings?.insights ||
-            activeMentorship.learnings?.whatHappened ||
-            'La claridad temprana en los acuerdos previene fricciones y fortalece la confianza mutua.',
-        ];
-        const reportFallback: FinalFeedbackReport = activeMentorship.finalFeedbackReport || {
-          detectedStrengths: [],
-          stageTwoSkills: fallbackSkills,
-          chosenActions: [fallbackAction],
-          stageSixLearnings: fallbackLearnings,
-          recommendationsForAutonomy: [
-            'Practicar la retroalimentación continua en lugar de esperar a revisiones formales',
-            'Documentar los acuerdos de forma breve y visible para el equipo',
-            'Mantener el hábito de analizar el contexto y las perspectivas antes de reaccionar',
-          ],
-          deliveredAt: new Date().toISOString(),
-        };
-
-        const sessionSnapshot: MentorshipSession = {
-          ...activeMentorship,
-          currentStage: 7,
-          status: 'completed',
-          finalFeedbackReport: reportFallback,
-          lastActiveAt: new Date().toISOString(),
-        };
-
-        setMentorships((prev) =>
-          prev.map((m) => (m.id === currentCaseId ? sessionSnapshot : m))
-        );
-
-        if (!activeMentorship.isTestSession) {
-          dispatchFinalFeedbackReportEmail(sessionSnapshot, reportFallback).catch((e) =>
-            console.error('[LIDACTA 📧] Error no bloqueante despachando reporte final en fallback:', e)
-          );
-        }
-      } else {
-        const errMsg = {
-          id: `msg_${Date.now()}_err`,
-          caseId: currentCaseId,
-          mentorshipId: currentCaseId,
-          sender: 'lidacta' as const,
-          text: MENTOR_TEMPORARY_ERROR_TEXT,
-          timestamp: new Date().toISOString(),
-          stage: nextStage,
-          isError: true,
-        };
-        setMentorships((prev) =>
-          prev.map((m) =>
-            m.id === currentCaseId
-              ? { ...m, messages: [...m.messages, errMsg], lastActiveAt: new Date().toISOString() }
-              : m
-          )
-        );
-      }
-    } finally {
-      setIsSendingMessage(false);
-    }
   };
 
   const setStageReadyToAdvance = (stage: StageNumber | null) => {
     if (!activeMentorship) return;
-    setMentorships((prev) =>
+    const currentCaseId = activeMentorship.id;
+    commitMentorships((prev) =>
       prev.map((m) =>
-        m.id === activeMentorship.id
+        m.id === currentCaseId
           ? {
               ...m,
               stageReadyToAdvance: stage,
@@ -2724,45 +2904,54 @@ El Equipo de Lidacta`;
     );
   };
 
-  const updateActionPlan = (plan: MentorshipSession['actionPlan']) => {
-    if (!activeMentorship || !plan) return;
+  const updateActionPlan = (plan: MentorshipSession['actionPlan']): boolean => {
+    if (!activeMentorship || !plan) return false;
+    const currentCaseId = activeMentorship.id;
+    const latestSession =
+      mentorshipsRef.current.find((m) => m.id === currentCaseId) || activeMentorship;
+    if (!latestSession) return false;
+
     const now = new Date().toISOString();
-    const stage5Time = plan.stage5EnteredAt || activeMentorship.stage5EnteredAt || now;
+    const stage5Time = plan.stage5EnteredAt || latestSession.stage5EnteredAt || now;
     const isShared = Boolean(
       plan.shareActionPlanWithHR ?? plan.actionPlanShared ?? plan.shareWithHR ?? false
     );
     const updatedPlan: MentorshipActionPlan = {
       ...plan,
-      cleanedAutoGeneratedV1: plan.cleanedAutoGeneratedV1 ?? activeMentorship.actionPlan?.cleanedAutoGeneratedV1,
+      cleanedAutoGeneratedV1:
+        plan.cleanedAutoGeneratedV1 ?? latestSession.actionPlan?.cleanedAutoGeneratedV1,
       shareWithHR: isShared,
       shareActionPlanWithHR: isShared,
       actionPlanShared: isShared,
       stage5EnteredAt: stage5Time,
     };
 
-    setMentorships((prev) =>
-      prev.map((m) =>
-        m.id === activeMentorship.id
-          ? {
-              ...m,
-              actionPlan: updatedPlan,
-              shareActionPlanWithHR: isShared,
-              actionPlanShared: isShared,
-              stage5EnteredAt: stage5Time,
-              status: 'in_action',
-              lastActiveAt: now,
-            }
-          : m
-      )
+    let updated = false;
+    commitMentorships((prev) =>
+      prev.map((m) => {
+        if (m.id !== currentCaseId) return m;
+        updated = true;
+        return {
+          ...m,
+          actionPlan: updatedPlan,
+          shareActionPlanWithHR: isShared,
+          actionPlanShared: isShared,
+          stage5EnteredAt: stage5Time,
+          status: 'in_action',
+          lastActiveAt: now,
+        };
+      })
     );
 
+    if (!updated) return false;
+
     // Create action reminder notification for leader (only for real sessions)
-    if (!activeMentorship.isTestSession) {
+    if (!latestSession.isTestSession) {
       const reminderNotif: NotificationItem = {
         id: `notif_${Date.now()}_reminder`,
         recipientRole: 'leader',
-        recipientUserId: activeMentorship.leaderId,
-        companyId: activeMentorship.companyId,
+        recipientUserId: latestSession.leaderId,
+        companyId: latestSession.companyId,
         title: 'Recordatorio de tu Plan de Acción',
         message: `${currentUser.name}, tienes programada tu acción: "${plan.what}". Recuerda cuidar: ${plan.careReminders}`,
         type: 'action_reminder',
@@ -2777,6 +2966,7 @@ El Equipo de Lidacta`;
 
       setNotifications((prev) => [reminderNotif, ...prev]);
     }
+    return true;
   };
 
   /**
@@ -3089,6 +3279,12 @@ El Equipo de Lidacta`;
     if (!activeMentorship) return;
 
     const currentCaseId = activeMentorship.id;
+    const targetSession =
+      mentorshipsRef.current.find((m) => m.id === currentCaseId) || activeMentorship;
+    if (!acquireCaseOperationLock(activeCaseOperationsRef.current, currentCaseId, 'message')) {
+      return;
+    }
+
     const now = new Date().toISOString();
     const executionStatus: ActionPlanExecutionStatus = executed ? 'executed' : 'not_executed';
     const leaderAnswerText = executed
@@ -3106,7 +3302,7 @@ El Equipo de Lidacta`;
       isLeaderVoiceQuote: true,
     };
 
-    const isolatedExistingMessages = (activeMentorship.messages || []).filter((m: any) => {
+    const isolatedExistingMessages = (targetSession.messages || []).filter((m: any) => {
       if (!m || typeof m !== 'object') return false;
       const mCase = m.caseId || m.mentorshipId;
       if (mCase && mCase !== currentCaseId) return false;
@@ -3116,21 +3312,21 @@ El Equipo de Lidacta`;
       return true;
     });
 
-    const updatedActionPlan = activeMentorship.actionPlan
+    const updatedActionPlan = targetSession.actionPlan
       ? executed
         ? {
-            ...activeMentorship.actionPlan,
+            ...targetSession.actionPlan,
             isCompleted: true,
-            completedAt: activeMentorship.actionPlan.completedAt || now,
+            completedAt: targetSession.actionPlan.completedAt || now,
           }
         : {
-            ...activeMentorship.actionPlan,
+            ...targetSession.actionPlan,
             isCompleted: false,
             completedAt: undefined,
           }
       : undefined;
 
-    setMentorships((prev) =>
+    commitMentorships((prev) =>
       prev.map((m) =>
         m.id === currentCaseId
           ? {
@@ -3145,11 +3341,12 @@ El Equipo de Lidacta`;
       )
     );
 
-    const company = companies.find((c) => c.id === activeMentorship.companyId) || companies[0];
+    const company = companies.find((c) => c.id === targetSession.companyId) || companies[0];
+    setCaseSending(currentCaseId, true);
     setIsSendingMessage(true);
 
     const buildFallbackReplyText = () => {
-      const planWhat = activeMentorship.actionPlan?.what?.trim();
+      const planWhat = targetSession.actionPlan?.what?.trim();
       if (executed) {
         return planWhat
           ? `Gracias por confirmarlo. Tomando en cuenta tu compromiso en la Etapa 5 ("${planWhat}"), reflexionemos sobre lo que viviste: ¿qué ocurrió realmente al llevarlo a la práctica, qué observaste en la otra persona o en tu equipo, y qué aprendizaje te deja esta experiencia?`
@@ -3176,15 +3373,15 @@ El Equipo de Lidacta`;
           userMessage: leaderAnswerText,
           currentMessage: leaderAnswerText,
           message: leaderAnswerText,
-          identifiedSkills: activeMentorship.identifiedSkills || [],
-          skillEntries: activeMentorship.skillEntries || [],
+          identifiedSkills: targetSession.identifiedSkills || [],
+          skillEntries: targetSession.skillEntries || [],
           sessionData: {
-            ...stripSessionMessagesForApi(activeMentorship),
-            actionPlan: updatedActionPlan || activeMentorship.actionPlan,
+            ...stripSessionMessagesForApi(targetSession),
+            actionPlan: updatedActionPlan || targetSession.actionPlan,
             actionPlanExecutionStatus: executionStatus,
             stage6ExecutionVerified: true,
-            skillEntries: activeMentorship.skillEntries || [],
-            identifiedSkills: activeMentorship.identifiedSkills || [],
+            skillEntries: targetSession.skillEntries || [],
+            identifiedSkills: targetSession.identifiedSkills || [],
           },
         }),
       });
@@ -3210,7 +3407,7 @@ El Equipo de Lidacta`;
         stage: 6 as StageNumber,
       };
 
-      setMentorships((prev) =>
+      commitMentorships((prev) =>
         prev.map((m) =>
           m.id === currentCaseId
             ? {
@@ -3232,7 +3429,7 @@ El Equipo de Lidacta`;
         timestamp: new Date().toISOString(),
         stage: 6 as StageNumber,
       };
-      setMentorships((prev) =>
+      commitMentorships((prev) =>
         prev.map((m) =>
           m.id === currentCaseId
             ? {
@@ -3245,6 +3442,8 @@ El Equipo de Lidacta`;
       );
     } finally {
       setIsSendingMessage(false);
+      releaseCaseOperationLock(activeCaseOperationsRef.current, currentCaseId);
+      setCaseSending(currentCaseId, false);
     }
   };
 
@@ -4456,6 +4655,7 @@ El Equipo de Lidacta`;
         notifications,
         unreadNotificationsCount,
         isSendingMessage,
+        isAdvancingStage,
         isEmailDrawerOpen,
         isProfileModalOpen,
         openProfileModal,

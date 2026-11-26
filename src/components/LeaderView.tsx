@@ -253,6 +253,73 @@ export function isStageGoalMet(session: MentorshipSession | null, stage: StageNu
   return false;
 }
 
+export function applyConfirmedTransitionOpenStages(
+  prev: Record<StageNumber, boolean>,
+  fromStage: StageNumber,
+  toStage: StageNumber,
+  confirmed: boolean
+): Record<StageNumber, boolean> {
+  if (!confirmed) return prev;
+  return {
+    ...prev,
+    [fromStage]: false,
+    [toStage]: true,
+  };
+}
+
+export interface ExecuteActionPlanToStage6Params {
+  isActionPlanComplete: boolean;
+  isCommitmentConfirmed: boolean;
+  isAdvancingStage: boolean;
+  isSendingMessage: boolean;
+  saveActionPlan: () => boolean;
+  advanceToStage6: () => Promise<boolean>;
+  showToast: (message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
+  onTransitionConfirmed?: () => void;
+}
+
+export async function executeActionPlanAndAdvanceToStage6({
+  isActionPlanComplete,
+  isCommitmentConfirmed,
+  isAdvancingStage,
+  isSendingMessage,
+  saveActionPlan,
+  advanceToStage6,
+  showToast,
+  onTransitionConfirmed,
+}: ExecuteActionPlanToStage6Params): Promise<boolean> {
+  if (isAdvancingStage || isSendingMessage) {
+    return false;
+  }
+  if (!isActionPlanComplete) {
+    showToast(
+      'Por favor completa los 5 campos obligatorios del Plan de Acción (¿Qué?, ¿Cuándo?, ¿Con quién?, ¿Cómo? y ¿Qué vas a cuidar?) antes de avanzar.',
+      'warning'
+    );
+    return false;
+  }
+  if (!isCommitmentConfirmed) {
+    showToast(
+      'Por favor confirma tu compromiso personal marcando la casilla de confirmación antes de avanzar.',
+      'warning'
+    );
+    return false;
+  }
+
+  const saved = saveActionPlan();
+  if (!saved) {
+    showToast('No se pudo guardar el Plan de Acción. Intenta nuevamente antes de avanzar.', 'error');
+    return false;
+  }
+
+  const confirmed = await advanceToStage6();
+  if (confirmed) {
+    onTransitionConfirmed?.();
+    showToast('¡Compromiso registrado! Avanzando a Etapa 6: Aprender y reflexionar.', 'success');
+  }
+  return confirmed;
+}
+
 export const LeaderView: React.FC = () => {
   const {
     currentUser,
@@ -268,6 +335,7 @@ export const LeaderView: React.FC = () => {
     respondStage6ExecutionCheck,
     saveLearnings,
     isSendingMessage,
+    isAdvancingStage,
     showToast,
     retrySendFinalReportEmail,
     isImpersonating,
@@ -407,7 +475,6 @@ export const LeaderView: React.FC = () => {
   }, [activeMentorship?.id]);
 
   const [reopenedStages, setReopenedStages] = useState<Record<number, boolean>>({});
-  const [isAdvancingStage, setIsAdvancingStage] = useState(false);
   const [isPracticingStage4, setIsPracticingStage4] = useState(false);
 
   useEffect(() => {
@@ -594,7 +661,7 @@ export const LeaderView: React.FC = () => {
   };
 
   const handleSendStage5Comment = async () => {
-    if (!stage5CommentText.trim() || isSendingMessage) return;
+    if (!stage5CommentText.trim() || isSendingMessage || isAdvancingStage) return;
     const textToSend = stage5CommentText.trim();
     setStage5CommentText('');
     if (activeMentorship?.id) {
@@ -608,7 +675,7 @@ export const LeaderView: React.FC = () => {
   };
 
   const handleSendVoiceDirectStage5 = async (text: string) => {
-    if (!text.trim() || isSendingMessage) return;
+    if (!text.trim() || isSendingMessage || isAdvancingStage) return;
     setStage5CommentText('');
     if (activeMentorship?.id) {
       try {
@@ -671,7 +738,7 @@ export const LeaderView: React.FC = () => {
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!inputText.trim() || isSendingMessage) return;
+    if (!inputText.trim() || isSendingMessage || isAdvancingStage) return;
     const text = inputText;
     setInputText('');
     setStageInputText('');
@@ -684,7 +751,7 @@ export const LeaderView: React.FC = () => {
 
   // Dedicated submission for active stage card
   const handleSubmitStageMessage = async (st: StageNumber) => {
-    if (!stageInputText.trim() || isSendingMessage) return;
+    if (!stageInputText.trim() || isSendingMessage || isAdvancingStage) return;
     const textToSend = stageInputText.trim();
     setReopenedStages((prev) => ({ ...prev, [st]: false }));
     setStageInputText('');
@@ -697,7 +764,7 @@ export const LeaderView: React.FC = () => {
   };
 
   const handleSubmitVoiceDirect = async (st: StageNumber, text: string) => {
-    if (!text.trim() || isSendingMessage) return;
+    if (!text.trim() || isSendingMessage || isAdvancingStage) return;
     setReopenedStages((prev) => ({ ...prev, [st]: false }));
     setStageInputText('');
     setInputText('');
@@ -774,53 +841,63 @@ export const LeaderView: React.FC = () => {
     if (!activeMentorship) return false;
     setIsSavingActionPlan(true);
 
-    const plan: MentorshipActionPlan = {
-      what: actionWhat.trim(),
-      when: actionWhen.trim(),
-      withWhom: actionWithWhom.trim(),
-      how: actionHow.trim(),
-      careReminders: actionCare.trim(),
-      cleanedAutoGeneratedV1: activeMentorship.actionPlan?.cleanedAutoGeneratedV1,
-      isCommitmentConfirmed: isCommitmentConfirmed,
-      shareWithHR: actionShareWithHR,
-      shareActionPlanWithHR: actionShareWithHR,
-      actionPlanShared: actionShareWithHR,
-      isCompleted: activeMentorship.actionPlan?.isCompleted || false,
-    };
+    try {
+      const plan: MentorshipActionPlan = {
+        what: actionWhat.trim(),
+        when: actionWhen.trim(),
+        withWhom: actionWithWhom.trim(),
+        how: actionHow.trim(),
+        careReminders: actionCare.trim(),
+        cleanedAutoGeneratedV1: activeMentorship.actionPlan?.cleanedAutoGeneratedV1,
+        isCommitmentConfirmed: isCommitmentConfirmed,
+        shareWithHR: actionShareWithHR,
+        shareActionPlanWithHR: actionShareWithHR,
+        actionPlanShared: actionShareWithHR,
+        isCompleted: activeMentorship.actionPlan?.isCompleted || false,
+      };
 
-    updateActionPlan(plan);
-    setIsSavingActionPlan(false);
-    setJustSavedActionPlan(true);
-    setTimeout(() => setJustSavedActionPlan(false), 3000);
-
-    if (!silent) {
-      if (isActionPlanComplete) {
-        showToast('Plan de acción guardado exitosamente. Marca la casilla de confirmación para habilitar el avance.', 'success');
-      } else {
-        showToast('Borrador guardado. Recuerda completar los 5 campos obligatorios para avanzar a la Etapa 6.', 'info');
+      const saved = updateActionPlan(plan);
+      if (!saved) {
+        if (!silent) {
+          showToast('No se pudo guardar el Plan de Acción. Intenta nuevamente.', 'error');
+        }
+        return false;
       }
+
+      setJustSavedActionPlan(true);
+      setTimeout(() => setJustSavedActionPlan(false), 3000);
+
+      if (!silent) {
+        if (isActionPlanComplete) {
+          showToast('Plan de acción guardado exitosamente. Marca la casilla de confirmación para habilitar el avance.', 'success');
+        } else {
+          showToast('Borrador guardado. Recuerda completar los 5 campos obligatorios para avanzar a la Etapa 6.', 'info');
+        }
+      }
+      return true;
+    } catch (err) {
+      console.error('Error saving action plan:', err);
+      if (!silent) {
+        showToast('Hubo un error al guardar el Plan de Acción. Intenta nuevamente.', 'error');
+      }
+      return false;
+    } finally {
+      setIsSavingActionPlan(false);
     }
-    return true;
   };
 
-  const handleAdvanceToStage6 = () => {
-    if (!isActionPlanComplete) {
-      showToast(
-        'Por favor completa los 5 campos obligatorios del Plan de Acción (¿Qué?, ¿Cuándo?, ¿Con quién?, ¿Cómo? y ¿Qué vas a cuidar?) antes de avanzar.',
-        'warning'
-      );
-      return;
-    }
-    if (!isCommitmentConfirmed) {
-      showToast(
-        'Por favor confirma tu compromiso personal marcando la casilla de confirmación antes de avanzar.',
-        'warning'
-      );
-      return;
-    }
-    handleSaveActionPlan(true);
-    advanceStage(6);
-    showToast('¡Compromiso registrado! Avanzando a Etapa 6: Aprender y reflexionar.', 'success');
+  const handleAdvanceToStage6 = async () => {
+    await executeActionPlanAndAdvanceToStage6({
+      isActionPlanComplete,
+      isCommitmentConfirmed,
+      isAdvancingStage,
+      isSendingMessage,
+      saveActionPlan: () => handleSaveActionPlan(true),
+      advanceToStage6: () => advanceStage(6),
+      showToast,
+      onTransitionConfirmed: () =>
+        setOpenStages((prev) => applyConfirmedTransitionOpenStages(prev, 5, 6, true)),
+    });
   };
 
   const handleSaveLearnings = () => {
@@ -1887,13 +1964,13 @@ export const LeaderView: React.FC = () => {
                                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-start gap-3 pt-1 border-t border-[#493447]/10">
                                         <button
                                           type="button"
-                                          disabled={isAdvancingStage}
+                                          disabled={isAdvancingStage || isSendingMessage}
                                           onClick={async () => {
-                                            setIsAdvancingStage(true);
                                             const next = (st < 7 ? (st + 1) as StageNumber : 7) as StageNumber;
-                                            await advanceStage(next);
-                                            setIsAdvancingStage(false);
-                                            setOpenStages((prev) => ({ ...prev, [st]: false, [next]: true }));
+                                            const ok = await advanceStage(next);
+                                            setOpenStages((prev) =>
+                                              applyConfirmedTransitionOpenStages(prev, st, next, ok)
+                                            );
                                           }}
                                           className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2666] text-[#F7B538] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer active:scale-95 disabled:opacity-50"
                                         >
@@ -1938,7 +2015,7 @@ export const LeaderView: React.FC = () => {
                                       }}
                                       placeholder="Escribe aquí tu respuesta, dudas o reflexiones..."
                                       rows={4}
-                                      disabled={isSendingMessage}
+                                      disabled={isSendingMessage || isAdvancingStage}
                                       className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
                                     />
 
@@ -1949,7 +2026,7 @@ export const LeaderView: React.FC = () => {
                                         stageNumber={st}
                                         stageName={meta.name}
                                         mode="stage-card"
-                                        disabled={isSendingMessage}
+                                        disabled={isSendingMessage || isAdvancingStage}
                                         isSending={isSendingMessage}
                                         onTranscript={(text) => {
                                           setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
@@ -1962,7 +2039,7 @@ export const LeaderView: React.FC = () => {
                                       <button
                                         type="button"
                                         onClick={() => handleSubmitStageMessage(st)}
-                                        disabled={!stageInputText.trim() || isSendingMessage}
+                                        disabled={!stageInputText.trim() || isSendingMessage || isAdvancingStage}
                                         className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
                                       >
                                         {isSendingMessage ? (
@@ -2018,6 +2095,7 @@ export const LeaderView: React.FC = () => {
                                           <div className="flex flex-col sm:flex-row gap-2">
                                             <button
                                               type="button"
+                                              disabled={isSendingMessage || isAdvancingStage}
                                               onClick={() => {
                                                 setStageReadyToAdvance(null);
                                                 setIsPracticingStage4(true);
@@ -2026,27 +2104,29 @@ export const LeaderView: React.FC = () => {
                                                   true
                                                 );
                                               }}
-                                              className="min-h-[44px] text-xs px-3.5 py-2 bg-white border border-[#493447]/15 rounded-xl hover:border-[#BF3A1B] font-semibold text-[#2D1B4E] cursor-pointer flex items-center justify-center gap-1.5 shadow-xs active:scale-98"
+                                              className="min-h-[44px] text-xs px-3.5 py-2 bg-white border border-[#493447]/15 rounded-xl hover:border-[#BF3A1B] font-semibold text-[#2D1B4E] cursor-pointer flex items-center justify-center gap-1.5 shadow-xs active:scale-98 disabled:opacity-50"
                                             >
                                               🎭 Iniciar simulación de diálogo
                                             </button>
                                             <button
                                               type="button"
+                                              disabled={isSendingMessage || isAdvancingStage}
                                               onClick={() => {
                                                 setStageReadyToAdvance(null);
                                                 setIsPracticingStage4(true);
                                               }}
-                                              className="min-h-[44px] text-xs px-3.5 py-2 bg-white border border-[#493447]/15 rounded-xl hover:border-[#BF3A1B] font-semibold text-[#2D1B4E] cursor-pointer flex items-center justify-center gap-1.5 shadow-xs active:scale-98"
+                                              className="min-h-[44px] text-xs px-3.5 py-2 bg-white border border-[#493447]/15 rounded-xl hover:border-[#BF3A1B] font-semibold text-[#2D1B4E] cursor-pointer flex items-center justify-center gap-1.5 shadow-xs active:scale-98 disabled:opacity-50"
                                             >
                                               ✍️ Redactar mi propia simulación
                                             </button>
                                             <button
                                               type="button"
+                                              disabled={isSendingMessage || isAdvancingStage}
                                               onClick={() => {
                                                 setStageReadyToAdvance(4);
                                                 setIsPracticingStage4(false);
                                               }}
-                                              className="min-h-[44px] text-xs px-3.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#4A3F55] rounded-xl cursor-pointer flex items-center justify-center font-medium active:scale-98"
+                                              className="min-h-[44px] text-xs px-3.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#4A3F55] rounded-xl cursor-pointer flex items-center justify-center font-medium active:scale-98 disabled:opacity-50"
                                             >
                                               ⏭️ Omitir práctica y pasar a Actuar (Plan de Acción)
                                             </button>
@@ -2100,7 +2180,7 @@ export const LeaderView: React.FC = () => {
                                             }}
                                             placeholder="Escribe lo que le dirías a tu contraparte en esta simulación..."
                                             rows={4}
-                                            disabled={isSendingMessage}
+                                            disabled={isSendingMessage || isAdvancingStage}
                                             className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
                                           />
 
@@ -2109,7 +2189,7 @@ export const LeaderView: React.FC = () => {
                                               stageNumber={4}
                                               stageName={meta.name}
                                               mode="stage-card"
-                                              disabled={isSendingMessage}
+                                              disabled={isSendingMessage || isAdvancingStage}
                                               isSending={isSendingMessage}
                                               onTranscript={(text) => {
                                                 setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
@@ -2121,7 +2201,7 @@ export const LeaderView: React.FC = () => {
                                             <button
                                               type="button"
                                               onClick={() => handleSubmitStageMessage(4)}
-                                              disabled={!stageInputText.trim() || isSendingMessage}
+                                              disabled={!stageInputText.trim() || isSendingMessage || isAdvancingStage}
                                               className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
                                             >
                                               {isSendingMessage ? (
@@ -2154,12 +2234,13 @@ export const LeaderView: React.FC = () => {
                                               type="button"
                                               disabled={isSendingMessage || isAdvancingStage}
                                               onClick={async () => {
-                                                setIsAdvancingStage(true);
-                                                setStageReadyToAdvance(4);
-                                                setIsPracticingStage4(false);
-                                                await advanceStage(5);
-                                                setIsAdvancingStage(false);
-                                                setOpenStages((prev) => ({ ...prev, 4: false, 5: true }));
+                                                const ok = await advanceStage(5);
+                                                if (ok) {
+                                                  setIsPracticingStage4(false);
+                                                  setOpenStages((prev) =>
+                                                    applyConfirmedTransitionOpenStages(prev, 4, 5, true)
+                                                  );
+                                                }
                                               }}
                                               className="min-h-[44px] flex items-center justify-center gap-2 px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2666] text-[#F7B538] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer active:scale-95 disabled:opacity-50"
                                             >
@@ -2208,11 +2289,12 @@ export const LeaderView: React.FC = () => {
                                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1 border-t border-[#493447]/10">
                                           <button
                                             type="button"
+                                            disabled={isAdvancingStage || isSendingMessage}
                                             onClick={() => {
                                               setStageReadyToAdvance(null);
                                               setIsPracticingStage4(true);
                                             }}
-                                            className="min-h-[44px] flex items-center justify-center gap-2 px-4 py-2.5 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 text-[#2D1B4E] border border-[#BF3A1B]/30 font-heading font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer active:scale-95"
+                                            className="min-h-[44px] flex items-center justify-center gap-2 px-4 py-2.5 bg-[#FFF7EF] hover:bg-[#FFD3BF]/40 text-[#2D1B4E] border border-[#BF3A1B]/30 font-heading font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer active:scale-95 disabled:opacity-50"
                                           >
                                             {hasStage4LeaderMessage
                                               ? 'Seguir practicando'
@@ -2221,12 +2303,12 @@ export const LeaderView: React.FC = () => {
 
                                           <button
                                             type="button"
-                                            disabled={isAdvancingStage}
+                                            disabled={isAdvancingStage || isSendingMessage}
                                             onClick={async () => {
-                                              setIsAdvancingStage(true);
-                                              await advanceStage(5);
-                                              setIsAdvancingStage(false);
-                                              setOpenStages((prev) => ({ ...prev, 4: false, 5: true }));
+                                              const ok = await advanceStage(5);
+                                              setOpenStages((prev) =>
+                                                applyConfirmedTransitionOpenStages(prev, 4, 5, ok)
+                                              );
                                             }}
                                             className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2666] text-[#F7B538] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer active:scale-95 disabled:opacity-50"
                                           >
@@ -2552,7 +2634,7 @@ export const LeaderView: React.FC = () => {
                                     }}
                                     placeholder="Escribe aquí tus comentarios adicionales, dudas o reflexiones sobre la ejecución de tu compromiso..."
                                     rows={3}
-                                    disabled={isSendingMessage}
+                                    disabled={isSendingMessage || isAdvancingStage}
                                     className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
                                   />
 
@@ -2561,7 +2643,7 @@ export const LeaderView: React.FC = () => {
                                       stageNumber={5}
                                       stageName="Etapa 5: Actuar"
                                       mode="stage-card"
-                                      disabled={isSendingMessage}
+                                      disabled={isSendingMessage || isAdvancingStage}
                                       isSending={isSendingMessage}
                                       onTranscript={(text) => {
                                         handleStage5CommentChange(stage5CommentText ? `${stage5CommentText} ${text}` : text);
@@ -2572,7 +2654,7 @@ export const LeaderView: React.FC = () => {
                                     <button
                                       type="button"
                                       onClick={handleSendStage5Comment}
-                                      disabled={!stage5CommentText.trim() || isSendingMessage}
+                                      disabled={!stage5CommentText.trim() || isSendingMessage || isAdvancingStage}
                                       className="min-h-[44px] flex items-center justify-center gap-2 px-5 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer active:scale-95"
                                     >
                                       {isSendingMessage ? (
@@ -2607,16 +2689,20 @@ export const LeaderView: React.FC = () => {
                                   <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2.5">
                                     <button
                                       type="button"
-                                      onClick={handleAdvanceToStage6}
-                                      disabled={!isActionPlanComplete || !isCommitmentConfirmed}
-                                      className={`w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-5 py-2.5 font-bold text-xs rounded-xl transition-all shadow-xs ${
-                                        isActionPlanComplete && isCommitmentConfirmed
+                                      onClick={() => { void handleAdvanceToStage6(); }}
+                                      disabled={!isActionPlanComplete || !isCommitmentConfirmed || isAdvancingStage || isSendingMessage}
+                                      className={`w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-5 py-2.5 font-bold text-xs rounded-xl transition-all shadow-xs disabled:opacity-50 ${
+                                        isActionPlanComplete && isCommitmentConfirmed && !isAdvancingStage && !isSendingMessage
                                           ? 'bg-[#2D1B4E] hover:bg-[#3D2568] text-[#F7B538] cursor-pointer active:scale-98'
                                           : 'bg-neutral-200 text-neutral-400 cursor-not-allowed border border-neutral-300'
                                       }`}
                                     >
                                       <CheckCircle2 className="w-3.5 h-3.5" />
-                                      <span>Ya ejecuté la acción → Ir a Etapa 6 (Aprender y reflexionar)</span>
+                                      <span>
+                                        {isAdvancingStage
+                                          ? 'Avanzando a Etapa 6...'
+                                          : 'Ya ejecuté la acción → Ir a Etapa 6 (Aprender y reflexionar)'}
+                                      </span>
                                     </button>
                                   </div>
 
@@ -2707,7 +2793,7 @@ export const LeaderView: React.FC = () => {
                                     <div className="flex flex-col sm:flex-row gap-2.5">
                                       <button
                                         type="button"
-                                        disabled={isSendingMessage}
+                                        disabled={isSendingMessage || isAdvancingStage}
                                         onClick={() => respondStage6ExecutionCheck(true)}
                                         className="min-h-[44px] flex-1 px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2666] text-[#F7B538] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                                       >
@@ -2717,7 +2803,7 @@ export const LeaderView: React.FC = () => {
 
                                       <button
                                         type="button"
-                                        disabled={isSendingMessage}
+                                        disabled={isSendingMessage || isAdvancingStage}
                                         onClick={() => respondStage6ExecutionCheck(false)}
                                         className="min-h-[44px] flex-1 px-5 py-2.5 bg-white hover:bg-[#FFD3BF]/35 text-[#2D1B4E] border-2 border-[#BF3A1B]/40 font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-xs transition-all cursor-pointer active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                                       >
@@ -2857,7 +2943,7 @@ export const LeaderView: React.FC = () => {
                                       {isCurrent && (
                                         <button
                                           type="button"
-                                          disabled={isSendingMessage}
+                                          disabled={isSendingMessage || isAdvancingStage}
                                           onClick={() => respondStage6ExecutionCheck(true)}
                                           className="text-[11px] font-bold text-[#BF3A1B] hover:text-[#2D1B4E] underline cursor-pointer text-left sm:text-right disabled:opacity-50"
                                         >
@@ -2907,7 +2993,7 @@ export const LeaderView: React.FC = () => {
                                           : 'Comparte qué ocurrió tras tu acción, qué funcionó o si solo lograste ejecutar una parte...'
                                       }
                                       rows={3}
-                                      disabled={isSendingMessage}
+                                      disabled={isSendingMessage || isAdvancingStage}
                                       className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
                                     />
 
@@ -2916,7 +3002,7 @@ export const LeaderView: React.FC = () => {
                                         stageNumber={6}
                                         stageName={meta.name}
                                         mode="stage-card"
-                                        disabled={isSendingMessage}
+                                        disabled={isSendingMessage || isAdvancingStage}
                                         isSending={isSendingMessage}
                                         onTranscript={(text) => {
                                           setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
@@ -2928,7 +3014,7 @@ export const LeaderView: React.FC = () => {
                                       <button
                                         type="button"
                                         onClick={() => handleSubmitStageMessage(6)}
-                                        disabled={!stageInputText.trim() || isSendingMessage}
+                                        disabled={!stageInputText.trim() || isSendingMessage || isAdvancingStage}
                                         className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
                                       >
                                         {isSendingMessage ? (
@@ -2949,11 +3035,23 @@ export const LeaderView: React.FC = () => {
                                   <div className="pt-2 border-t border-[#493447]/10 flex flex-col sm:flex-row sm:items-center justify-end gap-2.5">
                                     <button
                                       type="button"
-                                      onClick={() => advanceStage(7)}
-                                      className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2568] text-[#F7B538] font-bold text-xs rounded-xl transition-all shadow-xs active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
+                                      disabled={isAdvancingStage || isSendingMessage}
+                                      onClick={async () => {
+                                        const ok = await advanceStage(7);
+                                        setOpenStages((prev) =>
+                                          applyConfirmedTransitionOpenStages(prev, 6, 7, ok)
+                                        );
+                                      }}
+                                      className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2568] text-[#F7B538] font-bold text-xs rounded-xl transition-all shadow-xs active:scale-98 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                      <span>Concluir e ir a Cierre y retroalimentación (Etapa 7)</span>
-                                      <ArrowRight className="w-3.5 h-3.5 text-[#F7B538]" />
+                                      {isAdvancingStage ? (
+                                        <span>Generando cierre (Etapa 7)...</span>
+                                      ) : (
+                                        <>
+                                          <span>Concluir e ir a Cierre y retroalimentación (Etapa 7)</span>
+                                          <ArrowRight className="w-3.5 h-3.5 text-[#F7B538]" />
+                                        </>
+                                      )}
                                     </button>
                                   </div>
                                 )}
@@ -3173,10 +3271,17 @@ export const LeaderView: React.FC = () => {
                                 {st < 7 && !isCaseCompleted && (
                                   <button
                                     type="button"
-                                    onClick={() => advanceStage(st)}
-                                    className="text-xs text-[#BF3A1B] hover:underline font-bold cursor-pointer"
+                                    disabled={isAdvancingStage || isSendingMessage}
+                                    onClick={async () => {
+                                      const prevCurrent = activeMentorship.currentStage;
+                                      const ok = await advanceStage(st);
+                                      setOpenStages((prev) =>
+                                        applyConfirmedTransitionOpenStages(prev, prevCurrent, st, ok)
+                                      );
+                                    }}
+                                    className="text-xs text-[#BF3A1B] hover:underline font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
-                                    Reabrir como etapa activa
+                                    {isAdvancingStage ? 'Reabriendo etapa...' : 'Reabrir como etapa activa'}
                                   </button>
                                 )}
                               </div>
@@ -3230,7 +3335,7 @@ export const LeaderView: React.FC = () => {
                             : `Escribe tu respuesta para la Etapa ${activeMentorship.currentStage || 1}...`
                         }
                         className="min-h-[44px] flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 min-w-0 disabled:bg-neutral-100 disabled:text-[#4A3F55]/60"
-                        disabled={isSendingMessage || isStage6PendingVerification}
+                        disabled={isSendingMessage || isAdvancingStage || isStage6PendingVerification}
                       />
 
                       {/* WhatsApp Voice Recording Button & Dynamic Audio Bar */}
@@ -3238,14 +3343,14 @@ export const LeaderView: React.FC = () => {
                         stageNumber={activeMentorship.currentStage || 1}
                         stageName={STAGE_META[activeMentorship.currentStage || 1]?.name}
                         mode="bottom-bar"
-                        disabled={isSendingMessage || isStage6PendingVerification}
+                        disabled={isSendingMessage || isAdvancingStage || isStage6PendingVerification}
                         isSending={isSendingMessage}
                         onTranscript={(text) => {
                           setInputText((prev) => (prev ? `${prev} ${text}` : text));
                           setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
                         }}
                         onSendDirect={async (text) => {
-                          if (!text.trim() || isSendingMessage || isStage6PendingVerification) return;
+                          if (!text.trim() || isSendingMessage || isAdvancingStage || isStage6PendingVerification) return;
                           setInputText('');
                           setStageInputText('');
                           await sendMessageInActiveSession(text.trim(), activeMentorship.currentStage === 4);
@@ -3258,7 +3363,7 @@ export const LeaderView: React.FC = () => {
                       {/* Send Button */}
                       <button
                         type="submit"
-                        disabled={!inputText.trim() || isSendingMessage || isStage6PendingVerification}
+                        disabled={!inputText.trim() || isSendingMessage || isAdvancingStage || isStage6PendingVerification}
                         title="Enviar respuesta escrita"
                         className="min-h-[44px] min-w-[44px] p-2.5 bg-[#BF3A1B] hover:bg-[#a63014] text-white rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer shrink-0 flex items-center justify-center active:scale-95"
                       >
