@@ -146,7 +146,7 @@ describe('Fase 1: Cierre de brechas Producción / Desarrollo (Shadowing, session
 
     // Verificar que los flujos modificados mantienen conversationHistory y history, y usan stripSessionMessagesForApi
     const stripCallOccurrences = (contextSource.match(/stripSessionMessagesForApi\(/g) || []).length;
-    assert.equal(stripCallOccurrences, 4, 'Deben existir exactamente 4 llamadas a stripSessionMessagesForApi(');
+    assert.equal(stripCallOccurrences, 5, 'Deben existir exactamente 5 llamadas a stripSessionMessagesForApi(');
     assert.ok(contextSource.includes('conversationHistory,'), 'Debe seguir enviando conversationHistory');
     assert.ok(contextSource.includes('conversationHistory: isolatedExistingMessages,'), 'Debe seguir enviando conversationHistory en sesiones activas');
     assert.ok(contextSource.includes('history: isolatedExistingMessages,'), 'Debe seguir enviando history en sesiones activas');

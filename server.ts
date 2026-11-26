@@ -242,7 +242,8 @@ app.post('/api/mentor/respond', async (req: Request, res: Response) => {
         (m.id && String(m.id).includes('_err')) ||
         m.isError ||
         text.includes('no pudo responder en este momento') ||
-        text.includes('por favor reintenta')
+        text.includes('por favor reintenta') ||
+        text.includes('error de servidor')
       ) {
         return false;
       }
@@ -304,6 +305,18 @@ app.post('/api/mentor/respond', async (req: Request, res: Response) => {
         ? getActiveSkillNames(existingSessionSkillEntries)
         : normalizeExistingSessionSkills(rawExistingSkills);
 
+    const existingSuggestedAlternatives = Array.isArray(sessionData?.suggestedAlternatives)
+      ? sessionData.suggestedAlternatives
+      : Array.isArray(body?.suggestedAlternatives)
+      ? body.suggestedAlternatives
+      : [];
+    const existingChosenAlternative =
+      typeof sessionData?.chosenAlternative === 'string' && sessionData.chosenAlternative.trim()
+        ? sessionData.chosenAlternative.trim()
+        : typeof body?.chosenAlternative === 'string' && body.chosenAlternative.trim()
+        ? body.chosenAlternative.trim()
+        : null;
+
     safeSessionContext = {
       id: targetCaseId,
       title: activeCaseTitle,
@@ -314,6 +327,8 @@ app.post('/api/mentor/respond', async (req: Request, res: Response) => {
       leaderAlternatives: Array.isArray(req.body?.sessionData?.leaderAlternatives)
         ? req.body.sessionData.leaderAlternatives
         : [],
+      ...(existingSuggestedAlternatives.length > 0 ? { suggestedAlternatives: existingSuggestedAlternatives } : {}),
+      ...(existingChosenAlternative ? { chosenAlternative: existingChosenAlternative } : {}),
       actionPlan: req.body?.sessionData?.actionPlan || null,
       actionPlanExecutionStatus: req.body?.sessionData?.actionPlanExecutionStatus || null,
     };
@@ -876,6 +891,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
 
         let response: any = null;
         const primaryStartTime = Date.now();
+        let primaryTimeoutId: ReturnType<typeof setTimeout> | undefined;
 
         try {
           const geminiCall = ai.models.generateContent({
@@ -888,11 +904,20 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
             },
           });
 
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Gemini API request timeout (fallback activated)')), 30000)
-          );
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            primaryTimeoutId = setTimeout(
+              () => reject(new Error('Gemini API request timeout (fallback activated)')),
+              30000
+            );
+          });
 
-          response = await Promise.race([geminiCall, timeoutPromise]);
+          try {
+            response = await Promise.race([geminiCall, timeoutPromise]);
+          } finally {
+            if (primaryTimeoutId !== undefined) {
+              clearTimeout(primaryTimeoutId);
+            }
+          }
           logUsageSuccess(response, MODEL_NAME, 1, 'primary', Date.now() - primaryStartTime);
         } catch (initialErr: any) {
           logUsageError(initialErr, MODEL_NAME, 1, 'primary', Date.now() - primaryStartTime);
@@ -911,6 +936,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
           if ((isRateOrUnavailable || isTimeout) && MODEL_NAME !== FALLBACK_MODEL) {
             console.warn(`Incidencia detectada en modelo principal (${errStr}) en ${MODEL_NAME}. Reintentando con fallback ${FALLBACK_MODEL}...`);
             const fallbackStartTime = Date.now();
+            let fallbackTimeoutId: ReturnType<typeof setTimeout> | undefined;
             try {
               const fallbackCall = ai.models.generateContent({
                 model: FALLBACK_MODEL,
@@ -921,10 +947,19 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
                   temperature: 0.7,
                 },
               });
-              const timeoutFallback = new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error('Gemini fallback request timeout')), 30000)
-              );
-              response = await Promise.race([fallbackCall, timeoutFallback]);
+              const timeoutFallback = new Promise<never>((_, reject) => {
+                fallbackTimeoutId = setTimeout(
+                  () => reject(new Error('Gemini fallback request timeout')),
+                  30000
+                );
+              });
+              try {
+                response = await Promise.race([fallbackCall, timeoutFallback]);
+              } finally {
+                if (fallbackTimeoutId !== undefined) {
+                  clearTimeout(fallbackTimeoutId);
+                }
+              }
               logUsageSuccess(response, FALLBACK_MODEL, 2, 'fallback', Date.now() - fallbackStartTime);
             } catch (fallbackErr: any) {
               logUsageError(fallbackErr, FALLBACK_MODEL, 2, 'fallback', Date.now() - fallbackStartTime);

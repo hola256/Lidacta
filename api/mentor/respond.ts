@@ -2002,6 +2002,24 @@ export function generateContextualCoachReply(
   };
 }
 
+export function extractGeminiCandidateText(data: any): string {
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts) || parts.length === 0) {
+    return '';
+  }
+
+  const nonThoughtTexts = parts
+    .filter((p: any) => p && !p.thought && typeof p.text === 'string' && p.text.trim().length > 0)
+    .map((p: any) => p.text);
+
+  if (nonThoughtTexts.length > 0) {
+    return nonThoughtTexts.join('');
+  }
+
+  const fallbackFirstPart = parts[0]?.text;
+  return typeof fallbackFirstPart === 'string' ? fallbackFirstPart : '';
+}
+
 export const maxDuration = 60; // 60 segundos de timeout
 
 export default async function handler(req: any, res: any) {
@@ -2680,7 +2698,8 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
       }
     }
 
-    if (!ok || !data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+    const candidatePartText = extractGeminiCandidateText(data);
+    if (!ok || !candidatePartText) {
       if (currentStageNum === 7) {
         console.warn('[Lidacta API] Despachando fallback estructurado para Etapa 7 con finalFeedback...');
         const fallbackStage7 = generateContextualCoachReply(
@@ -2725,7 +2744,6 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
       });
     }
 
-    const candidatePartText = data.candidates[0].content.parts[0].text || '';
     const rawText = candidatePartText
       .trim()
       .replace(/^```json\s*/i, '')

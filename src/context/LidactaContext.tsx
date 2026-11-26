@@ -1599,7 +1599,7 @@ El Equipo de Lidacta`;
           message: challengeText,
           identifiedSkills: [],
           skillEntries: [],
-          sessionData: newSession,
+          sessionData: stripSessionMessagesForApi(newSession),
         }),
       });
 
