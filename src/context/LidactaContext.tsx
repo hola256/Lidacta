@@ -36,9 +36,66 @@ import {
   getActiveSkillEntries,
   getActiveSkillNames,
   sanitizeDetectedStrengths,
+  isValidStage2ObservableEvidence,
+  buildStage2EvidenceContext,
   INSUFFICIENT_EVIDENCE_MESSAGE,
   INSUFFICIENT_STRENGTHS_MESSAGE,
 } from '../utils/skillsConsolidator';
+
+export function reconcileStage2SkillEntries(
+  existingEntries: LeadershipSkillEntry[] = [],
+  incomingEntries: LeadershipSkillEntry[] = [],
+  sessionContext?: {
+    caseTitle?: string;
+    initialChallenge?: string;
+    history?: any[];
+    latestUserMessage?: string;
+  }
+): LeadershipSkillEntry[] {
+  const existing = Array.isArray(existingEntries) ? existingEntries : [];
+  const incoming = Array.isArray(incomingEntries) ? incomingEntries : [];
+  if (incoming.length === 0) return existing;
+
+  const existingClusters = new Set(existing.map((e) => e?.cluster).filter(Boolean));
+  const existingNames = new Set(
+    existing.map((e) => (e?.skill || '').trim().toLowerCase()).filter(Boolean)
+  );
+  const stage2Context = sessionContext ? buildStage2EvidenceContext(sessionContext) : undefined;
+
+  const mergedMap = new Map<string, LeadershipSkillEntry>();
+  for (const entry of existing) {
+    if (entry && entry.cluster) {
+      mergedMap.set(entry.cluster, entry);
+    }
+  }
+
+  for (const entry of incoming) {
+    if (!entry || !entry.skill || !entry.cluster) continue;
+    const isPreexisting =
+      existingClusters.has(entry.cluster) ||
+      existingNames.has(entry.skill.trim().toLowerCase());
+
+    if (isPreexisting) {
+      mergedMap.set(entry.cluster, entry);
+      continue;
+    }
+
+    const hasValidEvidence =
+      Array.isArray(entry.evidenceHistory) &&
+      entry.evidenceHistory.some(
+        (ev) =>
+          ev &&
+          typeof ev.evidenceText === 'string' &&
+          isValidStage2ObservableEvidence(ev.evidenceText, stage2Context)
+      );
+
+    if (hasValidEvidence) {
+      mergedMap.set(entry.cluster, entry);
+    }
+  }
+
+  return Array.from(mergedMap.values());
+}
 import {
   QA_TEST_LEADER_ID,
   QA_TEST_LEADER_PROFILE,
@@ -950,7 +1007,17 @@ export async function executeTransactionalStageTransition({
 
         let updatedSkillEntries: LeadershipSkillEntry[] = m.skillEntries || [];
         if (!isReopen) {
-          if ([2, 3, 4].includes(nextStage) && Array.isArray(coachReply.skillEntries)) {
+          if (nextStage === 2 && Array.isArray(coachReply.skillEntries)) {
+            updatedSkillEntries = reconcileStage2SkillEntries(
+              m.skillEntries || [],
+              coachReply.skillEntries,
+              {
+                caseTitle: m.title,
+                initialChallenge: m.initialChallenge,
+                history: m.messages,
+              }
+            );
+          } else if ([3, 4].includes(nextStage) && Array.isArray(coachReply.skillEntries)) {
             updatedSkillEntries = coachReply.skillEntries;
           } else if (
             (!m.skillEntries || m.skillEntries.length === 0) &&
@@ -975,7 +1042,7 @@ export async function executeTransactionalStageTransition({
           updatedSkillEntries.length > 0
             ? activeSkillNames
             : !isReopen &&
-              [2, 3, 4].includes(nextStage) &&
+              [3, 4].includes(nextStage) &&
               Array.isArray(coachReply.identifiedSkills)
             ? normalizeExistingSessionSkills(coachReply.identifiedSkills)
             : m.identifiedSkills || [];
@@ -3011,7 +3078,18 @@ El Equipo de Lidacta`;
             // se adopta directamente como la verdad canónica estructurada (respetando estados y evidencias reales).
             // En etapas 1, 5, 6 y 7: se conservan intactas las entradas existentes de la sesión (m.skillEntries).
             let newSkillEntries: LeadershipSkillEntry[] = baseSession.skillEntries || [];
-            if ([2, 3, 4].includes(currentStage) && Array.isArray(coachReply.skillEntries)) {
+            if (currentStage === 2 && Array.isArray(coachReply.skillEntries)) {
+              newSkillEntries = reconcileStage2SkillEntries(
+                baseSession.skillEntries || [],
+                coachReply.skillEntries,
+                {
+                  caseTitle: baseSession.title,
+                  initialChallenge: baseSession.initialChallenge,
+                  history: baseSession.messages,
+                  latestUserMessage: text,
+                }
+              );
+            } else if ([3, 4].includes(currentStage) && Array.isArray(coachReply.skillEntries)) {
               newSkillEntries = coachReply.skillEntries;
             } else if (
               (!baseSession.skillEntries || baseSession.skillEntries.length === 0) &&
@@ -3025,12 +3103,12 @@ El Equipo de Lidacta`;
 
             // Sincronización de identifiedSkills para retrocompatibilidad:
             // Si existen skillEntries, extraemos los nombres de las habilidades activas (vigente o precisada) con getActiveSkillNames.
-            // Si no hay skillEntries, recurrimos a coachReply.identifiedSkills (en 2, 3, 4) o mantenemos m.identifiedSkills.
+            // Si no hay skillEntries, recurrimos a coachReply.identifiedSkills (en 3, 4) o mantenemos m.identifiedSkills.
             const activeSkillNamesFromEntries = newSkillEntries.length > 0 ? getActiveSkillNames(newSkillEntries) : [];
             const newSkills =
               newSkillEntries.length > 0
                 ? activeSkillNamesFromEntries
-                : [2, 3, 4].includes(currentStage) && Array.isArray(coachReply.identifiedSkills)
+                : [3, 4].includes(currentStage) && Array.isArray(coachReply.identifiedSkills)
                 ? normalizeExistingSessionSkills(coachReply.identifiedSkills)
                 : baseSession.identifiedSkills
                 ? normalizeExistingSessionSkills(baseSession.identifiedSkills)

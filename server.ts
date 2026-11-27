@@ -17,6 +17,8 @@ import {
   formatStageTwoSkillsWithEvidence,
   normalizeExistingSessionSkills,
   sanitizeDetectedStrengths,
+  buildStage2EvidenceContext,
+  buildStage2LocalContextRule,
   INSUFFICIENT_EVIDENCE_MESSAGE,
   INSUFFICIENT_STRENGTHS_MESSAGE,
   SkillReconsiderationDirective,
@@ -1343,6 +1345,18 @@ Debes responder SIEMPRE en formato JSON con la siguiente estructura exacta:
           })
           .join('\n');
 
+        const stage2LocalRule =
+          currentStageNum === 2
+            ? buildStage2LocalContextRule({
+                caseTitle: activeCaseTitle,
+                initialChallenge: activeCaseChallenge,
+                history: resolvedHistory,
+                latestUserMessage: resolvedUserMessage,
+                leaderProfile,
+                companyContext,
+              })
+            : '';
+
         const stage6LocalRule =
           currentStageNum === 6
             ? `
@@ -1404,7 +1418,7 @@ IMPORTANTE: Responde de forma empática, humana y reflexiva, validando la emoci�
 REGLA CRÍTICA ANTI-CICLADO:
 - Está terminantemente PROHIBIDO repetir la misma pregunta o coletilla de cierre en turnos consecutivos (por ejemplo: "¿qué impacto directo tiene no intervenir en este momento...?").
 - Si el líder expresa confusión ("No entiendo tu pregunta", "A qué te refieres", "No te sigo"), reformula la pregunta con palabras cotidianas y más sencillas, o brinda un ejemplo práctico laboral en lugar de repetir la plantilla.
-- Si el líder ya aportó información o muestra desgaste, valida su sentir de forma natural y haz una pregunta diferente o habilita el avance ("readyToAdvance": true).${stage6LocalRule}${stage7LocalRule}
+- Si el líder ya aportó información o muestra desgaste, valida su sentir de forma natural y haz una pregunta diferente o habilita el avance ("readyToAdvance": true).${stage2LocalRule}${stage6LocalRule}${stage7LocalRule}
 
 Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSON estricto.`;
 
@@ -1761,16 +1775,43 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
               ? parsed.skillsReconsideration
               : undefined;
 
+          const stage2EvidenceContext =
+            currentStageNum === 2
+              ? buildStage2EvidenceContext({
+                  caseTitle: activeCaseTitle,
+                  initialChallenge: activeCaseChallenge,
+                  history: resolvedHistory,
+                  latestUserMessage: resolvedUserMessage,
+                })
+              : undefined;
+
           // Consolidar usando el motor central sobre skillEntries
           finalSkillEntries = consolidateSkillEntries(
             existingSessionSkillEntries,
             candidateSkills,
             currentStageNum,
-            reconsiderationDirective
+            reconsiderationDirective,
+            undefined,
+            currentStageNum === 2
+              ? { requireEvidenceInStage2: true, stage2EvidenceContext }
+              : undefined
           );
 
           parsed.skillEntries = finalSkillEntries;
           parsed.identifiedSkills = getActiveSkillNames(finalSkillEntries);
+
+          if (
+            currentStageNum === 2 &&
+            candidateSkills.length > 0 &&
+            parsed.identifiedSkills.length === 0
+          ) {
+            parsed.readyToAdvance = false;
+            parsed.advancePrompt = null;
+            const existingReply = String(parsed.replyText || parsed.reply || '').trim();
+            if (existingReply && !existingReply.includes('?')) {
+              parsed.replyText = `${existingReply}\n\nPara identificar con precisión qué habilidad fortalecer en este caso, cuéntame un ejemplo concreto: ¿qué hiciste o dejaste de hacer en esa situación y qué te llevó a actuar así?`;
+            }
+          }
         } else {
           parsed.identifiedSkills = [];
           parsed.skillEntries = existingSessionSkillEntries;
@@ -2084,10 +2125,24 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
       const candidateSkills = Array.isArray(fallbackResponse.identifiedSkills)
         ? fallbackResponse.identifiedSkills
         : [];
+      const stage2EvidenceContext =
+        currentStageNum === 2
+          ? buildStage2EvidenceContext({
+              caseTitle: activeCaseTitle,
+              initialChallenge: activeCaseChallenge,
+              history: resolvedHistory,
+              latestUserMessage: resolvedUserMessage,
+            })
+          : undefined;
       finalSkillEntries = consolidateSkillEntries(
         existingSessionSkillEntries,
         candidateSkills,
-        currentStageNum
+        currentStageNum,
+        undefined,
+        undefined,
+        currentStageNum === 2
+          ? { requireEvidenceInStage2: true, stage2EvidenceContext }
+          : undefined
       );
       fallbackIdentifiedSkills = getActiveSkillNames(finalSkillEntries);
     } else {
@@ -3314,16 +3369,15 @@ export function generateDeterministicCoaching({
         ? getActiveSkillNames(sessionData.skillEntries)
         : normalizeExistingSessionSkills(sessionData?.identifiedSkills || []);
     const isBeginning = existing.length === 0;
-    const skills = isBeginning
-      ? inferSkillsFromText(userMessage, existing)
-      : existing;
+    const skills = existing;
 
     if (isBeginning) {
       return {
-        replyText: `Miremos esto desde otra perspectiva, ${leaderName}.\n\nSi te pusieras por un momento en los zapatos de la otra parte o de tu equipo, ¿cómo crees que están experimentando esta situación? Además, con total franqueza profesional: ¿en qué medida tus reacciones habituales o la forma en que comunicas las expectativas han contribuido a este escenario?\n\nIdentifico que para resolver esto de raíz, las habilidades clave que requieres poner en juego son: **${skills.join('** y **')}**.`,
+        replyText: `Miremos esto desde otra perspectiva, ${leaderName}.\n\nSi te pusieras por un momento en los zapatos de la otra parte o de tu equipo, ¿cómo crees que están experimentando esta situación? Y para identificar con precisión qué habilidad necesitas fortalecer, cuéntame un ejemplo concreto: ¿qué hiciste o dejaste de hacer frente a este reto?`,
         readyToAdvance: false,
-        identifiedSkills: skills,
-        detectedTheme: sessionData?.theme || 'Comunicación y Alineación de Equipo',
+        advancePrompt: null,
+        identifiedSkills: [],
+        detectedTheme: sessionData?.theme || 'Perspectivas y Habilidades',
         recommendedResources: [
           {
             title: 'Guía de Retroalimentación en Piso (Modelo E-H-I: Evento, Hecho, Impacto)',

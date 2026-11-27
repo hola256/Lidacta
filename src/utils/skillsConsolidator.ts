@@ -214,10 +214,25 @@ export function toTitleCase(str: string): string {
     .join(' ');
 }
 
+function hasWholePhrase(haystack: string, needle: string): boolean {
+  if (!haystack || !needle) return false;
+  if (haystack === needle) return true;
+  return (
+    haystack.startsWith(`${needle} `) ||
+    haystack.endsWith(` ${needle}`) ||
+    haystack.includes(` ${needle} `)
+  );
+}
+
+function buildCustomClusterKey(normalized: string): string {
+  return normalized.slice(0, 48);
+}
+
 /**
- * Mapea una habilidad candidata al catálogo canónico de Lidacta si existe equivalencia semántica.
- * Si no coincide con ninguna categoría canónica predeterminada pero es un término válido y profesional,
- * la normaliza en formato TitleCase para conservarla sin inventar ni distorsionar.
+ * Mapea una habilidad candidata al catálogo canónico de Lidacta cuando existe una correspondencia clara y unívoca.
+ * Evita asignaciones por coincidencias ambiguas de subcadenas o múltiples clústeres simultáneos.
+ * Si no coincide claramente con ningún clúster canónico pero es una competencia válida,
+ * la conserva en formato TitleCase sin forzarla dentro del catálogo de 9 clústeres.
  */
 export function mapToCanonicalSkill(rawSkill: string): { canonicalName: string; cluster: string } | null {
   const rawClean = (rawSkill || '').trim();
@@ -228,7 +243,13 @@ export function mapToCanonicalSkill(rawSkill: string): { canonicalName: string; 
   if (
     normalized.length < 3 ||
     normalized === 'ninguna' ||
+    normalized === 'ninguna habilidad' ||
+    normalized === 'sin habilidad' ||
     normalized === 'n a' ||
+    normalized === 'no aplica' ||
+    normalized === 'sin evidencia' ||
+    normalized === 'por definir' ||
+    normalized === 'pendiente' ||
     normalized === 'habilidad 1' ||
     normalized === 'habilidad 2' ||
     normalized === 'habilidad' ||
@@ -238,25 +259,315 @@ export function mapToCanonicalSkill(rawSkill: string): { canonicalName: string; 
     return null;
   }
 
-  // Búsqueda por keywords y clusters
+  // 1. Priorizar coincidencia exacta con nombre canónico o keyword exacta
   for (const def of CANONICAL_LEADERSHIP_SKILLS) {
-    const canonicalNorm = normalizeText(def.canonicalName);
-    if (normalized === canonicalNorm || normalized.includes(canonicalNorm) || canonicalNorm.includes(normalized)) {
+    if (normalized === normalizeText(def.canonicalName)) {
       return { canonicalName: def.canonicalName, cluster: def.cluster };
     }
     for (const kw of def.keywords) {
-      const kwNorm = normalizeText(kw);
-      if (normalized === kwNorm || normalized.includes(kwNorm) || kwNorm.includes(normalized)) {
+      if (normalized === normalizeText(kw)) {
         return { canonicalName: def.canonicalName, cluster: def.cluster };
       }
     }
   }
 
-  // Si no está en el catálogo exacto pero es una habilidad válida, formatear limpiamente
+  // 2. Coincidencia por frase completa dentro de la habilidad candidata (sin subcadenas inversas ambiguas)
+  const matchedDefs: CanonicalSkillDefinition[] = [];
+  for (const def of CANONICAL_LEADERSHIP_SKILLS) {
+    const canonicalNorm = normalizeText(def.canonicalName);
+    let matched = hasWholePhrase(normalized, canonicalNorm);
+    if (!matched) {
+      for (const kw of def.keywords) {
+        if (hasWholePhrase(normalized, normalizeText(kw))) {
+          matched = true;
+          break;
+        }
+      }
+    }
+    if (matched) {
+      matchedDefs.push(def);
+    }
+  }
+
+  // Solo normalizar a un clúster canónico si la correspondencia es clara y no ambigua (un único clúster)
+  if (matchedDefs.length === 1) {
+    return { canonicalName: matchedDefs[0].canonicalName, cluster: matchedDefs[0].cluster };
+  }
+
+  // Si no corresponde claramente a un clúster (0 coincidencias o mezcla ambigua de varios), no forzar clasificación
   return {
     canonicalName: toTitleCase(rawClean),
-    cluster: normalized.slice(0, 15),
+    cluster: buildCustomClusterKey(normalized),
   };
+}
+
+export interface Stage2EvidenceContext {
+  caseTitle?: string;
+  initialChallenge?: string;
+  leaderUtterances?: string[];
+}
+
+export interface ConsolidateSkillOptions {
+  requireEvidenceInStage2?: boolean;
+  stage2EvidenceContext?: Stage2EvidenceContext;
+}
+
+const STAGE2_STOPWORDS = new Set([
+  'para', 'como', 'pero', 'porque', 'cuando', 'donde', 'sobre', 'entre', 'desde', 'hasta',
+  'hacia', 'ante', 'bajo', 'contra', 'segun', 'durante', 'mediante', 'este', 'esta', 'estos',
+  'estas', 'ese', 'esa', 'esos', 'esas', 'aquel', 'aquella', 'ello', 'ellos', 'ellas',
+  'nosotros', 'ustedes', 'quien', 'quienes', 'cual', 'cuales', 'todo', 'toda', 'todos',
+  'todas', 'algo', 'nada', 'mucho', 'poco', 'mas', 'menos', 'muy', 'bien', 'mal', 'aqui',
+  'alli', 'ahora', 'antes', 'despues', 'siempre', 'nunca', 'solo', 'sola', 'también', 'tambien',
+  'pero', 'sino', 'aunque', 'mientras', 'entonces', 'luego', 'pues', 'tener', 'tiene', 'tienen',
+  'tengo', 'tuvo', 'hacer', 'hace', 'hizo', 'hacen', 'hago', 'estar', 'esta', 'estan', 'estoy',
+  'estuvo', 'haber', 'habia', 'hubo', 'puede', 'pueden', 'puedo', 'pudo', 'poder', 'debe',
+  'deben', 'debo', 'sera', 'fueron', 'siendo', 'sido', 'lider', 'lidacta', 'caso', 'etapa',
+  'problema', 'situacion', 'reto', 'habilidad', 'habilidades', 'evidencia', 'relato',
+  'menciono', 'comento', 'dijo', 'expreso', 'indico', 'senalo', 'cuenta', 'contar',
+  'muestra', 'refleja', 'demuestra', 'necesita', 'requiere', 'fortalecer', 'desarrollar',
+  'colaborador', 'colaboradores', 'equipo', 'persona', 'personas', 'area', 'trabajo',
+]);
+
+const STAGE2_SEMANTIC_CONCEPT_GROUPS: string[][] = [
+  ['miedo', 'temor', 'teme', 'evit', 'incomod', 'confront'],
+  ['enoj', 'molest', 'frustr', 'reacc', 'alter', 'impuls', 'calm', 'estres', 'presi'],
+  ['habl', 'deci', 'dijo', 'convers', 'call', 'silenc', 'expres', 'comunic', 'plante'],
+  ['report', 'entreg', 'tare', 'pendient', 'cumpl', 'plaz', 'fech', 'objetiv'],
+  ['tard', 'retras', 'atras', 'demor', 'tiemp', 'puntual', 'horario'],
+  ['deleg', 'control', 'asum', 'solt', 'central', 'microgest', 'autonom', 'responsab'],
+  ['acuerd', 'regl', 'compromis', 'expectat', 'paut', 'lineamient', 'seguimient'],
+  ['conflic', 'discus', 'roce', 'tens', 'desacuerd', 'diferenc', 'pele'],
+  ['retroaliment', 'feedback', 'correg', 'observ', 'senalamient', 'desempen'],
+  ['motiv', 'desanim', 'apat', 'reconoc', 'desinter', 'compromet', 'clima'],
+  ['jefe', 'gerent', 'superv', 'coord', 'analis', 'direct', 'subordin'],
+  ['sueld', 'salari', 'aument', 'pago', 'compens', 'tabulador'],
+  ['vacacion', 'ausenc', 'falt', 'permis', 'asist', 'disciplin', 'norma', 'politic'],
+  ['prioriz', 'decis', 'orden', 'urgenc', 'importan', 'organiz'],
+];
+
+function extractStage2ContentTokens(text: string): string[] {
+  const norm = normalizeText(text);
+  if (!norm) return [];
+  return norm
+    .split(' ')
+    .filter((token) => token.length >= 4 && !STAGE2_STOPWORDS.has(token));
+}
+
+function isMetaOrOperationalStage2Text(text: string): boolean {
+  const norm = normalizeText(text);
+  if (!norm) return true;
+  if (/^avanzando a etapa \d+/.test(norm)) return true;
+  if (
+    /^(si|no|ok|okey|vale|listo|de acuerdo|claro|perfecto|gracias|entendido|va|sale|avancemos|continuemos|siguiente)$/.test(
+      norm
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function isPertinentStage2SkillLabel(rawSkill: string): boolean {
+  const rawClean = (rawSkill || '').trim();
+  if (!rawClean || rawClean.length > 110) return false;
+  const normalized = normalizeText(rawClean);
+  const words = normalized.split(' ').filter(Boolean);
+  if (words.length === 0 || words.length > 12) return false;
+  if (!mapToCanonicalSkill(rawClean)) return false;
+
+  if (
+    /^(no se cuenta|falta de evidencia|evidencia insuficiente|no hay evidencia|el lider debe|recomiendo|sugiero)/.test(
+      normalized
+    )
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function isValidStage2ObservableEvidence(
+  evidenceText: string,
+  context?: Stage2EvidenceContext
+): boolean {
+  const clean = (evidenceText || '').trim();
+  if (!clean) return false;
+  if (isInsufficientEvidenceMessage(clean)) return false;
+
+  const normEvidence = normalizeText(clean);
+  const words = normEvidence.split(' ').filter(Boolean);
+  if (normEvidence.length < 10 || words.length < 2) return false;
+
+  // Rechazar marcadores explícitos de ausencia de evidencia o mera especulación sin sustento
+  if (
+    /\b(sin evidencia|no hay evidencia|no existe evidencia|evidencia insuficiente|sin registro|por definir|por confirmar|no especificado|no mencionado|aun no relata|no ha compartido|no aporto datos|no proporciono informacion|sin datos suficientes|solo por el titulo|basado en el titulo|se supone que|es probable que|probablemente|seguramente|quizas)\b/.test(
+      normEvidence
+    )
+  ) {
+    return false;
+  }
+
+  if (!context) {
+    return true;
+  }
+
+  // Cuando hay contexto de sesión real, exigir narrativa observable mínima y anclaje verificable
+  if (words.length < 4 && normEvidence.length < 20) {
+    return false;
+  }
+
+  const rawUtterances = [
+    ...(Array.isArray(context.leaderUtterances) ? context.leaderUtterances : []),
+    ...(context.initialChallenge ? [context.initialChallenge] : []),
+  ]
+    .map((u) => (u || '').trim())
+    .filter((u) => u.length > 0 && !isMetaOrOperationalStage2Text(u));
+
+  const narrativeTokens = new Set<string>();
+  for (const utt of rawUtterances) {
+    for (const tok of extractStage2ContentTokens(utt)) {
+      narrativeTokens.add(tok);
+    }
+  }
+
+  // Si el líder todavía no ha aportado relato concreto alguno en el caso
+  if (narrativeTokens.size < 3) {
+    return false;
+  }
+
+  // Rechazar si solo repite el título del problema sin aportar conductas o hechos concretos
+  const normTitle = normalizeText(context.caseTitle || '');
+  if (normTitle) {
+    if (normEvidence === normTitle) {
+      return false;
+    }
+    const titleTokens = new Set(extractStage2ContentTokens(normTitle));
+    const evidenceTokens = extractStage2ContentTokens(clean);
+    const evidenceBeyondTitle = evidenceTokens.filter((t) => !titleTokens.has(t));
+    if (titleTokens.size >= 2 && normEvidence.includes(normTitle) && evidenceBeyondTitle.length < 2) {
+      return false;
+    }
+    // Si el único texto del caso es idéntico al título corto y sin detalle conductual
+    const narrativeBeyondTitle = Array.from(narrativeTokens).filter((t) => !titleTokens.has(t));
+    if (titleTokens.size >= 1 && narrativeBeyondTitle.length === 0 && evidenceBeyondTitle.length < 2) {
+      return false;
+    }
+  }
+
+  // Verificar anclaje real entre la evidencia propuesta y el relato del líder (cita o paráfrasis fiel)
+  const evidenceContentTokens = extractStage2ContentTokens(clean);
+  if (evidenceContentTokens.length === 0) {
+    return false;
+  }
+
+  const narrativeList = Array.from(narrativeTokens);
+  const hasStemOverlap = evidenceContentTokens.some((evTok) => {
+    const evStem = evTok.slice(0, 4);
+    return narrativeList.some((narTok) => {
+      const narStem = narTok.slice(0, 4);
+      return evTok === narTok || evStem === narStem;
+    });
+  });
+
+  if (hasStemOverlap) {
+    return true;
+  }
+
+  const hasConceptOverlap = STAGE2_SEMANTIC_CONCEPT_GROUPS.some((group) => {
+    const evInGroup = evidenceContentTokens.some((tok) =>
+      group.some((prefix) => tok.startsWith(prefix))
+    );
+    if (!evInGroup) return false;
+    return narrativeList.some((tok) => group.some((prefix) => tok.startsWith(prefix)));
+  });
+
+  return hasConceptOverlap;
+}
+
+export function buildStage2EvidenceContext(params: {
+  caseTitle?: string;
+  initialChallenge?: string;
+  history?: any[];
+  latestUserMessage?: string;
+}): Stage2EvidenceContext {
+  const leaderMessages: string[] = [];
+  for (const m of Array.isArray(params.history) ? params.history : []) {
+    if (!m || typeof m !== 'object') continue;
+    const isLeader = m.sender === 'leader' || m.role === 'user';
+    if (!isLeader) continue;
+    const msgStage = Number(m.stage);
+    if (m.stage !== undefined && m.stage !== null && !Number.isNaN(msgStage) && msgStage > 2) {
+      continue;
+    }
+    const text = String(m.text || m.content || '').trim();
+    if (text && !isMetaOrOperationalStage2Text(text)) {
+      leaderMessages.push(text);
+    }
+  }
+  const latest = (params.latestUserMessage || '').trim();
+  if (latest && !isMetaOrOperationalStage2Text(latest)) {
+    leaderMessages.push(latest);
+  }
+  return {
+    caseTitle: (params.caseTitle || '').trim() || undefined,
+    initialChallenge: (params.initialChallenge || '').trim() || undefined,
+    leaderUtterances: leaderMessages,
+  };
+}
+
+export function buildStage2LocalContextRule(params: {
+  caseTitle?: string;
+  initialChallenge?: string;
+  history?: any[];
+  latestUserMessage?: string;
+  leaderProfile?: any;
+  companyContext?: any;
+}): string {
+  const stage1Utterances: string[] = [];
+  const stage2Utterances: string[] = [];
+
+  for (const m of Array.isArray(params.history) ? params.history : []) {
+    if (!m || typeof m !== 'object') continue;
+    if (m.sender !== 'leader' && m.role !== 'user') continue;
+    const text = String(m.text || m.content || '').trim();
+    if (!text || isMetaOrOperationalStage2Text(text)) continue;
+    const msgStage = Number(m.stage);
+    if (msgStage === 2) {
+      stage2Utterances.push(text);
+    } else if (!msgStage || msgStage === 1) {
+      stage1Utterances.push(text);
+    }
+  }
+
+  const latest = (params.latestUserMessage || '').trim();
+  if (latest && !isMetaOrOperationalStage2Text(latest) && !stage2Utterances.includes(latest)) {
+    stage2Utterances.push(latest);
+  }
+
+  const profileBits = [
+    params.leaderProfile?.position ? `Puesto: ${params.leaderProfile.position}` : '',
+    params.leaderProfile?.area ? `Área: ${params.leaderProfile.area}` : '',
+    typeof params.leaderProfile?.directReports === 'number'
+      ? `Personas a cargo: ${params.leaderProfile.directReports}`
+      : '',
+    params.companyContext?.industry ? `Industria: ${params.companyContext.industry}` : '',
+  ]
+    .filter(Boolean)
+    .join(' | ');
+
+  return `
+REGLA LOCAL DE ETAPA 2 (DIAGNÓSTICO DE HABILIDADES CON EVIDENCIA VERIFICABLE):
+- Contexto completo del caso actual (NO diagnostiques basándote solo en el último mensaje):
+  * Título de referencia (no usar por sí solo como evidencia): ${params.caseTitle || 'Caso actual'}
+  * Desafío inicial del caso: ${params.initialChallenge || 'No especificado'}
+  * Relato del líder en Etapa 1: ${stage1Utterances.join(' | ') || 'Sin mensajes sustantivos previos'}
+  * Aportes del líder en Etapa 2: ${stage2Utterances.join(' | ') || 'Aún sin aportes nuevos en Etapa 2'}
+  * Perfil y contexto laboral (usar únicamente si aporta evidencia relevante al caso): ${profileBits || 'No especificado'}
+- Requisitos obligatorios para proponer habilidades en "identifiedSkills":
+  1. Cada habilidad DEBE enviarse como objeto { "skill": "...", "evidenceText": "..." } donde "evidenceText" sea una cita breve o paráfrasis fiel de comportamientos, decisiones o dificultades concretas relatadas por el líder en el caso actual (Etapa 1 o Etapa 2).
+  2. PROHIBIDO proponer habilidades basadas únicamente en el título del problema, en suposiciones sobre el líder o en conductas no relatadas.
+  3. Prioriza uno de los 9 clústeres canónicos cuando haya correspondencia clara; si una competencia válida no corresponde claramente a ninguno, nómbrala con precisión sin forzar un clúster ambiguo. Conserva la distinción entre los 9 clústeres canónicos y las 6 áreas de desarrollo de la Biblioteca Interna.
+  4. Si todavía no existe evidencia observable suficiente en el relato del líder, devuelve "identifiedSkills": [], "readyToAdvance": false, "advancePrompt": null, y formula una pregunta concreta para recabar hechos o conductas antes de presentar habilidades como identificadas.`;
 }
 
 /**
@@ -400,9 +711,12 @@ export function consolidateSkillEntries(
   incomingCandidates: (string | IncomingSkillCandidate)[] = [],
   currentStage: number,
   reconsideration?: SkillReconsiderationDirective,
-  nowIsoString?: string
+  nowIsoString?: string,
+  options?: ConsolidateSkillOptions
 ): LeadershipSkillEntry[] {
   const now = nowIsoString || new Date().toISOString();
+  const requireEvidenceInStage2 = options?.requireEvidenceInStage2 !== false;
+  const stage2Context = options?.stage2EvidenceContext;
 
   // Clonar entradas existentes para inmutabilidad
   const entriesByCluster = new Map<string, LeadershipSkillEntry>();
@@ -557,10 +871,18 @@ export function consolidateSkillEntries(
         evidenceText = (item.evidenceText || '').trim();
       }
 
+      if (validStage === 2 && !isPertinentStage2SkillLabel(rawSkill)) {
+        continue;
+      }
+
       const mapped = mapToCanonicalSkill(rawSkill);
       if (!mapped) continue;
 
-      const existing = entriesByCluster.get(mapped.cluster);
+      const existing =
+        entriesByCluster.get(mapped.cluster) ||
+        Array.from(entriesByCluster.values()).find(
+          (entry) => normalizeText(entry.skill) === normalizeText(mapped.canonicalName)
+        );
 
       if (existing) {
         // REGLA CRÍTICA DE PREVENCIÓN DE REAPARICIÓN:
@@ -569,8 +891,14 @@ export function consolidateSkillEntries(
           continue;
         }
 
-        // Si la habilidad está activa ('vigente' o 'precisada'), registrar nueva evidencia si se provee
-        if (evidenceText) {
+        // Si la habilidad está activa ('vigente' o 'precisada'), registrar nueva evidencia si se provee y es válida
+        const canAttachEvidence =
+          Boolean(evidenceText) &&
+          (validStage !== 2 ||
+            !requireEvidenceInStage2 ||
+            isValidStage2ObservableEvidence(evidenceText, stage2Context));
+
+        if (canAttachEvidence) {
           const isDuplicate = existing.evidenceHistory.some(
             (ev) => normalizeText(ev.evidenceText) === normalizeText(evidenceText)
           );
@@ -588,6 +916,15 @@ export function consolidateSkillEntries(
           }
         }
       } else {
+        // En Etapa 2, ninguna habilidad nueva puede registrarse como 'vigente' sin evidencia observable verificable
+        if (
+          validStage === 2 &&
+          requireEvidenceInStage2 &&
+          !isValidStage2ObservableEvidence(evidenceText, stage2Context)
+        ) {
+          continue;
+        }
+
         // Nueva habilidad activa para la sesión
         const initialEvidence: ObservedEvidenceRecord[] = [];
         if (evidenceText) {
@@ -645,7 +982,9 @@ export function consolidateSkills(
     existingEntries,
     incomingSkills,
     currentStage,
-    reconsideration
+    reconsideration,
+    undefined,
+    { requireEvidenceInStage2: false }
   );
 
   return getActiveSkillNames(updatedEntries);
