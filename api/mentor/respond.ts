@@ -293,9 +293,17 @@ interface Stage2EvidenceContext {
   leaderUtterances?: string[];
 }
 
+interface Stage34EvidenceContext extends Stage2EvidenceContext {
+  leaderAlternatives?: string[];
+  chosenAlternative?: string;
+  hasStage4LeaderInput?: boolean;
+}
+
 interface ConsolidateSkillOptions {
   requireEvidenceInStage2?: boolean;
   stage2EvidenceContext?: Stage2EvidenceContext;
+  requireEvidenceInStages34?: boolean;
+  stage34EvidenceContext?: Stage34EvidenceContext;
 }
 
 const STAGE2_STOPWORDS = new Set([
@@ -550,6 +558,307 @@ REGLA LOCAL DE ETAPA 2 (DIAGNÓSTICO DE HABILIDADES CON EVIDENCIA VERIFICABLE):
   4. Si todavía no existe evidencia observable suficiente en el relato del líder, devuelve "identifiedSkills": [], "readyToAdvance": false, "advancePrompt": null, y formula una pregunta concreta para recabar hechos o conductas antes de presentar habilidades como identificadas.`;
 }
 
+const STAGE34_CONTEXT_CONCEPT_GROUPS: string[][] = [
+  ...STAGE2_SEMANTIC_CONCEPT_GROUPS,
+  ['miedo', 'temor', 'teme', 'evit', 'incomod', 'confront', 'friccion', 'tens', 'defensiv', 'roce', 'desacuerd', 'diferenc', 'pele', 'conflic', 'discus'],
+  ['enoj', 'molest', 'frustr', 'reacc', 'alter', 'impuls', 'calm', 'estres', 'presi', 'satur', 'desgast', 'sobrecarg', 'pacienc', 'seren', 'emocion'],
+  ['habl', 'deci', 'dijo', 'convers', 'call', 'silenc', 'expres', 'comunic', 'plante', 'dialog', 'explic', 'indag', 'pregunt', 'escuch', 'interrump', 'direct', 'tono', 'mensaj', 'corre', 'escrit'],
+  ['orden', 'exactament', 'impon', 'imposit', 'ultimatum', 'punitiv', 'amenaz', 'escal', 'exig', 'margen', 'autoritari', 'directriz', 'unilateral'],
+  ['report', 'entreg', 'tare', 'pendient', 'cumpl', 'plaz', 'fech', 'objetiv', 'corte', 'bitacor', 'tard', 'retras', 'atras', 'demor', 'tiemp', 'puntual', 'horari'],
+  ['deleg', 'control', 'asum', 'solt', 'central', 'microgest', 'autonom', 'responsab', 'haciend', 'absor', 'aprob', 'cubr', 'distribu', 'asign', 'operativ', 'personal'],
+  ['acuerd', 'regl', 'compromis', 'expectat', 'paut', 'lineamient', 'seguimient', 'clarid', 'criteri'],
+  ['retroaliment', 'feedback', 'correg', 'observ', 'senalamient', 'desempen', 'hecho', 'juici', 'subjetiv', 'critic'],
+  ['motiv', 'desanim', 'apat', 'reconoc', 'desinter', 'compromet', 'clima', 'iniciativ', 'entusiasm'],
+  ['prioriz', 'decis', 'orden', 'urgenc', 'importan', 'organiz', 'plan', 'alternativ', 'opcion', 'estrateg'],
+  ['sueld', 'salari', 'aument', 'pago', 'compens', 'tabulador', 'presupuest', 'bono', 'vacacion', 'ausenc', 'falt', 'permis', 'asist', 'disciplin', 'norma', 'politic', 'corporat', 'estructur', 'proceso', 'sistem', 'extern', 'ajeno', 'rrhh', 'herramient', 'tecnic', 'restricc', 'alcance', 'autoridad', 'sindical', 'laboral'],
+];
+
+const STAGE34_SIMULATION_MARKERS = ['simulac', 'ensay', 'practic', 'roleplay', 'ejercic', 'escenari'];
+
+const STAGE34_GENERIC_FILLER_TOKENS = new Set([
+  'aplica', 'aplicar', 'corresponde', 'necesaria', 'necesario', 'cambiar', 'quitar', 'eliminar',
+  'descartar', 'sustituir', 'reemplazar', 'mejor', 'otra', 'importante', 'general', 'actual',
+  'proceso', 'gerente', 'puesto', 'empresa', 'liderazgo', 'competencia', 'aspecto', 'punto',
+]);
+
+function hasSpeculativeOrMissingEvidenceMarkers(normText: string): boolean {
+  return /\b(sin evidencia|no hay evidencia|no existe evidencia|evidencia insuficiente|sin registro|por definir|por confirmar|no especificado|no mencionado|aun no relata|no ha compartido|no aporto datos|no proporciono informacion|sin datos suficientes|solo por el titulo|basado en el titulo|se supone que|es probable que|probablemente|seguramente|quizas|sin sustento|sin respaldo)\b/.test(
+    normText
+  );
+}
+
+function collectStage34NarrativeTokens(context: Stage34EvidenceContext): Set<string> {
+  const rawUtterances = [
+    ...(Array.isArray(context.leaderUtterances) ? context.leaderUtterances : []),
+    ...(context.initialChallenge ? [context.initialChallenge] : []),
+    ...(Array.isArray(context.leaderAlternatives) ? context.leaderAlternatives : []),
+    ...(context.chosenAlternative ? [context.chosenAlternative] : []),
+  ]
+    .map((u) => (u || '').trim())
+    .filter((u) => u.length > 0 && !isMetaOrOperationalStage2Text(u));
+
+  const narrativeTokens = new Set<string>();
+  for (const utt of rawUtterances) {
+    for (const tok of extractStage2ContentTokens(utt)) {
+      narrativeTokens.add(tok);
+    }
+  }
+  return narrativeTokens;
+}
+
+function failsCaseTitleOnlyCheck(
+  cleanText: string,
+  normText: string,
+  caseTitle: string | undefined,
+  narrativeTokens: Set<string>
+): boolean {
+  const normTitle = normalizeText(caseTitle || '');
+  if (!normTitle) return false;
+  if (normText === normTitle) return true;
+
+  const titleTokens = new Set(extractStage2ContentTokens(normTitle));
+  const textTokens = extractStage2ContentTokens(cleanText);
+  const textBeyondTitle = textTokens.filter((t) => !titleTokens.has(t));
+  if (titleTokens.size >= 2 && normText.includes(normTitle) && textBeyondTitle.length < 2) {
+    return true;
+  }
+  const narrativeBeyondTitle = Array.from(narrativeTokens).filter((t) => !titleTokens.has(t));
+  if (titleTokens.size >= 1 && narrativeBeyondTitle.length === 0 && textBeyondTitle.length < 2) {
+    return true;
+  }
+  return false;
+}
+
+function hasContextualSemanticMatch(
+  candidateTokens: string[],
+  narrativeTokens: Set<string>,
+  hasStage4LeaderInput?: boolean
+): boolean {
+  const substantiveTokens = candidateTokens.filter((t) => !STAGE34_GENERIC_FILLER_TOKENS.has(t));
+  if (substantiveTokens.length === 0) return false;
+
+  const narrativeList = Array.from(narrativeTokens);
+  const hasStemOverlap = substantiveTokens.some((evTok) => {
+    const evStem = evTok.slice(0, 4);
+    return narrativeList.some((narTok) => {
+      const narStem = narTok.slice(0, 4);
+      return evTok === narTok || evStem === narStem;
+    });
+  });
+  if (hasStemOverlap) return true;
+
+  const hasConceptOverlap = STAGE34_CONTEXT_CONCEPT_GROUPS.some((group) => {
+    const evInGroup = substantiveTokens.some((tok) =>
+      group.some((prefix) => tok.startsWith(prefix))
+    );
+    if (!evInGroup) return false;
+    return narrativeList.some((tok) => group.some((prefix) => tok.startsWith(prefix)));
+  });
+  if (hasConceptOverlap) return true;
+
+  if (hasStage4LeaderInput && substantiveTokens.length >= 3) {
+    const mentionsSimulation = substantiveTokens.some((tok) =>
+      STAGE34_SIMULATION_MARKERS.some((prefix) => tok.startsWith(prefix))
+    );
+    if (mentionsSimulation) return true;
+  }
+
+  return false;
+}
+
+function isValidStage34ContextualEvidence(
+  evidenceText: string,
+  context?: Stage34EvidenceContext
+): boolean {
+  const clean = (evidenceText || '').trim();
+  if (!clean) return false;
+  if (isInsufficientEvidenceMessage(clean)) return false;
+
+  const normEvidence = normalizeText(clean);
+  const words = normEvidence.split(' ').filter(Boolean);
+  if (normEvidence.length < 10 || words.length < 2) return false;
+
+  if (hasSpeculativeOrMissingEvidenceMarkers(normEvidence)) {
+    return false;
+  }
+
+  if (!context) {
+    return true;
+  }
+
+  if (words.length < 4 && normEvidence.length < 22) {
+    return false;
+  }
+
+  const narrativeTokens = collectStage34NarrativeTokens(context);
+  if (narrativeTokens.size < 3) {
+    return false;
+  }
+
+  if (failsCaseTitleOnlyCheck(clean, normEvidence, context.caseTitle, narrativeTokens)) {
+    return false;
+  }
+
+  const evidenceContentTokens = extractStage2ContentTokens(clean);
+  if (evidenceContentTokens.length === 0) {
+    return false;
+  }
+
+  return hasContextualSemanticMatch(
+    evidenceContentTokens,
+    narrativeTokens,
+    context.hasStage4LeaderInput
+  );
+}
+
+function isValidReconsiderationJustification(
+  justificationText: string,
+  context?: Stage34EvidenceContext
+): boolean {
+  const clean = (justificationText || '').trim();
+  if (!clean) return false;
+  if (isInsufficientEvidenceMessage(clean)) return false;
+
+  const normText = normalizeText(clean);
+  const words = normText.split(' ').filter(Boolean);
+  if (normText.length < 10 || words.length < 2) return false;
+
+  if (hasSpeculativeOrMissingEvidenceMarkers(normText)) {
+    return false;
+  }
+
+  const substantiveWithoutFiller = extractStage2ContentTokens(clean).filter(
+    (t) => !STAGE34_GENERIC_FILLER_TOKENS.has(t)
+  );
+  if (substantiveWithoutFiller.length < 2) {
+    return false;
+  }
+
+  if (!context) {
+    return true;
+  }
+
+  if (words.length < 4 && normText.length < 22) {
+    return false;
+  }
+
+  const narrativeTokens = collectStage34NarrativeTokens(context);
+  if (narrativeTokens.size < 3) {
+    return false;
+  }
+
+  if (failsCaseTitleOnlyCheck(clean, normText, context.caseTitle, narrativeTokens)) {
+    return false;
+  }
+
+  const contentTokens = extractStage2ContentTokens(clean);
+  if (contentTokens.length === 0) {
+    return false;
+  }
+
+  return hasContextualSemanticMatch(
+    contentTokens,
+    narrativeTokens,
+    context.hasStage4LeaderInput
+  );
+}
+
+function buildStage34EvidenceContext(params: {
+  caseTitle?: string;
+  initialChallenge?: string;
+  history?: any[];
+  latestUserMessage?: string;
+  leaderAlternatives?: string[];
+  chosenAlternative?: string | null;
+  currentStage?: number;
+}): Stage34EvidenceContext {
+  const leaderMessages: string[] = [];
+  let hasStage4LeaderInput = false;
+
+  for (const m of Array.isArray(params.history) ? params.history : []) {
+    if (!m || typeof m !== 'object') continue;
+    const isLeader = m.sender === 'leader' || m.role === 'user';
+    if (!isLeader) continue;
+    const msgStage = Number(m.stage);
+    if (m.stage !== undefined && m.stage !== null && !Number.isNaN(msgStage) && msgStage > 4) {
+      continue;
+    }
+    const text = String(m.text || m.content || '').trim();
+    if (text && !isMetaOrOperationalStage2Text(text)) {
+      leaderMessages.push(text);
+      if (msgStage === 4) {
+        hasStage4LeaderInput = true;
+      }
+    }
+  }
+
+  const latest = (params.latestUserMessage || '').trim();
+  if (latest && !isMetaOrOperationalStage2Text(latest)) {
+    leaderMessages.push(latest);
+    if (params.currentStage === 4) {
+      hasStage4LeaderInput = true;
+    }
+  }
+
+  const cleanAlternatives = Array.isArray(params.leaderAlternatives)
+    ? params.leaderAlternatives
+        .filter((a): a is string => typeof a === 'string' && a.trim().length > 0)
+        .map((a) => a.trim())
+    : [];
+
+  return {
+    caseTitle: (params.caseTitle || '').trim() || undefined,
+    initialChallenge: (params.initialChallenge || '').trim() || undefined,
+    leaderUtterances: leaderMessages,
+    leaderAlternatives: cleanAlternatives.length > 0 ? cleanAlternatives : undefined,
+    chosenAlternative:
+      typeof params.chosenAlternative === 'string' && params.chosenAlternative.trim()
+        ? params.chosenAlternative.trim()
+        : undefined,
+    hasStage4LeaderInput,
+  };
+}
+
+function buildStage3LocalContextRule(params: {
+  existingSkills?: string[];
+}): string {
+  const activeList =
+    Array.isArray(params.existingSkills) && params.existingSkills.length > 0
+      ? params.existingSkills.join(', ')
+      : 'Ninguna habilidad vigente registrada aún';
+
+  return `
+REGLA LOCAL DE ETAPA 3 (RECONOCIMIENTO DE DECISIONES):
+- Si en el último mensaje el líder elige o confirma explícitamente una alternativa o camino de acción (ej. "me quedo con...", "elijo...", "vamos con...", "prefiero...", "haré esa") sin expresar dudas activas ni pedir comparación:
+  * Reconoce y confirma explícitamente la alternativa elegida.
+  * Está PROHIBIDO seguir comparando ventajas y desventajas después de una decisión firme.
+  * Está PROHIBIDO proponer alternativas adicionales cuando el líder ya eligió.
+  * Habilita el avance ("readyToAdvance": true y "advancePrompt" breve invitando a Etapa 4 opcional o Etapa 5).
+- Si el líder todavía expresa dudas, solicita orientación o pregunta por consecuencias sin elegir, acompaña su análisis manteniendo "readyToAdvance": false.
+- Contraste y trazabilidad de habilidades en Etapa 3:
+  * Contrasta las habilidades vigentes (${activeList}) con la nueva información, alternativas o aclaraciones del líder.
+  * No propongas habilidades nuevas sin evidencia suficiente vinculada al desafío y al historial del caso (envía objetos { "skill": "...", "evidenceText": "..." }).
+  * Si la nueva información justifica descartar, precisar/sustituir o recuperar una habilidad previa (incluida una personalizada), usa "skillsReconsideration" con "discard", "replace" o "reactivate" (para "reactivate", incluye "evidence" con la justificación explícita y "newEvidenceText" con la nueva evidencia), siempre con respaldo contextual real.`;
+}
+
+function buildStage4LocalContextRule(params: {
+  existingSkills?: string[];
+  isPracticeMode?: boolean;
+}): string {
+  const activeList =
+    Array.isArray(params.existingSkills) && params.existingSkills.length > 0
+      ? params.existingSkills.join(', ')
+      : 'Ninguna habilidad vigente registrada aún';
+
+  return `
+REGLA LOCAL DE ETAPA 4 (PRÁCTICA OPCIONAL Y EVIDENCIA EN SIMULACIÓN):
+- Habilidades vigentes previas a contrastar: ${activeList}${params.isPracticeMode ? ' (sesión en modo práctica/roleplay)' : ''}.
+- Distingue con claridad las conductas observadas durante la simulación práctica (se registran como evidencia de simulación) frente a los hechos relatados de la experiencia real del líder.
+- Si el líder participa en el ejercicio práctico, utiliza sus intervenciones reales para confirmar, precisar, descartar o sustituir habilidades con respaldo concreto en "identifiedSkills" ({ "skill": "...", "evidenceText": "..." }) o en "skillsReconsideration" ("discard", "replace" o "reactivate" con "evidence" y "newEvidenceText").
+- PROHIBIDO inventar habilidades para completar el diagnóstico cuando falte evidencia suficiente, y PROHIBIDO reemplazar el criterio del líder o decidir por él.
+- Si el líder omite la práctica o no realiza simulación, conserva intactas las habilidades previas sin inventar evidencia ni descartes.`;
+}
+
 interface SkillReconsiderationDirective {
   discard?: Array<{
     skill: string;
@@ -559,6 +868,14 @@ interface SkillReconsiderationDirective {
     from: string;
     to: string;
     evidence: string;
+    newEvidenceText?: string;
+    evidenceText?: string;
+  }>;
+  reactivate?: Array<{
+    skill: string;
+    evidence: string;
+    newEvidenceText?: string;
+    evidenceText?: string;
   }>;
 }
 
@@ -636,6 +953,60 @@ function createSkillEntriesFromLegacy(
   });
 }
 
+function findExistingSkillEntry(
+  entriesByCluster: Map<string, LeadershipSkillEntry>,
+  rawSkill: string
+): { key: string; entry: LeadershipSkillEntry } | null {
+  const mapped = mapToCanonicalSkill(rawSkill);
+  const normRaw = normalizeText(rawSkill);
+  const normCanonical = mapped ? normalizeText(mapped.canonicalName) : '';
+
+  if (mapped && entriesByCluster.has(mapped.cluster)) {
+    const entry = entriesByCluster.get(mapped.cluster)!;
+    return { key: mapped.cluster, entry };
+  }
+
+  for (const [key, entry] of entriesByCluster.entries()) {
+    const normEntrySkill = normalizeText(entry.skill);
+    const normEntryCluster = normalizeText(entry.cluster);
+    if (
+      (normCanonical && normEntrySkill === normCanonical) ||
+      (normRaw && normEntrySkill === normRaw) ||
+      (mapped && normEntryCluster === normalizeText(mapped.cluster))
+    ) {
+      return { key, entry };
+    }
+  }
+
+  return null;
+}
+
+function isDistinctNewEvidenceForEntry(
+  entry: LeadershipSkillEntry,
+  candidateEvidenceText: string
+): boolean {
+  const normCandidate = normalizeText(candidateEvidenceText);
+  if (!normCandidate) return false;
+
+  if (
+    Array.isArray(entry.evidenceHistory) &&
+    entry.evidenceHistory.some((ev) => normalizeText(ev.evidenceText) === normCandidate)
+  ) {
+    return false;
+  }
+
+  if (
+    Array.isArray(entry.reconsiderationHistory) &&
+    entry.reconsiderationHistory.some(
+      (rec) => normalizeText(rec.reconsiderationReason) === normCandidate
+    )
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 function consolidateSkillEntries(
   existingEntries: LeadershipSkillEntry[] = [],
   incomingCandidates: (string | IncomingSkillCandidate)[] = [],
@@ -647,13 +1018,17 @@ function consolidateSkillEntries(
   const now = nowIsoString || new Date().toISOString();
   const requireEvidenceInStage2 = options?.requireEvidenceInStage2 !== false;
   const stage2Context = options?.stage2EvidenceContext;
+  const requireEvidenceInStages34 = options?.requireEvidenceInStages34 !== false;
+  const stage34Context = options?.stage34EvidenceContext;
 
   const entriesByCluster = new Map<string, LeadershipSkillEntry>();
   if (Array.isArray(existingEntries)) {
     for (const entry of existingEntries) {
-      if (!entry || !entry.cluster) continue;
-      entriesByCluster.set(entry.cluster, {
+      if (!entry || (!entry.cluster && !entry.skill)) continue;
+      const mapKey = entry.cluster || buildCustomClusterKey(normalizeText(entry.skill));
+      entriesByCluster.set(mapKey, {
         ...entry,
+        cluster: mapKey,
         evidenceHistory: Array.isArray(entry.evidenceHistory) ? [...entry.evidenceHistory] : [],
         reconsiderationHistory: Array.isArray(entry.reconsiderationHistory)
           ? [...entry.reconsiderationHistory]
@@ -667,8 +1042,14 @@ function consolidateSkillEntries(
   }
 
   const validStage = currentStage as 2 | 3 | 4;
+  const stageSourceType: EvidenceSourceType =
+    validStage === 4 ? 'simulacion_practica' : 'experiencia_relatada';
 
   if ((validStage === 3 || validStage === 4) && reconsideration) {
+    const validationContextForReconsideration = requireEvidenceInStages34
+      ? stage34Context
+      : undefined;
+
     if (Array.isArray(reconsideration.discard)) {
       for (const d of reconsideration.discard) {
         if (
@@ -676,15 +1057,13 @@ function consolidateSkillEntries(
           typeof d.skill !== 'string' ||
           !d.skill.trim() ||
           typeof d.evidence !== 'string' ||
-          !d.evidence.trim()
+          !isValidReconsiderationJustification(d.evidence, validationContextForReconsideration)
         ) {
           continue;
         }
 
-        const mapped = mapToCanonicalSkill(d.skill);
-        if (!mapped) continue;
-
-        const entry = entriesByCluster.get(mapped.cluster);
+        const found = findExistingSkillEntry(entriesByCluster, d.skill);
+        const entry = found?.entry;
         if (entry && (entry.status === 'vigente' || entry.status === 'precisada')) {
           entry.status = 'descartada';
           entry.lastUpdatedStage = validStage;
@@ -710,8 +1089,12 @@ function consolidateSkillEntries(
           typeof r.to !== 'string' ||
           !r.to.trim() ||
           typeof r.evidence !== 'string' ||
-          !r.evidence.trim()
+          !isValidReconsiderationJustification(r.evidence, validationContextForReconsideration)
         ) {
+          continue;
+        }
+
+        if (!isPertinentStage2SkillLabel(r.to)) {
           continue;
         }
 
@@ -719,35 +1102,70 @@ function consolidateSkillEntries(
         const mappedTo = mapToCanonicalSkill(r.to);
         if (!mappedFrom || !mappedTo) continue;
 
-        const fromEntry = entriesByCluster.get(mappedFrom.cluster);
-        if (fromEntry && (fromEntry.status === 'vigente' || fromEntry.status === 'precisada')) {
-          fromEntry.status = 'sustituida';
-          fromEntry.lastUpdatedStage = validStage;
-          fromEntry.updatedAt = now;
-          if (!fromEntry.reconsiderationHistory) {
-            fromEntry.reconsiderationHistory = [];
-          }
-          fromEntry.reconsiderationHistory.push({
-            stage: validStage,
-            reconsiderationReason: r.evidence.trim(),
-            replacedBySkill: mappedTo.canonicalName,
-            timestamp: now,
-          });
+        const fromFound = findExistingSkillEntry(entriesByCluster, r.from);
+        const fromEntry = fromFound?.entry;
+        if (!fromEntry || (fromEntry.status !== 'vigente' && fromEntry.status !== 'precisada')) {
+          continue;
         }
 
-        let toEntry = entriesByCluster.get(mappedTo.cluster);
+        const toFound = findExistingSkillEntry(entriesByCluster, r.to);
+        let toEntry = toFound?.entry;
+
+        if (toEntry && toEntry === fromEntry) {
+          continue;
+        }
+
+        const rawOptionalNewEv = (r.newEvidenceText || r.evidenceText || '').trim();
+        if (toEntry && toEntry.status === 'descartada') {
+          const hasValidNewEvidence =
+            Boolean(rawOptionalNewEv) &&
+            isValidStage34ContextualEvidence(rawOptionalNewEv, validationContextForReconsideration) &&
+            isDistinctNewEvidenceForEntry(toEntry, rawOptionalNewEv);
+          if (!hasValidNewEvidence) {
+            continue;
+          }
+        }
+
+        fromEntry.status = 'sustituida';
+        fromEntry.lastUpdatedStage = validStage;
+        fromEntry.updatedAt = now;
+        if (!fromEntry.reconsiderationHistory) {
+          fromEntry.reconsiderationHistory = [];
+        }
+        fromEntry.reconsiderationHistory.push({
+          stage: validStage,
+          reconsiderationReason: r.evidence.trim(),
+          replacedBySkill: toEntry ? toEntry.skill : mappedTo.canonicalName,
+          timestamp: now,
+        });
+
         if (!toEntry) {
+          const initialEvidence: ObservedEvidenceRecord[] = [];
+          if (
+            rawOptionalNewEv &&
+            (!requireEvidenceInStages34 ||
+              isValidStage34ContextualEvidence(rawOptionalNewEv, validationContextForReconsideration))
+          ) {
+            initialEvidence.push({
+              id: `ev-${validStage}-1-${Math.random().toString(36).substring(2, 7)}`,
+              stage: validStage,
+              sourceType: stageSourceType,
+              evidenceText: rawOptionalNewEv,
+              timestamp: now,
+            });
+          }
+
           toEntry = {
             skill: mappedTo.canonicalName,
             cluster: mappedTo.cluster,
             status: 'precisada',
             initialStage: validStage,
-            evidenceHistory: [],
+            evidenceHistory: initialEvidence,
             reconsiderationHistory: [
               {
                 stage: validStage,
                 reconsiderationReason: r.evidence.trim(),
-                replacesSkill: mappedFrom.canonicalName,
+                replacesSkill: fromEntry.skill,
                 timestamp: now,
               },
             ],
@@ -766,10 +1184,75 @@ function consolidateSkillEntries(
           toEntry.reconsiderationHistory.push({
             stage: validStage,
             reconsiderationReason: r.evidence.trim(),
-            replacesSkill: mappedFrom.canonicalName,
+            replacesSkill: fromEntry.skill,
             timestamp: now,
           });
+          if (
+            rawOptionalNewEv &&
+            (!requireEvidenceInStages34 ||
+              isValidStage34ContextualEvidence(rawOptionalNewEv, validationContextForReconsideration)) &&
+            isDistinctNewEvidenceForEntry(toEntry, rawOptionalNewEv)
+          ) {
+            toEntry.evidenceHistory.push({
+              id: `ev-${validStage}-${toEntry.evidenceHistory.length + 1}-${Math.random().toString(36).substring(2, 7)}`,
+              stage: validStage,
+              sourceType: stageSourceType,
+              evidenceText: rawOptionalNewEv,
+              timestamp: now,
+            });
+          }
         }
+      }
+    }
+
+    if (Array.isArray(reconsideration.reactivate)) {
+      for (const rec of reconsideration.reactivate) {
+        if (
+          !rec ||
+          typeof rec.skill !== 'string' ||
+          !rec.skill.trim() ||
+          typeof rec.evidence !== 'string' ||
+          !isValidReconsiderationJustification(rec.evidence, validationContextForReconsideration)
+        ) {
+          continue;
+        }
+
+        const rawNewEvidence = (rec.newEvidenceText || rec.evidenceText || '').trim();
+        if (
+          !rawNewEvidence ||
+          !isValidStage34ContextualEvidence(rawNewEvidence, validationContextForReconsideration)
+        ) {
+          continue;
+        }
+
+        const found = findExistingSkillEntry(entriesByCluster, rec.skill);
+        const entry = found?.entry;
+        if (!entry || entry.status !== 'descartada') {
+          continue;
+        }
+
+        if (!isDistinctNewEvidenceForEntry(entry, rawNewEvidence)) {
+          continue;
+        }
+
+        entry.status = 'precisada';
+        entry.lastUpdatedStage = validStage;
+        entry.updatedAt = now;
+        entry.evidenceHistory.push({
+          id: `ev-${validStage}-${entry.evidenceHistory.length + 1}-${Math.random().toString(36).substring(2, 7)}`,
+          stage: validStage,
+          sourceType: stageSourceType,
+          evidenceText: rawNewEvidence,
+          timestamp: now,
+        });
+        if (!entry.reconsiderationHistory) {
+          entry.reconsiderationHistory = [];
+        }
+        entry.reconsiderationHistory.push({
+          stage: validStage,
+          reconsiderationReason: rec.evidence.trim(),
+          timestamp: now,
+        });
       }
     }
   }
@@ -779,8 +1262,7 @@ function consolidateSkillEntries(
       let rawSkill = '';
       let evidenceText = '';
 
-      const sourceType: EvidenceSourceType =
-        validStage === 4 ? 'simulacion_practica' : 'experiencia_relatada';
+      const sourceType: EvidenceSourceType = stageSourceType;
 
       if (typeof item === 'string') {
         rawSkill = item;
@@ -789,18 +1271,15 @@ function consolidateSkillEntries(
         evidenceText = (item.evidenceText || '').trim();
       }
 
-      if (validStage === 2 && !isPertinentStage2SkillLabel(rawSkill)) {
+      if (!isPertinentStage2SkillLabel(rawSkill)) {
         continue;
       }
 
       const mapped = mapToCanonicalSkill(rawSkill);
       if (!mapped) continue;
 
-      const existing =
-        entriesByCluster.get(mapped.cluster) ||
-        Array.from(entriesByCluster.values()).find(
-          (entry) => normalizeText(entry.skill) === normalizeText(mapped.canonicalName)
-        );
+      const foundExisting = findExistingSkillEntry(entriesByCluster, rawSkill);
+      const existing = foundExisting?.entry;
 
       if (existing) {
         if (existing.status === 'descartada' || existing.status === 'sustituida') {
@@ -809,9 +1288,11 @@ function consolidateSkillEntries(
 
         const canAttachEvidence =
           Boolean(evidenceText) &&
-          (validStage !== 2 ||
-            !requireEvidenceInStage2 ||
-            isValidStage2ObservableEvidence(evidenceText, stage2Context));
+          (validStage === 2
+            ? !requireEvidenceInStage2 ||
+              isValidStage2ObservableEvidence(evidenceText, stage2Context)
+            : !requireEvidenceInStages34 ||
+              isValidStage34ContextualEvidence(evidenceText, stage34Context));
 
         if (canAttachEvidence) {
           const isDuplicate = existing.evidenceHistory.some(
@@ -835,6 +1316,14 @@ function consolidateSkillEntries(
           validStage === 2 &&
           requireEvidenceInStage2 &&
           !isValidStage2ObservableEvidence(evidenceText, stage2Context)
+        ) {
+          continue;
+        }
+
+        if (
+          (validStage === 3 || validStage === 4) &&
+          requireEvidenceInStages34 &&
+          !isValidStage34ContextualEvidence(evidenceText, stage34Context)
         ) {
           continue;
         }
@@ -3392,14 +3881,17 @@ Responde SIEMPRE en JSON estricto con esta estructura:
 
     const stage3LocalRule =
       currentStageNum === 3
-        ? `
-REGLA LOCAL DE ETAPA 3 (RECONOCIMIENTO DE DECISIONES):
-- Si en el último mensaje el líder elige o confirma explícitamente una alternativa o camino de acción (ej. "me quedo con...", "elijo...", "vamos con...", "prefiero...", "haré esa") sin expresar dudas activas ni pedir comparación:
-  * Reconoce y confirma explícitamente la alternativa elegida.
-  * Está PROHIBIDO seguir comparando ventajas y desventajas después de una decisión firme.
-  * Está PROHIBIDO proponer alternativas adicionales cuando el líder ya eligió.
-  * Habilita el avance ("readyToAdvance": true y "advancePrompt" breve invitando a Etapa 4 opcional o Etapa 5).
-- Si el líder todavía expresa dudas, solicita orientación o pregunta por consecuencias sin elegir, acompaña su análisis manteniendo "readyToAdvance": false.`
+        ? buildStage3LocalContextRule({
+            existingSkills: existingSessionSkills,
+          })
+        : '';
+
+    const stage4LocalRule =
+      currentStageNum === 4
+        ? buildStage4LocalContextRule({
+            existingSkills: existingSessionSkills,
+            isPracticeMode,
+          })
         : '';
 
     const stage6LocalRule =
@@ -3470,7 +3962,7 @@ INSTRUCCIONES LOCALES DE CONTINUIDAD Y CALIDAD CONVERSACIONAL:
 - Está terminantemente PROHIBIDO repetir preguntas que el líder ya respondió o pedir información ya compartida.
 - Está terminantemente PROHIBIDO repetir síntesis, explicaciones previas o coletillas de cierre en turnos consecutivos.
 - REGLA CRÍTICA ANTI-CICLADO: si el líder expresa confusión ("no entendí", "a qué te refieres") o indica que ya contestó, reformula con palabras cotidianas y sencillas (o un ejemplo breve laboral) sin repetir la pregunta o plantilla previa; si ya aportó información o muestra desgaste, avanza con una pregunta diferente o habilita el avance cuando corresponda.
-- Mantén tu respuesta breve, directa y proporcional (1 a 3 párrafos cortos), sin explicaciones innecesariamente extensas.${stage2LocalRule}${stage3LocalRule}${stage6LocalRule}${stage7LocalRule}
+- Mantén tu respuesta breve, directa y proporcional (1 a 3 párrafos cortos), sin explicaciones innecesariamente extensas.${stage2LocalRule}${stage3LocalRule}${stage4LocalRule}${stage6LocalRule}${stage7LocalRule}
 
 Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSON estricto.`;
 
@@ -3941,12 +4433,29 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
       }
 
       // Directivas de reconsideración (válidas EXCLUSIVAMENTE en etapas 3 y 4 con evidencia explícita)
-      const reconsiderationDirective: SkillReconsiderationDirective | undefined =
+      const rawReconsideration =
         (currentStageNum === 3 || currentStageNum === 4) &&
         parsed.skillsReconsideration &&
         typeof parsed.skillsReconsideration === 'object'
           ? parsed.skillsReconsideration
           : undefined;
+      const reconsiderationDirective: SkillReconsiderationDirective | undefined = rawReconsideration
+        ? {
+            discard: Array.isArray(rawReconsideration.discard)
+              ? rawReconsideration.discard
+              : undefined,
+            replace: Array.isArray(rawReconsideration.replace)
+              ? rawReconsideration.replace
+              : undefined,
+            reactivate: Array.isArray(rawReconsideration.reactivate)
+              ? rawReconsideration.reactivate
+              : Array.isArray(rawReconsideration.recover)
+              ? rawReconsideration.recover
+              : Array.isArray(rawReconsideration.restore)
+              ? rawReconsideration.restore
+              : undefined,
+          }
+        : undefined;
 
       const stage2EvidenceContext =
         currentStageNum === 2
@@ -3955,6 +4464,19 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
               initialChallenge: activeCaseChallenge,
               history: resolvedHistory,
               latestUserMessage: resolvedUserMessage,
+            })
+          : undefined;
+
+      const stage34EvidenceContext =
+        currentStageNum === 3 || currentStageNum === 4
+          ? buildStage34EvidenceContext({
+              caseTitle: activeCaseTitle,
+              initialChallenge: activeCaseChallenge,
+              history: resolvedHistory,
+              latestUserMessage: resolvedUserMessage,
+              leaderAlternatives: existingLeaderAlternatives,
+              chosenAlternative: existingChosenAlternative,
+              currentStage: currentStageNum,
             })
           : undefined;
 
@@ -3967,7 +4489,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         undefined,
         currentStageNum === 2
           ? { requireEvidenceInStage2: true, stage2EvidenceContext }
-          : undefined
+          : { requireEvidenceInStages34: true, stage34EvidenceContext }
       );
 
       parsed.skillEntries = finalSkillEntries;

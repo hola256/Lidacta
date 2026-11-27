@@ -19,6 +19,9 @@ import {
   sanitizeDetectedStrengths,
   buildStage2EvidenceContext,
   buildStage2LocalContextRule,
+  buildStage34EvidenceContext,
+  buildStage3LocalContextRule,
+  buildStage4LocalContextRule,
   INSUFFICIENT_EVIDENCE_MESSAGE,
   INSUFFICIENT_STRENGTHS_MESSAGE,
   SkillReconsiderationDirective,
@@ -1357,6 +1360,21 @@ Debes responder SIEMPRE en formato JSON con la siguiente estructura exacta:
               })
             : '';
 
+        const stage3LocalRule =
+          currentStageNum === 3
+            ? buildStage3LocalContextRule({
+                existingSkills: existingSessionSkills,
+              })
+            : '';
+
+        const stage4LocalRule =
+          currentStageNum === 4
+            ? buildStage4LocalContextRule({
+                existingSkills: existingSessionSkills,
+                isPracticeMode,
+              })
+            : '';
+
         const stage6LocalRule =
           currentStageNum === 6
             ? `
@@ -1418,7 +1436,7 @@ IMPORTANTE: Responde de forma empática, humana y reflexiva, validando la emoci�
 REGLA CRÍTICA ANTI-CICLADO:
 - Está terminantemente PROHIBIDO repetir la misma pregunta o coletilla de cierre en turnos consecutivos (por ejemplo: "¿qué impacto directo tiene no intervenir en este momento...?").
 - Si el líder expresa confusión ("No entiendo tu pregunta", "A qué te refieres", "No te sigo"), reformula la pregunta con palabras cotidianas y más sencillas, o brinda un ejemplo práctico laboral en lugar de repetir la plantilla.
-- Si el líder ya aportó información o muestra desgaste, valida su sentir de forma natural y haz una pregunta diferente o habilita el avance ("readyToAdvance": true).${stage2LocalRule}${stage6LocalRule}${stage7LocalRule}
+- Si el líder ya aportó información o muestra desgaste, valida su sentir de forma natural y haz una pregunta diferente o habilita el avance ("readyToAdvance": true).${stage2LocalRule}${stage3LocalRule}${stage4LocalRule}${stage6LocalRule}${stage7LocalRule}
 
 Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSON estricto.`;
 
@@ -1768,12 +1786,29 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
           }
 
           // Directivas de reconsideración (válidas EXCLUSIVAMENTE en etapas 3 y 4 con evidencia explícita)
-          const reconsiderationDirective: SkillReconsiderationDirective | undefined =
+          const rawReconsideration =
             (currentStageNum === 3 || currentStageNum === 4) &&
             parsed.skillsReconsideration &&
             typeof parsed.skillsReconsideration === 'object'
               ? parsed.skillsReconsideration
               : undefined;
+          const reconsiderationDirective: SkillReconsiderationDirective | undefined = rawReconsideration
+            ? {
+                discard: Array.isArray(rawReconsideration.discard)
+                  ? rawReconsideration.discard
+                  : undefined,
+                replace: Array.isArray(rawReconsideration.replace)
+                  ? rawReconsideration.replace
+                  : undefined,
+                reactivate: Array.isArray(rawReconsideration.reactivate)
+                  ? rawReconsideration.reactivate
+                  : Array.isArray(rawReconsideration.recover)
+                  ? rawReconsideration.recover
+                  : Array.isArray(rawReconsideration.restore)
+                  ? rawReconsideration.restore
+                  : undefined,
+              }
+            : undefined;
 
           const stage2EvidenceContext =
             currentStageNum === 2
@@ -1782,6 +1817,21 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
                   initialChallenge: activeCaseChallenge,
                   history: resolvedHistory,
                   latestUserMessage: resolvedUserMessage,
+                })
+              : undefined;
+
+          const stage34EvidenceContext =
+            currentStageNum === 3 || currentStageNum === 4
+              ? buildStage34EvidenceContext({
+                  caseTitle: activeCaseTitle,
+                  initialChallenge: activeCaseChallenge,
+                  history: resolvedHistory,
+                  latestUserMessage: resolvedUserMessage,
+                  leaderAlternatives: Array.isArray(safeSessionContext?.leaderAlternatives)
+                    ? safeSessionContext.leaderAlternatives
+                    : [],
+                  chosenAlternative: existingChosenAlternative,
+                  currentStage: currentStageNum,
                 })
               : undefined;
 
@@ -1794,7 +1844,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
             undefined,
             currentStageNum === 2
               ? { requireEvidenceInStage2: true, stage2EvidenceContext }
-              : undefined
+              : { requireEvidenceInStages34: true, stage34EvidenceContext }
           );
 
           parsed.skillEntries = finalSkillEntries;
@@ -2134,6 +2184,20 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
               latestUserMessage: resolvedUserMessage,
             })
           : undefined;
+      const stage34EvidenceContext =
+        currentStageNum === 3 || currentStageNum === 4
+          ? buildStage34EvidenceContext({
+              caseTitle: activeCaseTitle,
+              initialChallenge: activeCaseChallenge,
+              history: resolvedHistory,
+              latestUserMessage: resolvedUserMessage,
+              leaderAlternatives: Array.isArray(safeSessionContext?.leaderAlternatives)
+                ? safeSessionContext.leaderAlternatives
+                : [],
+              chosenAlternative: existingChosenAlternative,
+              currentStage: currentStageNum,
+            })
+          : undefined;
       finalSkillEntries = consolidateSkillEntries(
         existingSessionSkillEntries,
         candidateSkills,
@@ -2142,7 +2206,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         undefined,
         currentStageNum === 2
           ? { requireEvidenceInStage2: true, stage2EvidenceContext }
-          : undefined
+          : { requireEvidenceInStages34: true, stage34EvidenceContext }
       );
       fallbackIdentifiedSkills = getActiveSkillNames(finalSkillEntries);
     } else {
