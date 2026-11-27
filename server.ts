@@ -350,57 +350,248 @@ function isNonSubstantiveNonExecutionNote(value: string): boolean {
   return false;
 }
 
+const STAGE6_TRIVIAL_FIELD_VALUES = new Set([
+  'aun no lo se',
+  'todavia no lo se',
+  'no lo se',
+  'no se',
+  'aun no',
+  'todavia no',
+  'pendiente',
+  'ninguno',
+  'ninguna',
+  'nada',
+  'n a',
+  'na',
+  'no aplica',
+  'sin ejecucion',
+  'sin comentarios',
+  'sin observaciones',
+]);
+
+interface StructuredStage6Learnings {
+  executionStatus: string;
+  results: string[];
+  obstacles: string[];
+  insights: string[];
+  futureAdjustments: string[];
+}
+
+function extractStructuredStage6Learnings(
+  sessionData: any,
+  effectiveExecutionStatus?: string | null
+): StructuredStage6Learnings {
+  const status = effectiveExecutionStatus ?? sessionData?.actionPlanExecutionStatus ?? null;
+  const isUnexecuted = status === 'not_executed' || status === 'pending_verification';
+  const empty: StructuredStage6Learnings = {
+    executionStatus: status || 'unverified',
+    results: [],
+    obstacles: [],
+    insights: [],
+    futureAdjustments: [],
+  };
+
+  const learnings = sessionData?.learnings;
+  if (!learnings || typeof learnings !== 'object') return empty;
+
+  const seen = new Set<string>();
+  const cleanField = (raw: unknown): string | null => {
+    if (!isCleanStage7String(raw)) return null;
+    const trimmed = raw.trim();
+    if (isStage7InsufficientPlaceholder(trimmed)) return null;
+    const norm = normalizeStage6ComparisonText(trimmed);
+    if (!norm || STAGE6_TRIVIAL_FIELD_VALUES.has(norm)) return null;
+    if (isUnexecuted && isNonSubstantiveNonExecutionNote(trimmed)) return null;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return null;
+    seen.add(key);
+    return trimmed;
+  };
+
+  const results = isUnexecuted
+    ? []
+    : ([cleanField(learnings.whatHappened), cleanField(learnings.whatWorked)].filter(
+        Boolean
+      ) as string[]);
+  const obstacles = [cleanField(learnings.whatDidnt)].filter(Boolean) as string[];
+  const insights = [cleanField(learnings.insights)].filter(Boolean) as string[];
+  const futureAdjustments = [cleanField(learnings.futureAdjustments)].filter(Boolean) as string[];
+
+  return {
+    executionStatus: status || 'unverified',
+    results,
+    obstacles,
+    insights,
+    futureAdjustments,
+  };
+}
+
+function indicatesPendingOrUnexecutedAction(text: string): boolean {
+  const norm = normalizeStage6ComparisonText(text);
+  if (!norm) return false;
+  return (
+    /\b(?:pendient\w*|no\s+(?:se\s+)?(?:ha\s+)?ejecut\w*|no\s+ejecut\w*|por\s+ejecut\w*|reprogram\w*|pospus\w*|pospuest\w*|reagend\w*|diferid\w*|aplazad\w*)\b/.test(
+      norm
+    ) ||
+    /\b(?:sin\s+(?:haberse\s+)?(?:ejecut\w*|realiz\w*|inici\w*|concret\w*|efectu\w*|aplic\w*|llev\w*|cumpl\w*|implement\w*))\b/.test(
+      norm
+    ) ||
+    /\b(?:aun|todavia)\s+(?:no\b|por\s+(?:hac\w*|realiz\w*|ejecut\w*|inici\w*|concret\w*|aplic\w*))\b/.test(
+      norm
+    ) ||
+    /\bno\s+(?:se\s+)?(?:realizo|concreto|efectuo|llevo\s+a\s+cabo|inicio|cumplio|implemento)\b/.test(
+      norm
+    ) ||
+    /\b(?:en\s+(?:espera|pausa)|queda\s+por|falta\s+(?:por|realizar|ejecutar|concretar|sostener|llevar)|resta\s+(?:por|realizar|ejecutar))\b/.test(
+      norm
+    ) ||
+    /\b(?:agendad|programad|previst|planificad|calendarizad)[ao]s?\s+para\b/.test(norm)
+  );
+}
+
+function claimsActionAlreadyExecuted(text: string): boolean {
+  const norm = normalizeStage6ComparisonText(text);
+  if (!norm) return false;
+  if (indicatesPendingOrUnexecutedAction(norm)) return false;
+  return (
+    /\b(?:ya\s+(?:se\s+)?(?:ejecuto|realizo|implemento|cumplio|efectuo|concreto|llevo\s+a\s+cabo)|(?:accion|reunion|plan|conversacion)\s+(?:ya\s+)?(?:ejecutad[ao]|completad[ao]|implementad[ao]|concluid[ao]|realizad[ao]))\b/.test(
+      norm
+    ) ||
+    /\b(?:se\s+(?:ejecuto|realizo|implemento|concreto|llevo\s+a\s+cabo)\s+(?:con\s+exito|exitosamente|el|la|en|durante))\b/.test(
+      norm
+    )
+  );
+}
+
+function resolveStage7ChosenActions(
+  cleanChosenActions: string[],
+  registeredChosenActions: string[],
+  sessionData: any,
+  isUnexecutedStage7: boolean
+): string[] {
+  if (cleanChosenActions.length === 0) return registeredChosenActions;
+  if (!isUnexecutedStage7) return cleanChosenActions;
+
+  if (cleanChosenActions.some(claimsActionAlreadyExecuted)) {
+    return registeredChosenActions.length > 0 ? registeredChosenActions : [];
+  }
+
+  if (cleanChosenActions.some(indicatesPendingOrUnexecutedAction)) {
+    return cleanChosenActions;
+  }
+
+  const rawWhat = isCleanStage7String(sessionData?.actionPlan?.what)
+    ? normalizeStage6ComparisonText(sessionData.actionPlan.what).replace(/[.,;:]+$/g, '')
+    : '';
+  const onlyEchoedRawPlanWhat =
+    Boolean(rawWhat) &&
+    cleanChosenActions.length === 1 &&
+    normalizeStage6ComparisonText(cleanChosenActions[0]).replace(/[.,;:]+$/g, '') === rawWhat;
+
+  if (onlyEchoedRawPlanWhat && registeredChosenActions.length > 0) {
+    return registeredChosenActions;
+  }
+
+  const when = isCleanStage7String(sessionData?.actionPlan?.when)
+    ? sessionData.actionPlan.when.trim()
+    : '';
+  const normWhen = when ? normalizeStage6ComparisonText(when) : '';
+
+  return cleanChosenActions.map((item, idx) => {
+    if (idx > 0) return item;
+    const normItem = normalizeStage6ComparisonText(item);
+    const scheduleSuffix =
+      when && normWhen && !normItem.includes(normWhen) ? ` (Programada: ${when})` : '';
+    return `${item}${scheduleSuffix} — Estado: pendiente de ejecución`;
+  });
+}
+
 function extractRegisteredStage5Actions(
   sessionData: any,
   effectiveExecutionStatus?: string | null
 ): string[] {
   const what = sessionData?.actionPlan?.what;
-  if (!isCleanStage7String(what)) return [];
+  const chosenAlt = isCleanStage7String(sessionData?.chosenAlternative)
+    ? sessionData.chosenAlternative.trim()
+    : '';
+  const status = effectiveExecutionStatus ?? sessionData?.actionPlanExecutionStatus;
+  const isUnexecuted = status === 'not_executed' || status === 'pending_verification';
+
+  if (!isCleanStage7String(what)) {
+    if (chosenAlt && !isStage7InsufficientPlaceholder(chosenAlt)) {
+      return [
+        isUnexecuted
+          ? `Alternativa elegida (Etapa 3): ${chosenAlt} — Pendiente de concretar y ejecutar`
+          : `Alternativa elegida (Etapa 3): ${chosenAlt}`,
+      ];
+    }
+    return [];
+  }
+
   const trimmedWhat = what.trim();
   const when = isCleanStage7String(sessionData?.actionPlan?.when)
     ? sessionData.actionPlan.when.trim()
     : '';
-  const status = effectiveExecutionStatus ?? sessionData?.actionPlanExecutionStatus;
-  if (status === 'not_executed' || status === 'pending_verification') {
-    return [
-      `${trimmedWhat}${when ? ` (Programada: ${when})` : ''} — Estado: pendiente de ejecución`,
-    ];
+  const withWhom = isCleanStage7String(sessionData?.actionPlan?.withWhom)
+    ? sessionData.actionPlan.withWhom.trim()
+    : '';
+
+  const normWhat = normalizeStage6ComparisonText(trimmedWhat).replace(/[.,;:]+$/g, '');
+  const normChosenAlt = chosenAlt
+    ? normalizeStage6ComparisonText(chosenAlt).replace(/[.,;:]+$/g, '')
+    : '';
+  const hasDistinctChosenAlt =
+    Boolean(normChosenAlt) &&
+    normChosenAlt !== normWhat &&
+    !normWhat.includes(normChosenAlt) &&
+    !normChosenAlt.includes(normWhat);
+
+  if (isUnexecuted) {
+    const primary = `${trimmedWhat}${when ? ` (Programada: ${when})` : ''}${withWhom ? ` — Con: ${withWhom}` : ''} — Estado: pendiente de ejecución`;
+    return hasDistinctChosenAlt
+      ? [primary, `Alternativa elegida en Etapa 3 (previa al plan): ${chosenAlt}`]
+      : [primary];
   }
-  return [trimmedWhat];
+
+  if (status === 'executed') {
+    const contextParts = [
+      when ? `Programada: ${when}` : '',
+      withWhom ? `Con: ${withWhom}` : '',
+    ].filter(Boolean);
+    const primary =
+      contextParts.length > 0
+        ? `${trimmedWhat} (${contextParts.join(' | ')}) — Estado: ejecutada`
+        : trimmedWhat;
+    return hasDistinctChosenAlt
+      ? [primary, `Alternativa elegida en Etapa 3 (previa al plan): ${chosenAlt}`]
+      : [primary];
+  }
+
+  return hasDistinctChosenAlt
+    ? [trimmedWhat, `Alternativa elegida en Etapa 3 (previa al plan): ${chosenAlt}`]
+    : [trimmedWhat];
 }
 
 function extractRegisteredStage6Learnings(
   sessionData: any,
-  effectiveExecutionStatus?: string | null
+  effectiveExecutionStatus?: string | null,
+  options?: { labeled?: boolean }
 ): string[] {
-  const learnings = sessionData?.learnings;
-  if (!learnings || typeof learnings !== 'object') return [];
-  const status = effectiveExecutionStatus ?? sessionData?.actionPlanExecutionStatus;
-  const isUnexecuted = status === 'not_executed' || status === 'pending_verification';
-
-  const rawFields = isUnexecuted
-    ? [learnings.insights, learnings.futureAdjustments]
-    : [
-        learnings.insights,
-        learnings.whatHappened,
-        learnings.whatWorked,
-        learnings.futureAdjustments,
-      ];
-
-  const seen = new Set<string>();
-  const collected: string[] = [];
-  for (const field of rawFields) {
-    if (!isCleanStage7String(field)) continue;
-    const trimmed = field.trim();
-    if (isStage7InsufficientPlaceholder(trimmed)) continue;
-    if (isUnexecuted && isNonSubstantiveNonExecutionNote(trimmed)) continue;
-    const key = trimmed.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      collected.push(trimmed);
-    }
+  const structured = extractStructuredStage6Learnings(sessionData, effectiveExecutionStatus);
+  if (options?.labeled) {
+    return [
+      ...structured.results.map((item) => `Resultado obtenido: ${item}`),
+      ...structured.obstacles.map((item) => `Obstáculo / dificultad: ${item}`),
+      ...structured.insights.map((item) => `Aprendizaje del líder: ${item}`),
+      ...structured.futureAdjustments.map((item) => `Ajuste / pendiente: ${item}`),
+    ];
   }
-  return collected;
+  return [
+    ...structured.insights,
+    ...structured.results,
+    ...structured.obstacles.map((item) => `Obstáculo identificado: ${item}`),
+    ...structured.futureAdjustments,
+  ];
 }
 
 function hasSubstantiveStage7Items(arr: unknown): boolean {
@@ -416,6 +607,7 @@ function isValidStage7FinalFeedbackPayload(
     hasSessionSkills?: boolean;
     hasRegisteredActions?: boolean;
     hasRegisteredLearnings?: boolean;
+    executionStatus?: string | null;
   }
 ): { valid: boolean; reason?: string } {
   if (!finalFeedback || typeof finalFeedback !== 'object' || Array.isArray(finalFeedback)) {
@@ -451,12 +643,34 @@ function isValidStage7FinalFeedbackPayload(
       ? Boolean(options.hasSessionSkills)
       : hasSubstantiveStage7Items(finalFeedback.stageTwoSkills);
 
+  const isUnexecuted =
+    options?.executionStatus === 'not_executed' ||
+    options?.executionStatus === 'pending_verification';
+
+  const hasSubstantiveChosenActions =
+    Array.isArray(finalFeedback.chosenActions) &&
+    finalFeedback.chosenActions.some(
+      (item: unknown) =>
+        isCleanStage7String(item) &&
+        !isStage7InsufficientPlaceholder(item) &&
+        (!isUnexecuted || !claimsActionAlreadyExecuted(item))
+    );
+
+  const hasSubstantiveLearnings =
+    Array.isArray(finalFeedback.stageSixLearnings) &&
+    finalFeedback.stageSixLearnings.some(
+      (item: unknown) =>
+        isCleanStage7String(item) &&
+        !isStage7InsufficientPlaceholder(item) &&
+        (!isUnexecuted || !isNonSubstantiveNonExecutionNote(item))
+    );
+
   const hasAnySubstantiveContent =
     hasSubstantiveStage7Items(finalFeedback.detectedStrengths) ||
     hasAuthoritativeSkills ||
-    hasSubstantiveStage7Items(finalFeedback.chosenActions) ||
+    hasSubstantiveChosenActions ||
     Boolean(options?.hasRegisteredActions) ||
-    hasSubstantiveStage7Items(finalFeedback.stageSixLearnings) ||
+    hasSubstantiveLearnings ||
     Boolean(options?.hasRegisteredLearnings) ||
     hasSubstantiveStage7Items(finalFeedback.recommendationsForAutonomy);
 
@@ -637,9 +851,45 @@ app.post('/api/mentor/respond', async (req: Request, res: Response) => {
       req.body?.sessionData?.actionPlanExecutionStatus ||
       null;
 
+    const effectiveStage7ExecutionStatus: string | null =
+      currentStageNum === 7
+        ? (() => {
+            if (effectiveSessionExecutionStatus === 'not_executed') return 'not_executed';
+            const stage6LeaderMsgs = (resolvedHistory || []).filter(
+              (m: any) =>
+                (m.stage === 6 || m.stage === '6') &&
+                (m.sender === 'leader' || m.role === 'user')
+            );
+            for (let i = stage6LeaderMsgs.length - 1; i >= 0; i--) {
+              const msgText = (
+                stage6LeaderMsgs[i]?.text ||
+                stage6LeaderMsgs[i]?.content ||
+                ''
+              ).trim();
+              if (!msgText) continue;
+              if (
+                detectStage6ExecutionCorrection(msgText, effectiveSessionExecutionStatus) ===
+                'not_executed'
+              ) {
+                return 'not_executed';
+              }
+              if (
+                effectiveSessionExecutionStatus === 'executed' &&
+                isExplicitStage6ExecutionAffirmation(msgText)
+              ) {
+                return 'executed';
+              }
+            }
+            return effectiveSessionExecutionStatus;
+          })()
+        : effectiveSessionExecutionStatus;
+
+    const reconciledExecutionStatus: string | null =
+      currentStageNum === 7 ? effectiveStage7ExecutionStatus : effectiveSessionExecutionStatus;
+
     const effectiveSessionActionPlan =
       req.body?.sessionData?.actionPlan && typeof req.body.sessionData.actionPlan === 'object'
-        ? deterministicStage6Correction === 'not_executed'
+        ? reconciledExecutionStatus === 'not_executed'
           ? {
               ...req.body.sessionData.actionPlan,
               isCompleted: false,
@@ -647,6 +897,11 @@ app.post('/api/mentor/respond', async (req: Request, res: Response) => {
             }
           : req.body.sessionData.actionPlan
         : null;
+
+    const structuredStage6Learnings = extractStructuredStage6Learnings(
+      sessionData,
+      reconciledExecutionStatus
+    );
 
     safeSessionContext = {
       id: targetCaseId,
@@ -661,7 +916,12 @@ app.post('/api/mentor/respond', async (req: Request, res: Response) => {
       ...(existingSuggestedAlternatives.length > 0 ? { suggestedAlternatives: existingSuggestedAlternatives } : {}),
       ...(existingChosenAlternative ? { chosenAlternative: existingChosenAlternative } : {}),
       actionPlan: effectiveSessionActionPlan,
-      actionPlanExecutionStatus: effectiveSessionExecutionStatus,
+      actionPlanExecutionStatus: reconciledExecutionStatus,
+      ...(currentStageNum === 7
+        ? {
+            learnings: structuredStage6Learnings,
+          }
+        : {}),
     };
 
     // Build the system prompt embedding all Lidacta rules (SYSTEM PROMPT DE 3 BLOQUES)
@@ -1006,9 +1266,9 @@ CONTEXTO DINÁMICO DE ESTA SESIÓN
 - Caso / Reto actual: ${activeCaseTitle || 'Caso actual'}
 - Reto inicial: ${activeCaseChallenge || resolvedUserMessage || ''}
 - Habilidades ya identificadas en la sesión: ${existingSessionSkills.join(', ') || 'Ninguna aún'}
-- Plan de Acción (Etapa 5): ${req.body?.sessionData?.actionPlan?.what ? `${req.body.sessionData.actionPlan.what}${req.body.sessionData.actionPlan.when ? ` | Cuándo: ${req.body.sessionData.actionPlan.when}` : ''}${req.body.sessionData.actionPlan.withWhom ? ` | Con quién: ${req.body.sessionData.actionPlan.withWhom}` : ''}` : 'No registrado aún'}
-- Estado de ejecución del Plan de Acción (Etapa 6): ${req.body?.sessionData?.actionPlanExecutionStatus || 'Sin verificar'}
-- Reflexiones y aprendizajes registrados (Etapa 6): ${extractRegisteredStage6Learnings(sessionData).join(' | ') || 'Sin reflexiones registradas aún'}
+- Plan de Acción (Etapa 5): ${effectiveSessionActionPlan?.what ? `${effectiveSessionActionPlan.what}${effectiveSessionActionPlan.when ? ` | Cuándo: ${effectiveSessionActionPlan.when}` : ''}${effectiveSessionActionPlan.withWhom ? ` | Con quién: ${effectiveSessionActionPlan.withWhom}` : ''}` : 'No registrado aún'}
+- Estado de ejecución del Plan de Acción (Etapa 6): ${reconciledExecutionStatus || 'Sin verificar'}
+- Reflexiones y aprendizajes registrados (Etapa 6): ${extractRegisteredStage6Learnings(sessionData, reconciledExecutionStatus, { labeled: true }).join(' | ') || 'Sin reflexiones registradas aún'}
 
 CRITERIOS ESTRICTOS PARA EL CAMPO "readyToAdvance":
 - En Etapa 1: Debe ser true ÚNICAMENTE cuando ya se haya entregado previamente la síntesis con las 3 viñetas (**Hechos y situación**, **Dilema del líder**, **Impacto y reto principal**) Y el mensaje actual del líder confirme o valide dicha síntesis (ej. "de acuerdo", "sí", "si estoy lista", "totalmente", "correcto"). Si el líder corrige, pregunta, duda o aporta nuevos datos, DEBE ser false.
@@ -1069,38 +1329,9 @@ Debes responder SIEMPRE en formato JSON con la siguiente estructura exacta:
       requestBodyBytes: null,
     };
 
-    const effectiveStage7ExecutionStatus =
-      currentStageNum === 7
-        ? (() => {
-            if (effectiveSessionExecutionStatus === 'not_executed') return 'not_executed';
-            const stage6LeaderMsgs = (resolvedHistory || []).filter(
-              (m: any) =>
-                (m.stage === 6 || m.stage === '6') &&
-                (m.sender === 'leader' || m.role === 'user')
-            );
-            for (let i = stage6LeaderMsgs.length - 1; i >= 0; i--) {
-              const msgText = (
-                stage6LeaderMsgs[i]?.text ||
-                stage6LeaderMsgs[i]?.content ||
-                ''
-              ).trim();
-              if (!msgText) continue;
-              if (
-                detectStage6ExecutionCorrection(msgText, effectiveSessionExecutionStatus) ===
-                'not_executed'
-              ) {
-                return 'not_executed';
-              }
-              if (
-                effectiveSessionExecutionStatus === 'executed' &&
-                isExplicitStage6ExecutionAffirmation(msgText)
-              ) {
-                return 'executed';
-              }
-            }
-            return effectiveSessionExecutionStatus;
-          })()
-        : effectiveSessionExecutionStatus;
+    const stage7IsUnexecutedPrompt =
+      effectiveStage7ExecutionStatus === 'not_executed' ||
+      effectiveStage7ExecutionStatus === 'pending_verification';
 
     // Try Gemini API if initialized
     if (ai) {
@@ -1129,8 +1360,10 @@ REGLA LOCAL DE ETAPA 6 (RECONOCIMIENTO DEL ESTADO REAL DEL COMPROMISO):
           currentStageNum === 7
             ? `
 ESTADO REAL DEL COMPROMISO PARA EL CIERRE (ETAPA 7):
+- Alternativa elegida en Etapa 3: ${existingChosenAlternative || 'No registrada por separado'}
 - Acción diseñada (Etapa 5): ${effectiveSessionActionPlan?.what?.trim() || 'No registrada'}
 - Programación prevista (Etapa 5): ${effectiveSessionActionPlan?.when?.trim() || 'Sin fecha programada'}${effectiveSessionActionPlan?.withWhom?.trim() ? ` | Con quién: ${effectiveSessionActionPlan.withWhom.trim()}` : ''}
+- Cómo y cuidados previstos (Etapa 5): ${[effectiveSessionActionPlan?.how?.trim(), effectiveSessionActionPlan?.careReminders?.trim()].filter(Boolean).join(' | ') || 'No especificados'}
 - Estado real de ejecución: ${
                 effectiveStage7ExecutionStatus === 'not_executed'
                   ? 'PENDIENTE DE EJECUCIÓN (el líder aclaró o registró que aún NO ejecuta la acción)'
@@ -1140,12 +1373,20 @@ ESTADO REAL DEL COMPROMISO PARA EL CIERRE (ETAPA 7):
                   ? 'EJECUTADA'
                   : 'Sin verificar'
               }
-- Instrucción obligatoria de cierre según el estado real:
-  * Distingue con precisión entre la acción diseñada, su programación, lo que ya fue ejecutado y lo que permanece pendiente.
+- Resultados reales reportados (Etapa 6): ${
+                structuredStage6Learnings.results.join(' | ') ||
+                (stage7IsUnexecutedPrompt ? 'Ninguno (la acción aún no se ejecuta)' : 'Sin resultados registrados')
+              }
+- Obstáculos o qué no funcionó (Etapa 6): ${structuredStage6Learnings.obstacles.join(' | ') || 'Ninguno registrado'}
+- Aprendizajes y reflexiones del líder (Etapa 6): ${structuredStage6Learnings.insights.join(' | ') || 'Ninguno registrado'}
+- Ajustes futuros / reprogramación / siguientes pasos (Etapa 6): ${structuredStage6Learnings.futureAdjustments.join(' | ') || 'Ninguno registrado'}
+- Instrucción obligatoria de síntesis y distinción del proceso:
+  * Sintetiza el proceso con lenguaje ejecutivo claro sin copiar literalmente los campos del formulario cuando puedas integrarlos con fidelidad.
+  * Distingue con precisión entre lo identificado (habilidades/causas), la alternativa elegida en Etapa 3, la acción diseñada y programada en Etapa 5, lo ejecutado, los resultados obtenidos, los obstáculos, los aprendizajes y lo que permanece pendiente o reprogramado (no confundas la alternativa elegida con el plan final si cambió).
   * ${
-    effectiveStage7ExecutionStatus === 'not_executed' || effectiveStage7ExecutionStatus === 'pending_verification'
-      ? 'Como la acción NO ha sido ejecutada: en "chosenActions" indica explícitamente la acción diseñada, su programación y que permanece pendiente de ejecución; en "stageSixLearnings" PROHIBIDO incluir respuestas evasivas ("Aún no lo sé"), disculpas por haber presionado el botón por error o aprendizajes de resultados inexistentes (incluye solo reflexiones reales sobre obstáculos, decisiones o siguientes pasos, o déjalo en []); y en "recommendationsForAutonomy" incluye el siguiente paso o reprogramación concreta para llevarla a cabo.'
-      : 'Al haberse ejecutado la acción, sintetiza los compromisos, aprendizajes reales y recomendaciones de autonomía sin inventar datos.'
+    stage7IsUnexecutedPrompt
+      ? 'Como la acción NO ha sido ejecutada: en "chosenActions" sintetiza la acción comprometida, su programación o reprogramación y su estado pendiente o aún no concretado; en "stageSixLearnings" PROHIBIDO inventar resultados de ejecución inexistentes o incluir respuestas evasivas ("Aún no lo sé") o disculpas por haber presionado el botón por error, pero SÍ sintetiza obstáculos reales, decisiones o aprendizajes sustantivos (o déjalo en [] si no hay); y en "recommendationsForAutonomy" incluye el siguiente paso o reprogramación concreta.'
+      : 'Como la acción SÍ fue ejecutada: en "chosenActions" distingue la acción ejecutada respecto de la alternativa previa si evolucionó; en "stageSixLearnings" sintetiza los resultados que efectivamente reportó el líder, los obstáculos enfrentados (si existen) y los aprendizajes/ajustes sin inventar datos.'
   }`
             : '';
 
@@ -1567,6 +1808,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
             hasSessionSkills: skillsToReport.length > 0,
             hasRegisteredActions: registeredChosenActions.length > 0,
             hasRegisteredLearnings: registeredStage6Learnings.length > 0,
+            executionStatus: effectiveStage7ExecutionStatus,
           });
 
           if (!isCleanStage7String(candidateStage7Reply) || !feedbackValidation.valid) {
@@ -1626,25 +1868,19 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
             .filter(
               (s: string) =>
                 !isStage7InsufficientPlaceholder(s) &&
-                (!isUnexecutedStage7 || !isNonSubstantiveNonExecutionNote(s))
+                (!isUnexecutedStage7 ||
+                  (!isNonSubstantiveNonExecutionNote(s) && !claimsActionAlreadyExecuted(s)))
             );
           const cleanRecommendations = parsed.finalFeedback.recommendationsForAutonomy
             .map((s: string) => s.trim())
             .filter((s: string) => !isStage7InsufficientPlaceholder(s));
 
-          const resolvedChosenActions = (() => {
-            if (cleanChosenActions.length === 0) return registeredChosenActions;
-            if (
-              isUnexecutedStage7 &&
-              registeredChosenActions.length > 0 &&
-              !cleanChosenActions.some((item: string) =>
-                /pendiente|no ejecutad|por ejecutar|reprogram/i.test(item)
-              )
-            ) {
-              return registeredChosenActions;
-            }
-            return cleanChosenActions;
-          })();
+          const resolvedChosenActions = resolveStage7ChosenActions(
+            cleanChosenActions,
+            registeredChosenActions,
+            sessionData,
+            isUnexecutedStage7
+          );
 
           // Garantizar la estructura de las 5 secciones conservando acciones/reflexiones reales sin inventar datos faltantes
           parsed.finalFeedback = {

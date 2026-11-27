@@ -245,6 +245,103 @@ export function isNonSubstantiveNonExecutionNote(value: string): boolean {
   return false;
 }
 
+const STAGE6_TRIVIAL_FIELD_VALUES_CLIENT = new Set([
+  'aun no lo se',
+  'todavia no lo se',
+  'no lo se',
+  'no se',
+  'aun no',
+  'todavia no',
+  'pendiente',
+  'ninguno',
+  'ninguna',
+  'nada',
+  'n a',
+  'na',
+  'no aplica',
+  'sin ejecucion',
+  'sin comentarios',
+  'sin observaciones',
+]);
+
+export function indicatesPendingOrUnexecutedAction(text: string): boolean {
+  const norm = normalizeStage6ComparisonText(text);
+  if (!norm) return false;
+  return (
+    /\b(?:pendient\w*|no\s+(?:se\s+)?(?:ha\s+)?ejecut\w*|no\s+ejecut\w*|por\s+ejecut\w*|reprogram\w*|pospus\w*|pospuest\w*|reagend\w*|diferid\w*|aplazad\w*)\b/.test(
+      norm
+    ) ||
+    /\b(?:sin\s+(?:haberse\s+)?(?:ejecut\w*|realiz\w*|inici\w*|concret\w*|efectu\w*|aplic\w*|llev\w*|cumpl\w*|implement\w*))\b/.test(
+      norm
+    ) ||
+    /\b(?:aun|todavia)\s+(?:no\b|por\s+(?:hac\w*|realiz\w*|ejecut\w*|inici\w*|concret\w*|aplic\w*))\b/.test(
+      norm
+    ) ||
+    /\bno\s+(?:se\s+)?(?:realizo|concreto|efectuo|llevo\s+a\s+cabo|inicio|cumplio|implemento)\b/.test(
+      norm
+    ) ||
+    /\b(?:en\s+(?:espera|pausa)|queda\s+por|falta\s+(?:por|realizar|ejecutar|concretar|sostener|llevar)|resta\s+(?:por|realizar|ejecutar))\b/.test(
+      norm
+    ) ||
+    /\b(?:agendad|programad|previst|planificad|calendarizad)[ao]s?\s+para\b/.test(norm)
+  );
+}
+
+export function claimsActionAlreadyExecuted(text: string): boolean {
+  const norm = normalizeStage6ComparisonText(text);
+  if (!norm) return false;
+  if (indicatesPendingOrUnexecutedAction(norm)) return false;
+  return (
+    /\b(?:ya\s+(?:se\s+)?(?:ejecuto|realizo|implemento|cumplio|efectuo|concreto|llevo\s+a\s+cabo)|(?:accion|reunion|plan|conversacion)\s+(?:ya\s+)?(?:ejecutad[ao]|completad[ao]|implementad[ao]|concluid[ao]|realizad[ao]))\b/.test(
+      norm
+    ) ||
+    /\b(?:se\s+(?:ejecuto|realizo|implemento|concreto|llevo\s+a\s+cabo)\s+(?:con\s+exito|exitosamente|el|la|en|durante))\b/.test(
+      norm
+    )
+  );
+}
+
+export function resolveStage7ChosenActions(
+  cleanChosenActions: string[],
+  registeredChosenActions: string[],
+  actionPlan: MentorshipActionPlan | undefined,
+  isUnexecutedStage7: boolean
+): string[] {
+  if (cleanChosenActions.length === 0) return registeredChosenActions;
+  if (!isUnexecutedStage7) return cleanChosenActions;
+
+  if (cleanChosenActions.some(claimsActionAlreadyExecuted)) {
+    return registeredChosenActions.length > 0 ? registeredChosenActions : [];
+  }
+
+  if (cleanChosenActions.some(indicatesPendingOrUnexecutedAction)) {
+    return cleanChosenActions;
+  }
+
+  const rawWhat = isCleanStage7Text(actionPlan?.what)
+    ? normalizeStage6ComparisonText(actionPlan!.what).replace(/[.,;:]+$/g, '')
+    : '';
+  const onlyEchoedRawPlanWhat =
+    Boolean(rawWhat) &&
+    cleanChosenActions.length === 1 &&
+    normalizeStage6ComparisonText(cleanChosenActions[0]).replace(/[.,;:]+$/g, '') === rawWhat;
+
+  if (onlyEchoedRawPlanWhat && registeredChosenActions.length > 0) {
+    return registeredChosenActions;
+  }
+
+  const when = isCleanStage7Text(actionPlan?.when) ? actionPlan!.when.trim() : '';
+  const normWhen = when ? normalizeStage6ComparisonText(when) : '';
+
+  return cleanChosenActions.map((item, idx) => {
+    if (idx > 0) return item;
+    const normItem = normalizeStage6ComparisonText(item);
+    const scheduleSuffix =
+      when && normWhen && !normItem.includes(normWhen) ? ` (Programada: ${when})` : '';
+    return `${item}${scheduleSuffix} — Estado: pendiente de ejecución`;
+  });
+}
+
 export function reconcileStage6ExecutionState(
   session: MentorshipSession,
   nextStatus: ActionPlanExecutionStatus,
@@ -309,6 +406,7 @@ export function buildStage7FinalFeedbackReport(
     actionPlan?: MentorshipActionPlan;
     learnings?: MentorshipLearnings;
     actionPlanExecutionStatus?: ActionPlanExecutionStatus;
+    chosenAlternative?: string;
   }
 ): FinalFeedbackReport | undefined {
   if (!coachFinalFeedback || typeof coachFinalFeedback !== 'object' || Array.isArray(coachFinalFeedback)) {
@@ -338,45 +436,83 @@ export function buildStage7FinalFeedbackReport(
 
   const registeredActions = (() => {
     const rawWhat = sessionContext?.actionPlan?.what;
+    const chosenAlt = isCleanStage7Text(sessionContext?.chosenAlternative)
+      ? sessionContext!.chosenAlternative!.trim()
+      : '';
+
     if (!isCleanStage7Text(rawWhat) || isStage7InsufficientPlaceholderText(rawWhat)) {
+      if (chosenAlt && !isStage7InsufficientPlaceholderText(chosenAlt)) {
+        return [
+          isUnexecuted
+            ? `Alternativa elegida (Etapa 3): ${chosenAlt} — Pendiente de concretar y ejecutar`
+            : `Alternativa elegida (Etapa 3): ${chosenAlt}`,
+        ];
+      }
       return [];
     }
+
     const trimmedWhat = rawWhat.trim();
     const when = isCleanStage7Text(sessionContext?.actionPlan?.when)
       ? sessionContext!.actionPlan!.when.trim()
       : '';
+    const withWhom = isCleanStage7Text(sessionContext?.actionPlan?.withWhom)
+      ? sessionContext!.actionPlan!.withWhom.trim()
+      : '';
+
+    const normWhat = normalizeStage6ComparisonText(trimmedWhat).replace(/[.,;:]+$/g, '');
+    const normChosenAlt = chosenAlt
+      ? normalizeStage6ComparisonText(chosenAlt).replace(/[.,;:]+$/g, '')
+      : '';
+    const hasDistinctChosenAlt =
+      Boolean(normChosenAlt) &&
+      normChosenAlt !== normWhat &&
+      !normWhat.includes(normChosenAlt) &&
+      !normChosenAlt.includes(normWhat);
+
     if (isUnexecuted) {
-      return [
-        `${trimmedWhat}${when ? ` (Programada: ${when})` : ''} — Estado: pendiente de ejecución`,
-      ];
+      const primary = `${trimmedWhat}${when ? ` (Programada: ${when})` : ''}${withWhom ? ` — Con: ${withWhom}` : ''} — Estado: pendiente de ejecución`;
+      return hasDistinctChosenAlt
+        ? [primary, `Alternativa elegida en Etapa 3 (previa al plan): ${chosenAlt}`]
+        : [primary];
     }
-    return [trimmedWhat];
+
+    return hasDistinctChosenAlt
+      ? [trimmedWhat, `Alternativa elegida en Etapa 3 (previa al plan): ${chosenAlt}`]
+      : [trimmedWhat];
   })();
 
   const registeredLearnings: string[] = [];
   if (sessionContext?.learnings && typeof sessionContext.learnings === 'object') {
     const seen = new Set<string>();
+    const cleanLearningField = (raw: unknown): string | null => {
+      if (!isCleanStage7Text(raw)) return null;
+      const trimmed = raw.trim();
+      if (isStage7InsufficientPlaceholderText(trimmed)) return null;
+      const norm = normalizeStage6ComparisonText(trimmed);
+      if (!norm || STAGE6_TRIVIAL_FIELD_VALUES_CLIENT.has(norm)) return null;
+      if (isUnexecuted && isNonSubstantiveNonExecutionNote(trimmed)) return null;
+      const key = trimmed.toLowerCase();
+      if (seen.has(key)) return null;
+      seen.add(key);
+      return trimmed;
+    };
+
     const rawLearningFields = isUnexecuted
-      ? [
-          sessionContext.learnings.insights,
-          sessionContext.learnings.futureAdjustments,
-        ]
+      ? [sessionContext.learnings.insights, sessionContext.learnings.futureAdjustments]
       : [
           sessionContext.learnings.insights,
           sessionContext.learnings.whatHappened,
           sessionContext.learnings.whatWorked,
           sessionContext.learnings.futureAdjustments,
         ];
+
     for (const raw of rawLearningFields) {
-      if (!isCleanStage7Text(raw)) continue;
-      const trimmed = raw.trim();
-      if (isStage7InsufficientPlaceholderText(trimmed)) continue;
-      if (isUnexecuted && isNonSubstantiveNonExecutionNote(trimmed)) continue;
-      const key = trimmed.toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        registeredLearnings.push(trimmed);
-      }
+      const cleaned = cleanLearningField(raw);
+      if (cleaned) registeredLearnings.push(cleaned);
+    }
+    const obstacle = cleanLearningField(sessionContext.learnings.whatDidnt);
+    if (obstacle) {
+      registeredLearnings.push(`Obstáculo identificado: ${obstacle}`);
     }
   }
 
@@ -386,22 +522,20 @@ export function buildStage7FinalFeedbackReport(
   const cleanedChosenActions = cleanNonPlaceholderList(coachFinalFeedback.chosenActions);
   const cleanedStageSixLearnings = cleanNonPlaceholderList(
     coachFinalFeedback.stageSixLearnings
-  ).filter((s) => !isUnexecuted || !isNonSubstantiveNonExecutionNote(s));
+  ).filter(
+    (s) =>
+      !isStage7InsufficientPlaceholderText(s) &&
+      (!isUnexecuted ||
+        (!isNonSubstantiveNonExecutionNote(s) && !claimsActionAlreadyExecuted(s)))
+  );
   const cleanedRecommendations = cleanNonPlaceholderList(coachFinalFeedback.recommendationsForAutonomy);
 
-  const resolvedChosenActions = (() => {
-    if (cleanedChosenActions.length === 0) return registeredActions;
-    if (
-      isUnexecuted &&
-      registeredActions.length > 0 &&
-      !cleanedChosenActions.some((item) =>
-        /pendiente|no ejecutad|por ejecutar|reprogram/i.test(item)
-      )
-    ) {
-      return registeredActions;
-    }
-    return cleanedChosenActions;
-  })();
+  const resolvedChosenActions = resolveStage7ChosenActions(
+    cleanedChosenActions,
+    registeredActions,
+    sessionContext?.actionPlan,
+    isUnexecuted
+  );
 
   const builtReport: FinalFeedbackReport = {
     ...coachFinalFeedback,
@@ -786,6 +920,7 @@ export async function executeTransactionalStageTransition({
             actionPlan: latestSession.actionPlan,
             learnings: latestSession.learnings,
             actionPlanExecutionStatus: resolveStage6ExecutionStatus(latestSession),
+            chosenAlternative: latestSession.chosenAlternative,
           }
         )
       : undefined;
@@ -2922,6 +3057,7 @@ El Equipo de Lidacta`;
                       actionPlan: baseSession.actionPlan,
                       learnings: baseSession.learnings,
                       actionPlanExecutionStatus: resolveStage6ExecutionStatus(baseSession),
+                      chosenAlternative: baseSession.chosenAlternative,
                     }
                   )
                 : undefined;
@@ -2961,6 +3097,7 @@ El Equipo de Lidacta`;
                   actionPlan: resolvedTargetSession.actionPlan,
                   learnings: resolvedTargetSession.learnings,
                   actionPlanExecutionStatus: resolveStage6ExecutionStatus(resolvedTargetSession),
+                  chosenAlternative: resolvedTargetSession.chosenAlternative,
                 }
               )
             : undefined;
