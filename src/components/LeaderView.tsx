@@ -2817,6 +2817,21 @@ export const LeaderView: React.FC = () => {
                                 {/* Estado B: Plan ejecutado -> Reflexión guiada y formulario de aprendizaje */}
                                 {stage6ExecutionStatus === 'executed' && (
                                   <>
+                                    {isCurrent && (
+                                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-[#FFF7EF]/60 border border-[#493447]/10 rounded-xl text-xs">
+                                        <span className="font-semibold text-[#2D1B4E]">
+                                          Confirmaste que ya ejecutaste tu Plan de Acción.
+                                        </span>
+                                        <button
+                                          type="button"
+                                          disabled={isSendingMessage || isAdvancingStage}
+                                          onClick={() => respondStage6ExecutionCheck(false)}
+                                          className="text-[11px] font-bold text-[#BF3A1B] hover:text-[#2D1B4E] underline cursor-pointer text-left sm:text-right disabled:opacity-50"
+                                        >
+                                          Aún no he ejecutado mi Plan de Acción (cambiar a No)
+                                        </button>
+                                      </div>
+                                    )}
                                     <div className="space-y-3 text-xs">
                                       <div>
                                         <div className="flex items-center justify-between mb-1">

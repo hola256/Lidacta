@@ -1894,7 +1894,9 @@ export function generateContextualCoachReply(
   }
 
   if (stage === 6) {
-    const executionStatus = sessionContext?.actionPlanExecutionStatus;
+    const rawExecutionStatus = sessionContext?.actionPlanExecutionStatus;
+    const deterministicCorrection = detectStage6ExecutionCorrection(cleanMsg, rawExecutionStatus);
+    const executionStatus = deterministicCorrection || rawExecutionStatus;
     const planWhat = sessionContext?.actionPlan?.what?.trim();
     const mentionsPartial = [
       'parte',
@@ -1912,6 +1914,10 @@ export function generateContextualCoachReply(
     ].some((k) => lowerMsg.includes(k));
 
     if (executionStatus === 'not_executed') {
+      const correctionFields =
+        deterministicCorrection === 'not_executed'
+          ? { correctedExecutionStatus: 'not_executed' as const }
+          : {};
       if (mentionsPartial) {
         return {
           replyText: `Gracias por compartirlo con claridad, ${leaderName}. Valoro mucho lo que sí lograste avanzar hasta ahora${
@@ -1921,17 +1927,23 @@ export function generateContextualCoachReply(
           advancePrompt: null,
           detectedTheme: 'Acompañamiento sobre Plan Pendiente (Avance Parcial)',
           isTherapeuticCase: false,
+          ...correctionFields,
         };
       }
 
       return {
-        replyText: `Gracias por compartirlo con honestidad, ${leaderName}; este espacio es para acompañarte sin juicios. Respecto al compromiso que definiste en la Etapa 5${
+        replyText: `${
+          deterministicCorrection === 'not_executed'
+            ? `Gracias por aclararlo con total honestidad, ${leaderName}. Tomo nota de que aún no has ejecutado tu Plan de Acción y actualizo tu seguimiento a plan pendiente.`
+            : `Gracias por compartirlo con honestidad, ${leaderName}; este espacio es para acompañarte sin juicios.`
+        } Respecto al compromiso que definiste en la Etapa 5${
           planWhat ? ` ("${planWhat}")` : ''
         }, ¿qué obstáculos o circunstancias se presentaron que impidieron llevarlo a cabo, o hubo alguna parte en la que sí lograste avanzar? Conversemos para ver qué ajustar y definir tu siguiente paso.`,
         readyToAdvance: false,
         advancePrompt: null,
         detectedTheme: 'Acompañamiento sobre Plan Pendiente',
         isTherapeuticCase: false,
+        ...correctionFields,
       };
     }
 
@@ -2065,26 +2077,185 @@ function isStage7InsufficientPlaceholder(value: string): boolean {
   );
 }
 
-function extractRegisteredStage5Actions(sessionData: any): string[] {
-  const what = sessionData?.actionPlan?.what;
-  return isCleanStage7String(what) ? [what.trim()] : [];
+function normalizeStage6ComparisonText(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-function extractRegisteredStage6Learnings(sessionData: any): string[] {
+export function detectStage6ExecutionCorrection(
+  userMessage: string,
+  currentStatus?: string | null
+): 'not_executed' | null {
+  if (typeof userMessage !== 'string' || !userMessage.trim()) return null;
+  if (currentStatus === 'not_executed') return null;
+
+  const norm = normalizeStage6ComparisonText(userMessage);
+
+  const hasButtonErrorSignal =
+    /(?:(?:me equivoque|presione|aprete|le di|seleccione|toque|marque|oprimi)\s+(?:el\s+boton|por\s+error|sin\s+querer|accidentalmente|"?si"?\s*(?:por\s+error|sin\s+querer|accidentalmente)?))|(?:por\s+error\s+(?:presione|aprete|seleccione|marque|le\s+di)\s+(?:a\s+)?(?:el\s+boton|"?si"?))|(?:(?:boton|por\s+error|sin\s+querer|accidentalmente).*(?:no\s+(?:he|lo|la)|aun\s+no|todavia\s+no))/.test(
+      norm
+    );
+
+  const affirmsAlreadyExecuted =
+    /\b(?:ya|si)\s+(?:lo\s+|la\s+)?(?:ejecute|realice|hice|lleve\s+a\s+cabo)\b/.test(norm);
+
+  if (affirmsAlreadyExecuted && !hasButtonErrorSignal) {
+    return null;
+  }
+
+  const hasExplicitNonExecution =
+    /(?:^|\b)(?:aun\s+|todavia\s+)?no\s+(?:he\s+|lo\s+|la\s+)?(?:ejecutado|realizado|llevado\s+a\s+cabo|hecho|cumplido|implementado|aplicado|tenido\s+la\s+conversacion)\b/.test(
+      norm
+    ) ||
+    /(?:todavia|aun)\s+no\s+(?:lo\s+|la\s+)?(?:hago|ejecuto|realizo|aplico|cumplo)\b/.test(
+      norm
+    ) ||
+    /\bno\s+pude\s+(?:ejecutar|realizar|llevar\s+a\s+cabo|hacer|tener\s+la\s+conversacion)\b/.test(
+      norm
+    );
+
+  if (hasButtonErrorSignal || hasExplicitNonExecution) {
+    return 'not_executed';
+  }
+
+  return null;
+}
+
+function isExplicitStage6ExecutionAffirmation(userMessage: string): boolean {
+  if (typeof userMessage !== 'string' || !userMessage.trim()) return false;
+  if (detectStage6ExecutionCorrection(userMessage, 'executed') === 'not_executed') {
+    return false;
+  }
+  const norm = normalizeStage6ComparisonText(userMessage);
+  return (
+    /\b(?:ya|si)\s+(?:lo\s+|la\s+)?(?:ejecute|realice|hice|lleve\s+a\s+cabo)\b/.test(norm) ||
+    /\bsi\s+ya\s+ejecute\s+mi\s+plan\s+de\s+accion\b/.test(norm)
+  );
+}
+
+function stripExecutionStatusClarificationClauses(norm: string): string {
+  return norm
+    .replace(
+      /\b(?:la\s+verdad|honestamente|perdon|disculpa|disculpen|solo\s+para\s+aclarar|para\s+aclarar|queria\s+aclarar)\b/g,
+      ' '
+    )
+    .replace(
+      /\bme\s+equivoque(?:\s+al\s+(?:presionar|apretar|darle|seleccionar|tocar|marcar|oprimir)(?:\s+(?:a\s+|en\s+)?(?:el\s+boton(?:\s+(?:de\s+)?si)?|"?si"?))?)?\b/g,
+      ' '
+    )
+    .replace(
+      /\b(?:presione|aprete|le\s+di|seleccione|toque|marque|oprimi)\s+(?:a\s+|en\s+)?(?:el\s+boton(?:\s+(?:de\s+)?si)?|por\s+error|sin\s+querer|accidentalmente|"?si"?(?:\s*(?:por\s+error|sin\s+querer|accidentalmente))?)\b/g,
+      ' '
+    )
+    .replace(
+      /\bpor\s+error\s+(?:presione|aprete|seleccione|marque|le\s+di)(?:\s+(?:a\s+)?(?:el\s+boton|"?si"?))?\b/g,
+      ' '
+    )
+    .replace(/\b(?:por\s+error|sin\s+querer|accidentalmente)\b/g, ' ')
+    .replace(
+      /\b(?:aun|todavia)\s+no\s+(?:he\s+|lo\s+|la\s+)?(?:ejecutado|realizado|llevado\s+a\s+cabo|hecho|cumplido|implementado|aplicado|tenido\s+la\s+conversacion|hago|ejecuto|realizo|aplico|cumplo)(?:\s+(?:el\s+plan(?:\s+de\s+accion)?|la\s+accion|esto|eso))?(?:\s+(?:aun|todavia))?\b/g,
+      ' '
+    )
+    .replace(
+      /\bno\s+(?:he\s+|lo\s+|la\s+)?(?:ejecutado|realizado|llevado\s+a\s+cabo|hecho|cumplido|implementado|aplicado|tenido\s+la\s+conversacion)(?:\s+(?:el\s+plan(?:\s+de\s+accion)?|la\s+accion|esto|eso))?(?:\s+(?:aun|todavia))?\b/g,
+      ' '
+    )
+    .replace(
+      /\bno\s+pude\s+(?:ejecutar|realizar|llevar\s+a\s+cabo|hacer|tener\s+la\s+conversacion)(?:lo|la)?(?:\s+(?:el\s+plan(?:\s+de\s+accion)?|la\s+accion|esto|eso))?(?:\s+(?:aun|todavia))?\b/g,
+      ' '
+    )
+    .replace(/\b(?:el\s+plan|la\s+accion)\s+(?:sigue|esta|permanece)\s+pendiente(?:\s+de\s+ejecucion)?\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isNonSubstantiveNonExecutionNote(value: string): boolean {
+  const norm = normalizeStage6ComparisonText(value);
+  if (!norm) return true;
+
+  const pureUncertaintyOrFiller = [
+    'aun no lo se',
+    'todavia no lo se',
+    'no lo se',
+    'no se',
+    'aun no',
+    'todavia no',
+    'pendiente',
+    'ninguno',
+    'ninguna',
+    'nada',
+    'n a',
+    'na',
+    'no aplica',
+    'sin ejecucion',
+  ];
+  if (pureUncertaintyOrFiller.includes(norm)) return true;
+
+  if (detectStage6ExecutionCorrection(value, 'executed') === 'not_executed') {
+    const remainder = stripExecutionStatusClarificationClauses(norm);
+    if (!remainder) return true;
+    const trivialStatusTokens = new Set([
+      'y', 'o', 'pero', 'que', 'de', 'el', 'la', 'los', 'las', 'un', 'una', 'a', 'en',
+      'con', 'por', 'para', 'mi', 'su', 'lo', 'le', 'se', 'aun', 'todavia', 'ya', 'si', 'no',
+      'boton', 'plan', 'accion', 'eso', 'esto',
+    ]);
+    const meaningfulRemainderWords = remainder
+      .split(' ')
+      .filter((w) => w.length >= 2 && !trivialStatusTokens.has(w));
+    return meaningfulRemainderWords.length < 3;
+  }
+
+  return false;
+}
+
+function extractRegisteredStage5Actions(
+  sessionData: any,
+  effectiveExecutionStatus?: string | null
+): string[] {
+  const what = sessionData?.actionPlan?.what;
+  if (!isCleanStage7String(what)) return [];
+  const trimmedWhat = what.trim();
+  const when = isCleanStage7String(sessionData?.actionPlan?.when)
+    ? sessionData.actionPlan.when.trim()
+    : '';
+  const status = effectiveExecutionStatus ?? sessionData?.actionPlanExecutionStatus;
+  if (status === 'not_executed' || status === 'pending_verification') {
+    return [
+      `${trimmedWhat}${when ? ` (Programada: ${when})` : ''} — Estado: pendiente de ejecución`,
+    ];
+  }
+  return [trimmedWhat];
+}
+
+function extractRegisteredStage6Learnings(
+  sessionData: any,
+  effectiveExecutionStatus?: string | null
+): string[] {
   const learnings = sessionData?.learnings;
   if (!learnings || typeof learnings !== 'object') return [];
-  const rawFields = [
-    learnings.insights,
-    learnings.whatHappened,
-    learnings.whatWorked,
-    learnings.futureAdjustments,
-  ];
+  const status = effectiveExecutionStatus ?? sessionData?.actionPlanExecutionStatus;
+  const isUnexecuted = status === 'not_executed' || status === 'pending_verification';
+
+  const rawFields = isUnexecuted
+    ? [learnings.insights, learnings.futureAdjustments]
+    : [
+        learnings.insights,
+        learnings.whatHappened,
+        learnings.whatWorked,
+        learnings.futureAdjustments,
+      ];
+
   const seen = new Set<string>();
   const collected: string[] = [];
   for (const field of rawFields) {
     if (!isCleanStage7String(field)) continue;
     const trimmed = field.trim();
     if (isStage7InsufficientPlaceholder(trimmed)) continue;
+    if (isUnexecuted && isNonSubstantiveNonExecutionNote(trimmed)) continue;
     const key = trimmed.toLowerCase();
     if (!seen.has(key)) {
       seen.add(key);
@@ -2339,6 +2510,30 @@ export default async function handler(req: any, res: any) {
         ? body.chosenAlternative.trim()
         : null;
 
+    const deterministicStage6Correction =
+      currentStageNum === 6
+        ? detectStage6ExecutionCorrection(
+            resolvedUserMessage,
+            sessionData?.actionPlanExecutionStatus
+          )
+        : null;
+
+    const effectiveSessionExecutionStatus: string | null =
+      deterministicStage6Correction ||
+      sessionData?.actionPlanExecutionStatus ||
+      null;
+
+    const effectiveSessionActionPlan =
+      sessionData?.actionPlan && typeof sessionData.actionPlan === 'object'
+        ? deterministicStage6Correction === 'not_executed'
+          ? {
+              ...sessionData.actionPlan,
+              isCompleted: false,
+              completedAt: undefined,
+            }
+          : sessionData.actionPlan
+        : null;
+
     safeSessionContext = {
       id: targetCaseId,
       title: activeCaseTitle,
@@ -2349,8 +2544,8 @@ export default async function handler(req: any, res: any) {
       leaderAlternatives: existingLeaderAlternatives,
       ...(existingSuggestedAlternatives.length > 0 ? { suggestedAlternatives: existingSuggestedAlternatives } : {}),
       ...(existingChosenAlternative ? { chosenAlternative: existingChosenAlternative } : {}),
-      actionPlan: sessionData?.actionPlan || null,
-      actionPlanExecutionStatus: sessionData?.actionPlanExecutionStatus || null,
+      actionPlan: effectiveSessionActionPlan,
+      actionPlanExecutionStatus: effectiveSessionExecutionStatus,
     };
 
     const apiKey =
@@ -2585,6 +2780,76 @@ REGLA LOCAL DE ETAPA 3 (RECONOCIMIENTO DE DECISIONES):
 - Si el líder todavía expresa dudas, solicita orientación o pregunta por consecuencias sin elegir, acompaña su análisis manteniendo "readyToAdvance": false.`
         : '';
 
+    const stage6LocalRule =
+      currentStageNum === 6
+        ? `
+REGLA LOCAL DE ETAPA 6 (RECONOCIMIENTO DEL ESTADO REAL DEL COMPROMISO):
+- La aclaración más reciente y explícita del líder SIEMPRE tiene prioridad sobre una selección previa de botón (actionPlanExecutionStatus).
+- Si el líder aclara que aún no ha ejecutado su Plan de Acción, que presionó «Sí» por error o que la acción sigue pendiente:
+  * Reconoce su aclaración con empatía y sin juicios.
+  * Orienta el 100% de tu respuesta al acompañamiento de plan pendiente (explorar obstáculos, circunstancias, ajustes o reprogramación/siguiente paso).
+  * PROHIBIDO preguntar por resultados de una ejecución que no ocurrió o pedir aprendizajes como si ya la hubiera realizado.
+  * Incluye obligatoriamente en tu JSON el campo "correctedExecutionStatus": "not_executed".
+- Si no hay contradicción de estado, omite "correctedExecutionStatus" o envíalo en null.`
+        : '';
+
+    const effectiveStage7ExecutionStatus =
+      currentStageNum === 7
+        ? (() => {
+            if (effectiveSessionExecutionStatus === 'not_executed') return 'not_executed';
+            const stage6LeaderMsgs = (resolvedHistory || []).filter(
+              (m: any) =>
+                (m.stage === 6 || m.stage === '6') &&
+                (m.sender === 'leader' || m.role === 'user')
+            );
+            for (let i = stage6LeaderMsgs.length - 1; i >= 0; i--) {
+              const msgText = (
+                stage6LeaderMsgs[i]?.text ||
+                stage6LeaderMsgs[i]?.content ||
+                ''
+              ).trim();
+              if (!msgText) continue;
+              if (
+                detectStage6ExecutionCorrection(msgText, effectiveSessionExecutionStatus) ===
+                'not_executed'
+              ) {
+                return 'not_executed';
+              }
+              if (
+                effectiveSessionExecutionStatus === 'executed' &&
+                isExplicitStage6ExecutionAffirmation(msgText)
+              ) {
+                return 'executed';
+              }
+            }
+            return effectiveSessionExecutionStatus;
+          })()
+        : effectiveSessionExecutionStatus;
+
+    const stage7LocalRule =
+      currentStageNum === 7
+        ? `
+ESTADO REAL DEL COMPROMISO PARA EL CIERRE (ETAPA 7):
+- Acción diseñada (Etapa 5): ${effectiveSessionActionPlan?.what?.trim() || 'No registrada'}
+- Programación prevista (Etapa 5): ${effectiveSessionActionPlan?.when?.trim() || 'Sin fecha programada'}${effectiveSessionActionPlan?.withWhom?.trim() ? ` | Con quién: ${effectiveSessionActionPlan.withWhom.trim()}` : ''}
+- Estado real de ejecución: ${
+            effectiveStage7ExecutionStatus === 'not_executed'
+              ? 'PENDIENTE DE EJECUCIÓN (el líder aclaró o registró que aún NO ejecuta la acción)'
+              : effectiveStage7ExecutionStatus === 'pending_verification'
+              ? 'PENDIENTE DE VERIFICACIÓN'
+              : effectiveStage7ExecutionStatus === 'executed'
+              ? 'EJECUTADA'
+              : 'Sin verificar'
+          }
+- Instrucción obligatoria de cierre según el estado real:
+  * Distingue con precisión entre la acción diseñada, su programación, lo que ya fue ejecutado y lo que permanece pendiente.
+  * ${
+    effectiveStage7ExecutionStatus === 'not_executed' || effectiveStage7ExecutionStatus === 'pending_verification'
+      ? 'Como la acción NO ha sido ejecutada: en "chosenActions" indica explícitamente la acción diseñada, su programación y que permanece pendiente de ejecución; en "stageSixLearnings" PROHIBIDO incluir respuestas evasivas ("Aún no lo sé"), disculpas por haber presionado el botón por error o aprendizajes de resultados inexistentes (incluye solo reflexiones reales sobre obstáculos, decisiones o siguientes pasos, o déjalo en []); y en "recommendationsForAutonomy" incluye el siguiente paso o reprogramación concreta para llevarla a cabo.'
+      : 'Al haberse ejecutado la acción, sintetiza los compromisos, aprendizajes reales y recomendaciones de autonomía sin inventar datos.'
+  }`
+        : '';
+
     const finalTurnPrompt = `${
       trailingUnrepliedUserHistory
         ? `Mensajes previos del líder en el historial (anteriores al mensaje actual):\n${trailingUnrepliedUserHistory}\n\n========================================\n`
@@ -2602,7 +2867,7 @@ INSTRUCCIONES LOCALES DE CONTINUIDAD Y CALIDAD CONVERSACIONAL:
 - Está terminantemente PROHIBIDO repetir preguntas que el líder ya respondió o pedir información ya compartida.
 - Está terminantemente PROHIBIDO repetir síntesis, explicaciones previas o coletillas de cierre en turnos consecutivos.
 - REGLA CRÍTICA ANTI-CICLADO: si el líder expresa confusión ("no entendí", "a qué te refieres") o indica que ya contestó, reformula con palabras cotidianas y sencillas (o un ejemplo breve laboral) sin repetir la pregunta o plantilla previa; si ya aportó información o muestra desgaste, avanza con una pregunta diferente o habilita el avance cuando corresponda.
-- Mantén tu respuesta breve, directa y proporcional (1 a 3 párrafos cortos), sin explicaciones innecesariamente extensas.${stage3LocalRule}
+- Mantén tu respuesta breve, directa y proporcional (1 a 3 párrafos cortos), sin explicaciones innecesariamente extensas.${stage3LocalRule}${stage6LocalRule}${stage7LocalRule}
 
 Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSON estricto.`;
 
@@ -3113,8 +3378,14 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
         skillsToReport = [];
       }
 
-      const registeredChosenActions = extractRegisteredStage5Actions(sessionData);
-      const registeredStage6Learnings = extractRegisteredStage6Learnings(sessionData);
+      const registeredChosenActions = extractRegisteredStage5Actions(
+        sessionData,
+        effectiveStage7ExecutionStatus
+      );
+      const registeredStage6Learnings = extractRegisteredStage6Learnings(
+        sessionData,
+        effectiveStage7ExecutionStatus
+      );
 
       const feedbackValidation = isValidStage7FinalFeedbackPayload(parsed.finalFeedback, {
         hasSessionSkills: skillsToReport.length > 0,
@@ -3167,28 +3438,66 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
       // Formatear stageTwoSkills con la evidencia real observada o el mensaje de insuficiencia
       const formattedStageTwoSkills = formatStageTwoSkillsWithEvidence(skillsToReport);
 
+      const isUnexecutedStage7 =
+        effectiveStage7ExecutionStatus === 'not_executed' ||
+        effectiveStage7ExecutionStatus === 'pending_verification';
+
       const cleanChosenActions = parsed.finalFeedback.chosenActions
         .map((s: string) => s.trim())
         .filter((s: string) => !isStage7InsufficientPlaceholder(s));
       const cleanStageSixLearnings = parsed.finalFeedback.stageSixLearnings
         .map((s: string) => s.trim())
-        .filter((s: string) => !isStage7InsufficientPlaceholder(s));
+        .filter(
+          (s: string) =>
+            !isStage7InsufficientPlaceholder(s) &&
+            (!isUnexecutedStage7 || !isNonSubstantiveNonExecutionNote(s))
+        );
       const cleanRecommendations = parsed.finalFeedback.recommendationsForAutonomy
         .map((s: string) => s.trim())
         .filter((s: string) => !isStage7InsufficientPlaceholder(s));
+
+      const resolvedChosenActions = (() => {
+        if (cleanChosenActions.length === 0) return registeredChosenActions;
+        if (
+          isUnexecutedStage7 &&
+          registeredChosenActions.length > 0 &&
+          !cleanChosenActions.some((item: string) =>
+            /pendiente|no ejecutad|por ejecutar|reprogram/i.test(item)
+          )
+        ) {
+          return registeredChosenActions;
+        }
+        return cleanChosenActions;
+      })();
 
       // Garantizar la estructura de las 5 secciones conservando acciones/reflexiones reales sin inventar datos faltantes
       parsed.finalFeedback = {
         detectedStrengths: sanitizeDetectedStrengths(parsed.finalFeedback.detectedStrengths),
         stageTwoSkills: formattedStageTwoSkills,
-        chosenActions:
-          cleanChosenActions.length > 0 ? cleanChosenActions : registeredChosenActions,
+        chosenActions: resolvedChosenActions,
         stageSixLearnings:
           cleanStageSixLearnings.length > 0
             ? cleanStageSixLearnings
             : registeredStage6Learnings,
         recommendationsForAutonomy: cleanRecommendations,
       };
+    }
+
+    let validatedStage6Correction: 'not_executed' | null = null;
+    if (currentStageNum === 6) {
+      if (
+        parsed?.correctedExecutionStatus === 'not_executed' ||
+        deterministicStage6Correction === 'not_executed'
+      ) {
+        validatedStage6Correction = 'not_executed';
+      }
+      if (validatedStage6Correction) {
+        parsed.correctedExecutionStatus = validatedStage6Correction;
+      } else {
+        delete parsed.correctedExecutionStatus;
+      }
+    } else if (parsed && typeof parsed === 'object') {
+      delete parsed.correctedExecutionStatus;
     }
 
     const rawReply =
@@ -3220,6 +3529,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
       text: responseText,
       readyToAdvance: Boolean(parsed.readyToAdvance),
       advancePrompt: parsed.advancePrompt ?? null,
+      ...(validatedStage6Correction ? { correctedExecutionStatus: validatedStage6Correction } : {}),
       data: {
         ...parsed,
         reply: responseText,

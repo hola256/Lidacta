@@ -122,6 +122,157 @@ function isStage7InsufficientPlaceholderText(val: string): boolean {
   );
 }
 
+function normalizeStage6ComparisonText(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function detectStage6ExecutionCorrection(
+  userMessage: string,
+  currentStatus?: string | null
+): 'not_executed' | null {
+  if (typeof userMessage !== 'string' || !userMessage.trim()) return null;
+  if (currentStatus === 'not_executed') return null;
+
+  const norm = normalizeStage6ComparisonText(userMessage);
+
+  const hasButtonErrorSignal =
+    /(?:(?:me equivoque|presione|aprete|le di|seleccione|toque|marque|oprimi)\s+(?:el\s+boton|por\s+error|sin\s+querer|accidentalmente|"?si"?\s*(?:por\s+error|sin\s+querer|accidentalmente)?))|(?:por\s+error\s+(?:presione|aprete|seleccione|marque|le\s+di)\s+(?:a\s+)?(?:el\s+boton|"?si"?))|(?:(?:boton|por\s+error|sin\s+querer|accidentalmente).*(?:no\s+(?:he|lo|la)|aun\s+no|todavia\s+no))/.test(
+      norm
+    );
+
+  const affirmsAlreadyExecuted =
+    /\b(?:ya|si)\s+(?:lo\s+|la\s+)?(?:ejecute|realice|hice|lleve\s+a\s+cabo)\b/.test(norm);
+
+  if (affirmsAlreadyExecuted && !hasButtonErrorSignal) {
+    return null;
+  }
+
+  const hasExplicitNonExecution =
+    /(?:^|\b)(?:aun\s+|todavia\s+)?no\s+(?:he\s+|lo\s+|la\s+)?(?:ejecutado|realizado|llevado\s+a\s+cabo|hecho|cumplido|implementado|aplicado|tenido\s+la\s+conversacion)\b/.test(
+      norm
+    ) ||
+    /(?:todavia|aun)\s+no\s+(?:lo\s+|la\s+)?(?:hago|ejecuto|realizo|aplico|cumplo)\b/.test(
+      norm
+    ) ||
+    /\bno\s+pude\s+(?:ejecutar|realizar|llevar\s+a\s+cabo|hacer|tener\s+la\s+conversacion)\b/.test(
+      norm
+    );
+
+  if (hasButtonErrorSignal || hasExplicitNonExecution) {
+    return 'not_executed';
+  }
+
+  return null;
+}
+
+function stripExecutionStatusClarificationClauses(norm: string): string {
+  return norm
+    .replace(
+      /\b(?:la\s+verdad|honestamente|perdon|disculpa|disculpen|solo\s+para\s+aclarar|para\s+aclarar|queria\s+aclarar)\b/g,
+      ' '
+    )
+    .replace(
+      /\bme\s+equivoque(?:\s+al\s+(?:presionar|apretar|darle|seleccionar|tocar|marcar|oprimir)(?:\s+(?:a\s+|en\s+)?(?:el\s+boton(?:\s+(?:de\s+)?si)?|"?si"?))?)?\b/g,
+      ' '
+    )
+    .replace(
+      /\b(?:presione|aprete|le\s+di|seleccione|toque|marque|oprimi)\s+(?:a\s+|en\s+)?(?:el\s+boton(?:\s+(?:de\s+)?si)?|por\s+error|sin\s+querer|accidentalmente|"?si"?(?:\s*(?:por\s+error|sin\s+querer|accidentalmente))?)\b/g,
+      ' '
+    )
+    .replace(
+      /\bpor\s+error\s+(?:presione|aprete|seleccione|marque|le\s+di)(?:\s+(?:a\s+)?(?:el\s+boton|"?si"?))?\b/g,
+      ' '
+    )
+    .replace(/\b(?:por\s+error|sin\s+querer|accidentalmente)\b/g, ' ')
+    .replace(
+      /\b(?:aun|todavia)\s+no\s+(?:he\s+|lo\s+|la\s+)?(?:ejecutado|realizado|llevado\s+a\s+cabo|hecho|cumplido|implementado|aplicado|tenido\s+la\s+conversacion|hago|ejecuto|realizo|aplico|cumplo)(?:\s+(?:el\s+plan(?:\s+de\s+accion)?|la\s+accion|esto|eso))?(?:\s+(?:aun|todavia))?\b/g,
+      ' '
+    )
+    .replace(
+      /\bno\s+(?:he\s+|lo\s+|la\s+)?(?:ejecutado|realizado|llevado\s+a\s+cabo|hecho|cumplido|implementado|aplicado|tenido\s+la\s+conversacion)(?:\s+(?:el\s+plan(?:\s+de\s+accion)?|la\s+accion|esto|eso))?(?:\s+(?:aun|todavia))?\b/g,
+      ' '
+    )
+    .replace(
+      /\bno\s+pude\s+(?:ejecutar|realizar|llevar\s+a\s+cabo|hacer|tener\s+la\s+conversacion)(?:lo|la)?(?:\s+(?:el\s+plan(?:\s+de\s+accion)?|la\s+accion|esto|eso))?(?:\s+(?:aun|todavia))?\b/g,
+      ' '
+    )
+    .replace(/\b(?:el\s+plan|la\s+accion)\s+(?:sigue|esta|permanece)\s+pendiente(?:\s+de\s+ejecucion)?\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function isNonSubstantiveNonExecutionNote(value: string): boolean {
+  const norm = normalizeStage6ComparisonText(value);
+  if (!norm) return true;
+
+  const pureUncertaintyOrFiller = [
+    'aun no lo se',
+    'todavia no lo se',
+    'no lo se',
+    'no se',
+    'aun no',
+    'todavia no',
+    'pendiente',
+    'ninguno',
+    'ninguna',
+    'nada',
+    'n a',
+    'na',
+    'no aplica',
+    'sin ejecucion',
+  ];
+  if (pureUncertaintyOrFiller.includes(norm)) return true;
+
+  if (detectStage6ExecutionCorrection(value, 'executed') === 'not_executed') {
+    const remainder = stripExecutionStatusClarificationClauses(norm);
+    if (!remainder) return true;
+    const trivialStatusTokens = new Set([
+      'y', 'o', 'pero', 'que', 'de', 'el', 'la', 'los', 'las', 'un', 'una', 'a', 'en',
+      'con', 'por', 'para', 'mi', 'su', 'lo', 'le', 'se', 'aun', 'todavia', 'ya', 'si', 'no',
+      'boton', 'plan', 'accion', 'eso', 'esto',
+    ]);
+    const meaningfulRemainderWords = remainder
+      .split(' ')
+      .filter((w) => w.length >= 2 && !trivialStatusTokens.has(w));
+    return meaningfulRemainderWords.length < 3;
+  }
+
+  return false;
+}
+
+export function reconcileStage6ExecutionState(
+  session: MentorshipSession,
+  nextStatus: ActionPlanExecutionStatus,
+  now: string = new Date().toISOString()
+): MentorshipSession {
+  const updatedActionPlan: MentorshipActionPlan | undefined = session.actionPlan
+    ? nextStatus === 'executed'
+      ? {
+          ...session.actionPlan,
+          isCompleted: true,
+          completedAt: session.actionPlan.completedAt || now,
+        }
+      : {
+          ...session.actionPlan,
+          isCompleted: false,
+          completedAt: undefined,
+        }
+    : undefined;
+
+  return {
+    ...session,
+    actionPlanExecutionStatus: nextStatus,
+    stage6ExecutionVerified: nextStatus !== 'pending_verification',
+    actionPlan: updatedActionPlan || session.actionPlan,
+    lastActiveAt: now,
+  };
+}
+
 export function isValidStage7FinalFeedbackReport(
   report: any
 ): report is FinalFeedbackReport {
@@ -157,6 +308,7 @@ export function buildStage7FinalFeedbackReport(
   sessionContext?: {
     actionPlan?: MentorshipActionPlan;
     learnings?: MentorshipLearnings;
+    actionPlanExecutionStatus?: ActionPlanExecutionStatus;
   }
 ): FinalFeedbackReport | undefined {
   if (!coachFinalFeedback || typeof coachFinalFeedback !== 'object' || Array.isArray(coachFinalFeedback)) {
@@ -180,24 +332,46 @@ export function buildStage7FinalFeedbackReport(
     return undefined;
   }
 
-  const registeredActions =
-    isCleanStage7Text(sessionContext?.actionPlan?.what) &&
-    !isStage7InsufficientPlaceholderText(sessionContext.actionPlan.what)
-      ? [sessionContext.actionPlan.what.trim()]
-      : [];
+  const executionStatus = sessionContext?.actionPlanExecutionStatus;
+  const isUnexecuted =
+    executionStatus === 'not_executed' || executionStatus === 'pending_verification';
+
+  const registeredActions = (() => {
+    const rawWhat = sessionContext?.actionPlan?.what;
+    if (!isCleanStage7Text(rawWhat) || isStage7InsufficientPlaceholderText(rawWhat)) {
+      return [];
+    }
+    const trimmedWhat = rawWhat.trim();
+    const when = isCleanStage7Text(sessionContext?.actionPlan?.when)
+      ? sessionContext!.actionPlan!.when.trim()
+      : '';
+    if (isUnexecuted) {
+      return [
+        `${trimmedWhat}${when ? ` (Programada: ${when})` : ''} — Estado: pendiente de ejecución`,
+      ];
+    }
+    return [trimmedWhat];
+  })();
 
   const registeredLearnings: string[] = [];
   if (sessionContext?.learnings && typeof sessionContext.learnings === 'object') {
     const seen = new Set<string>();
-    for (const raw of [
-      sessionContext.learnings.insights,
-      sessionContext.learnings.whatHappened,
-      sessionContext.learnings.whatWorked,
-      sessionContext.learnings.futureAdjustments,
-    ]) {
+    const rawLearningFields = isUnexecuted
+      ? [
+          sessionContext.learnings.insights,
+          sessionContext.learnings.futureAdjustments,
+        ]
+      : [
+          sessionContext.learnings.insights,
+          sessionContext.learnings.whatHappened,
+          sessionContext.learnings.whatWorked,
+          sessionContext.learnings.futureAdjustments,
+        ];
+    for (const raw of rawLearningFields) {
       if (!isCleanStage7Text(raw)) continue;
       const trimmed = raw.trim();
       if (isStage7InsufficientPlaceholderText(trimmed)) continue;
+      if (isUnexecuted && isNonSubstantiveNonExecutionNote(trimmed)) continue;
       const key = trimmed.toLowerCase();
       if (!seen.has(key)) {
         seen.add(key);
@@ -210,14 +384,30 @@ export function buildStage7FinalFeedbackReport(
     arr.map((s) => s.trim()).filter((s) => !isStage7InsufficientPlaceholderText(s));
 
   const cleanedChosenActions = cleanNonPlaceholderList(coachFinalFeedback.chosenActions);
-  const cleanedStageSixLearnings = cleanNonPlaceholderList(coachFinalFeedback.stageSixLearnings);
+  const cleanedStageSixLearnings = cleanNonPlaceholderList(
+    coachFinalFeedback.stageSixLearnings
+  ).filter((s) => !isUnexecuted || !isNonSubstantiveNonExecutionNote(s));
   const cleanedRecommendations = cleanNonPlaceholderList(coachFinalFeedback.recommendationsForAutonomy);
+
+  const resolvedChosenActions = (() => {
+    if (cleanedChosenActions.length === 0) return registeredActions;
+    if (
+      isUnexecuted &&
+      registeredActions.length > 0 &&
+      !cleanedChosenActions.some((item) =>
+        /pendiente|no ejecutad|por ejecutar|reprogram/i.test(item)
+      )
+    ) {
+      return registeredActions;
+    }
+    return cleanedChosenActions;
+  })();
 
   const builtReport: FinalFeedbackReport = {
     ...coachFinalFeedback,
     detectedStrengths: sanitizeDetectedStrengths(coachFinalFeedback.detectedStrengths),
     stageTwoSkills: resolveConsolidatedStageTwoSkills(skillEntries, legacyIdentifiedSkills),
-    chosenActions: cleanedChosenActions.length > 0 ? cleanedChosenActions : registeredActions,
+    chosenActions: resolvedChosenActions,
     stageSixLearnings:
       cleanedStageSixLearnings.length > 0 ? cleanedStageSixLearnings : registeredLearnings,
     recommendationsForAutonomy: cleanedRecommendations,
@@ -595,6 +785,7 @@ export async function executeTransactionalStageTransition({
           {
             actionPlan: latestSession.actionPlan,
             learnings: latestSession.learnings,
+            actionPlanExecutionStatus: resolveStage6ExecutionStatus(latestSession),
           }
         )
       : undefined;
@@ -696,6 +887,18 @@ export async function executeTransactionalStageTransition({
           : sessionForPostCommit.identifiedSkills || []
         ).join(', ') || 'Liderazgo operativo';
 
+      const hrExecutionStatus = resolveStage6ExecutionStatus(sessionForPostCommit);
+      const hrActionBullet =
+        hrExecutionStatus === 'executed'
+          ? `• Acción implementada: ${sessionForPostCommit.actionPlan?.what || 'Conversación 1 a 1'}`
+          : `• Acción programada (pendiente de ejecución): ${
+              sessionForPostCommit.actionPlan?.what?.trim() || 'Plan de acción pendiente'
+            }${
+              sessionForPostCommit.actionPlan?.when?.trim()
+                ? ` — Programada: ${sessionForPostCommit.actionPlan.when.trim()}`
+                : ''
+            }`;
+
       const hrNotification: NotificationItem = {
         id: `notif_${Date.now()}_case_completed`,
         recipientRole: 'hr',
@@ -708,7 +911,7 @@ export async function executeTransactionalStageTransition({
         emailSimulated: {
           to: `recursos.humanos@${sessionForPostCommit.companyName.toLowerCase().replace(/\s+/g, '')}.com`,
           subject: `Lidacta: ${sessionForPostCommit.leaderName} terminó su proceso de acompañamiento`,
-          bodyText: `Estimada responsable de Recursos Humanos,\n\n${sessionForPostCommit.leaderName} concluyó satisfactoriamente las 7 etapas de desarrollo en Lidacta.\n\nYa puedes consultar los indicadores clave en tu panel:\n• Tema abordado: ${sessionForPostCommit.theme}\n• Habilidades desarrolladas: ${activeSkillsList}\n• Acción implementada: ${sessionForPostCommit.actionPlan?.what || 'Conversación 1 a 1'}\n\nGracias por impulsar el liderazgo en acción.\n\nAtentamente,\nEquipo Lidacta`,
+          bodyText: `Estimada responsable de Recursos Humanos,\n\n${sessionForPostCommit.leaderName} concluyó satisfactoriamente las 7 etapas de desarrollo en Lidacta.\n\nYa puedes consultar los indicadores clave en tu panel:\n• Tema abordado: ${sessionForPostCommit.theme}\n• Habilidades desarrolladas: ${activeSkillsList}\n${hrActionBullet}\n\nGracias por impulsar el liderazgo en acción.\n\nAtentamente,\nEquipo Lidacta`,
         },
       };
 
@@ -2638,6 +2841,15 @@ El Equipo de Lidacta`;
             ? (currentStage as StageNumber)
             : null;
 
+        const rawStructuredCorrection =
+          coachReply.correctedExecutionStatus ?? data.correctedExecutionStatus;
+        const validatedStage6Correction: 'not_executed' | null =
+          currentStage === 6 && rawStructuredCorrection === 'not_executed'
+            ? 'not_executed'
+            : currentStage === 6
+            ? detectStage6ExecutionCorrection(text, targetSession.actionPlanExecutionStatus)
+            : null;
+
         const lidactaMsg = {
           id: `msg_${Date.now()}_lid`,
           caseId: currentCaseId,
@@ -2654,17 +2866,22 @@ El Equipo de Lidacta`;
           prev.map((m) => {
             if (m.id !== currentCaseId) return m;
 
+            const baseSession =
+              validatedStage6Correction === 'not_executed'
+                ? reconcileStage6ExecutionState(m, 'not_executed')
+                : m;
+
             // Manejo estructurado de skillEntries:
             // En etapas 2, 3 y 4: cuando el backend devuelve un arreglo en coachReply.skillEntries,
             // se adopta directamente como la verdad canónica estructurada (respetando estados y evidencias reales).
             // En etapas 1, 5, 6 y 7: se conservan intactas las entradas existentes de la sesión (m.skillEntries).
-            let newSkillEntries: LeadershipSkillEntry[] = m.skillEntries || [];
+            let newSkillEntries: LeadershipSkillEntry[] = baseSession.skillEntries || [];
             if ([2, 3, 4].includes(currentStage) && Array.isArray(coachReply.skillEntries)) {
               newSkillEntries = coachReply.skillEntries;
             } else if (
-              (!m.skillEntries || m.skillEntries.length === 0) &&
-              Array.isArray(m.identifiedSkills) &&
-              m.identifiedSkills.length > 0 &&
+              (!baseSession.skillEntries || baseSession.skillEntries.length === 0) &&
+              Array.isArray(baseSession.identifiedSkills) &&
+              baseSession.identifiedSkills.length > 0 &&
               Array.isArray(coachReply.skillEntries) &&
               coachReply.skillEntries.length > 0
             ) {
@@ -2680,14 +2897,14 @@ El Equipo de Lidacta`;
                 ? activeSkillNamesFromEntries
                 : [2, 3, 4].includes(currentStage) && Array.isArray(coachReply.identifiedSkills)
                 ? normalizeExistingSessionSkills(coachReply.identifiedSkills)
-                : m.identifiedSkills
-                ? normalizeExistingSessionSkills(m.identifiedSkills)
+                : baseSession.identifiedSkills
+                ? normalizeExistingSessionSkills(baseSession.identifiedSkills)
                 : [];
 
             const authoritativeEntries =
-              newSkillEntries.length > 0 ? newSkillEntries : m.skillEntries;
+              newSkillEntries.length > 0 ? newSkillEntries : baseSession.skillEntries;
             const authoritativeLegacySkills =
-              newSkills.length > 0 ? newSkills : m.identifiedSkills;
+              newSkills.length > 0 ? newSkills : baseSession.identifiedSkills;
 
             // In Stage 5, the leader personally writes and owns their Action Plan.
             // Any suggestions or drafts provided by Lidacta in the conversation remain in the chat only
@@ -2702,22 +2919,25 @@ El Equipo de Lidacta`;
                     authoritativeLegacySkills,
                     new Date().toISOString(),
                     {
-                      actionPlan: m.actionPlan,
-                      learnings: m.learnings,
+                      actionPlan: baseSession.actionPlan,
+                      learnings: baseSession.learnings,
+                      actionPlanExecutionStatus: resolveStage6ExecutionStatus(baseSession),
                     }
                   )
                 : undefined;
 
             const updatedTargetSession: MentorshipSession = {
-              ...m,
-              stageReadyToAdvance: stageAdvanceSignal !== null ? stageAdvanceSignal : m.stageReadyToAdvance,
-              messages: [...m.messages, lidactaMsg],
-              theme: coachReply.detectedTheme || m.theme,
+              ...baseSession,
+              stageReadyToAdvance:
+                stageAdvanceSignal !== null ? stageAdvanceSignal : baseSession.stageReadyToAdvance,
+              messages: [...baseSession.messages, lidactaMsg],
+              theme: coachReply.detectedTheme || baseSession.theme,
               skillEntries: newSkillEntries,
               identifiedSkills: newSkills,
-              suggestedAlternatives: coachReply.suggestedAlternatives || m.suggestedAlternatives,
-              actionPlan: m.actionPlan,
-              finalFeedbackReport: verifiedStage7Feedback || m.finalFeedbackReport,
+              suggestedAlternatives:
+                coachReply.suggestedAlternatives || baseSession.suggestedAlternatives,
+              actionPlan: baseSession.actionPlan,
+              finalFeedbackReport: verifiedStage7Feedback || baseSession.finalFeedbackReport,
               lastActiveAt: new Date().toISOString(),
             };
             committedTargetSession = updatedTargetSession;
@@ -2740,6 +2960,7 @@ El Equipo de Lidacta`;
                 {
                   actionPlan: resolvedTargetSession.actionPlan,
                   learnings: resolvedTargetSession.learnings,
+                  actionPlanExecutionStatus: resolveStage6ExecutionStatus(resolvedTargetSession),
                 }
               )
             : undefined;
