@@ -951,6 +951,521 @@ export function sanitizeDetectedStrengths(rawStrengths: any): string[] {
     .slice(0, 4);
 }
 
+export interface Stage7StrengthCalibrationContext {
+  skillEntries?: LeadershipSkillEntry[] | null;
+  identifiedSkills?: string[] | null;
+  stageTwoSkills?: string[] | null;
+  conversationHistory?: Array<{
+    sender?: string;
+    role?: string;
+    stage?: number | string;
+    text?: string;
+    content?: string;
+  }> | null;
+  actionPlan?: {
+    what?: string;
+    when?: string;
+    withWhom?: string;
+    how?: string;
+    careReminders?: string;
+    isCompleted?: boolean;
+  } | null;
+  chosenAlternative?: string | null;
+  actionPlanExecutionStatus?: string | null;
+  learnings?: {
+    whatHappened?: string;
+    whatWorked?: string;
+    whatDidnt?: string;
+    insights?: string;
+    futureAdjustments?: string;
+  } | null;
+  isPracticeMode?: boolean;
+}
+
+interface ActiveSkillMatcher {
+  cluster: string;
+  canonicalNorm: string;
+  phrases: string[];
+  customTokens: string[];
+}
+
+const STRENGTH_GENERIC_SKILL_TOKENS = new Set([
+  'habilidad', 'habilidades', 'competencia', 'competencias', 'capacidad', 'capacidades',
+  'gestion', 'manejo', 'desarrollo', 'liderazgo', 'efectiva', 'efectivo', 'constructiva',
+  'constructivo', 'basada', 'hechos', 'equipo', 'equipos', 'persona', 'personas',
+  'clarificacion', 'empatica', 'empatico', 'activa', 'activo', 'estrategico', 'estrategica',
+  'profesional', 'laboral', 'directivo', 'directiva',
+]);
+
+const STRENGTH_PROCESS_TRIVIAL_LEARNINGS = new Set([
+  'aun no lo se', 'todavia no lo se', 'no lo se', 'no se', 'aun no', 'todavia no',
+  'pendiente', 'ninguno', 'ninguna', 'nada', 'n a', 'na', 'no aplica', 'sin ejecucion',
+  'sin comentarios', 'sin observaciones',
+]);
+
+function capitalizeSpanishSentence(text: string): string {
+  const clean = text.trim();
+  if (!clean) return '';
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
+function buildActiveSkillMatchers(context?: Stage7StrengthCalibrationContext): ActiveSkillMatcher[] {
+  if (!context) return [];
+  const rawNames: string[] = [];
+  const seen = new Set<string>();
+
+  const pushSkillName = (name: unknown) => {
+    if (typeof name !== 'string') return;
+    const trimmed = name.trim();
+    if (!trimmed || isInsufficientEvidenceMessage(trimmed)) return;
+    const beforeEvidence = trimmed.split(/\s+[—-]\s+(?:Evidencia|Habilidad previamente)/i)[0].trim();
+    if (!beforeEvidence || isInsufficientEvidenceMessage(beforeEvidence)) return;
+    const key = normalizeText(beforeEvidence);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    rawNames.push(beforeEvidence);
+  };
+
+  if (Array.isArray(context.skillEntries) && context.skillEntries.length > 0) {
+    for (const entry of getActiveSkillEntries(context.skillEntries)) {
+      pushSkillName(entry.skill);
+    }
+  } else if (Array.isArray(context.identifiedSkills)) {
+    for (const s of context.identifiedSkills) {
+      pushSkillName(s);
+    }
+  }
+
+  if (Array.isArray(context.stageTwoSkills)) {
+    for (const s of context.stageTwoSkills) {
+      pushSkillName(s);
+    }
+  }
+
+  const matchers: ActiveSkillMatcher[] = [];
+  for (const name of rawNames) {
+    const mapped = mapToCanonicalSkill(name);
+    const canonicalNorm = mapped ? normalizeText(mapped.canonicalName) : normalizeText(name);
+    const canonicalDef = mapped
+      ? CANONICAL_LEADERSHIP_SKILLS.find((d) => d.cluster === mapped.cluster)
+      : undefined;
+
+    const phrases = canonicalDef
+      ? [normalizeText(canonicalDef.canonicalName), ...canonicalDef.keywords.map(normalizeText)]
+      : [canonicalNorm];
+
+    const customTokens = canonicalNorm
+      .split(' ')
+      .filter((t) => t.length >= 4 && !STAGE2_STOPWORDS.has(t) && !STRENGTH_GENERIC_SKILL_TOKENS.has(t));
+
+    matchers.push({
+      cluster: mapped ? mapped.cluster : canonicalNorm,
+      canonicalNorm,
+      phrases: Array.from(new Set(phrases.filter(Boolean))),
+      customTokens,
+    });
+  }
+
+  return matchers;
+}
+
+function matchesAnyActiveSkill(normStrength: string, matchers: ActiveSkillMatcher[]): boolean {
+  if (!normStrength || matchers.length === 0) return false;
+
+  for (const matcher of matchers) {
+    if (matcher.phrases.some((phrase) => hasWholePhrase(normStrength, phrase))) {
+      return true;
+    }
+
+    if (matcher.customTokens.length > 0) {
+      const strengthTokens = new Set(normStrength.split(' ').filter(Boolean));
+      const matchedTokens = matcher.customTokens.filter((tok) => strengthTokens.has(tok));
+      const threshold = matcher.customTokens.length === 1 ? 1 : 2;
+      if (matchedTokens.length >= threshold) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function hasMasteryOrConsolidationClaim(norm: string): boolean {
+  return (
+    /\b(?:dominio\s+(?:consolidado|pleno|solido|completo|total|sobresaliente|demostrado|efectivo|alto|profesional)|pleno\s+dominio|solido\s+dominio|alto\s+dominio|maestria(?:\s+(?:demostrada|consolidada|profesional))?|experto\s+en|experta\s+en)\b/.test(
+      norm
+    ) ||
+    /\b(?:habilidad|competencia|capacidad|destreza)\s+(?:plenamente\s+|totalmente\s+|ya\s+)?(?:consolidada|dominada|desarrollada|madura)\b/.test(
+      norm
+    ) ||
+    /\b(?:ya\s+domina|domina\s+(?:plenamente|con\s+soltura|por\s+completo|sin\s+dificultad)|manejo\s+(?:sobresaliente|experto|pleno|consolidado)|nivel\s+(?:experto|maestria|sobresaliente))\b/.test(
+      norm
+    ) ||
+    /\b(?:capacidad\s+permanente|practica\s+permanente|habito\s+(?:plenamente\s+)?consolidado|de\s+forma\s+permanente|en\s+todo\s+momento\s+en\s+(?:su\s+)?(?:piso|trabajo|area|equipo)|desempeno\s+(?:sobresaliente|ejemplar)\s+consolidado|liderazgo\s+plenamente\s+consolidado)\b/.test(
+      norm
+    ) ||
+    /\b(?:excelente|sobresaliente|solida|plena)\s+(?:capacidad|habilidad|competencia|manejo|gestion|destreza)\s+consolidada\b/.test(
+      norm
+    )
+  );
+}
+
+function hasDirectTraitPraiseWithoutProcess(norm: string): boolean {
+  if (
+    /\b(?:excelente|sobresaliente|solida|alta|gran|notable|impecable|ejemplar|extraordinaria|fuerte|buena)\s+(?:capacidad|habilidad|competencia|manejo|gestion|destreza|comunicacion|delegacion|escucha|retroalimentacion|inteligencia|regulacion|motivacion|resolucion)\b/.test(
+      norm
+    )
+  ) {
+    return true;
+  }
+
+  return /^(?:comunicacion\s+asertiva|delegacion\s+efectiva|escucha\s+activa|inteligencia\s+emocional|regulacion\s+emocional|retroalimentacion\s+(?:basada\s+en\s+hechos|constructiva)|resolucion\s+(?:constructiva\s+)?de\s+conflictos|gestion\s+de\s+acuerdos|motivacion\s+y\s+desarrollo|pensamiento\s+estrategico)\b/.test(
+    norm
+  );
+}
+
+function hasObservableProcessBehavior(norm: string): boolean {
+  return /\b(?:apertura|disposicion|honestidad|autoconciencia|autocritica|iniciativa|preparacion|claridad\s+(?:al|para|en|diagnostica)|criterio\s+(?:al|para)|reconocimiento|reconocio|identifico|distinguio|pauso|preparo|estructuro|formulo|propuso|pidio|escucho|expuso|planteo|cuestiono|aclaro|acepto|corrigio|ajusto|reprogramo|definio|continuidad\s+en|en\s+la\s+simulacion|durante\s+(?:la\s+simulacion|el\s+ensayo|el\s+roleplay|el\s+ejercicio|la\s+practica|la\s+mentoria|la\s+sesion|el\s+acompanamiento|el\s+cierre))\b/.test(
+    norm
+  );
+}
+
+function isExplicitlyScopedToSimulation(norm: string): boolean {
+  return /\b(?:en\s+(?:la\s+)?simulacion|durante\s+(?:la\s+)?simulacion|en\s+el\s+(?:ensayo|roleplay|role\s+play|ejercicio(?:\s+practico)?|escenario\s+de\s+practica)|durante\s+(?:la\s+practica|el\s+ensayo|el\s+ejercicio|el\s+roleplay)|en\s+la\s+practica\s+(?:guiada|de\s+etapa\s+4|simulada))\b/.test(
+    norm
+  );
+}
+
+function claimsGeneralizedPermanence(norm: string): boolean {
+  return (
+    /\b(?:habitualmente|cotidianamente|consistentemente|permanentemente|en\s+todas\s+sus\s+interacciones(?:\s+laborales)?|en\s+todo\s+momento|capacidad\s+permanente|habito\s+consolidado|de\s+forma\s+permanente)\b/.test(
+      norm
+    ) ||
+    /\b(?:siempre\s+(?:aplica|demuestra|escucha|delega|retroalimenta|regula|comunica)|de\s+manera\s+(?:habitual|cotidiana|consistente|sistematica|permanente)\s+(?:en\s+(?:su\s+)?(?:trabajo|equipo|area|piso)|aplica|demuestra|implementa))\b/.test(
+      norm
+    )
+  );
+}
+
+function claimsWorkplacePerformance(norm: string): boolean {
+  return (
+    /\b(?:en\s+(?:su|el)\s+trabajo(?:\s+(?:diario|cotidiano|habitual))?|en\s+piso|en\s+(?:su|la)\s+(?:operacion|area|planta)\s+(?:diaria|cotidiana)|en\s+el\s+dia\s+a\s+dia)\b/.test(
+      norm
+    ) ||
+    /\b(?:desempeno\s+(?:habitual|diario|cotidiano|solido\s+en\s+(?:el\s+)?(?:trabajo|piso)|demostrado\s+en\s+(?:el\s+)?(?:trabajo|piso)|en\s+el\s+puesto)|aplica\s+.{0,40}\b(?:en\s+su\s+trabajo|habitualmente)|ya\s+(?:implementa|aplica)\s+.{0,30}\ben\s+su\s+(?:area|trabajo|piso))\b/.test(
+      norm
+    )
+  );
+}
+
+function claimsStrengthExecutionOrResults(norm: string): boolean {
+  if (isExplicitlyScopedToSimulation(norm)) return false;
+  if (
+    /\b(?:pendiente|no\s+(?:se\s+)?(?:ha\s+)?ejecut\w*|sin\s+ejecut\w*|antes\s+de\s+(?:conversar|actuar|ejecutar)|por\s+ejecut\w*|para\s+ejecut\w*|al\s+disenar|diseno\s+de|diseno\s+un)\b/.test(
+      norm
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    /\b(?:ya\s+(?:se\s+)?(?:ejecuto|realizo|implemento|cumplio|efectuo|concreto|llevo\s+a\s+cabo)|(?:accion|reunion|plan|conversacion)\s+(?:ya\s+)?(?:ejecutad[ao]|completad[ao]|implementad[ao]|concluid[ao]|realizad[ao]))\b/.test(
+      norm
+    ) ||
+    /\b(?:ejecuto|implemento|llevo\s+a\s+cabo|concreto|cumplio|aplico)\s+(?:con\s+exito|exitosamente|eficazmente|en\s+(?:campo|piso|su\s+area)|el\s+plan|la\s+accion|la\s+reunion|la\s+conversacion|el\s+acuerdo)\b/.test(
+      norm
+    ) ||
+    /\b(?:logro\s+(?:mejorar|resultados|que\s+(?:el\s+)?equipo|cambios\s+en)|obtuvo\s+resultados(?:\s+positivos|\s+favorables)?|al\s+aplicar\s+(?:su|el)\s+plan|tras\s+(?:ejecutar|aplicar|implementar)\s+(?:el\s+plan|la\s+accion|la\s+reunion)|sostuvo\s+(?:con\s+exito\s+)?la\s+(?:reunion|conversacion|charla).{0,35}\b(?:logrando|obteniendo|con\s+resultados))\b/.test(
+      norm
+    )
+  );
+}
+
+function extractObservableBehaviorWithoutMastery(rawText: string): string | null {
+  const clean = rawText.trim();
+  if (!clean) return null;
+
+  const colonSplit = clean.split(/\s*(?::|—|\s+-\s+)\s*/);
+  if (colonSplit.length >= 2) {
+    const leftNorm = normalizeText(colonSplit[0]);
+    const rightRaw = colonSplit.slice(1).join(': ').trim();
+    const rightNorm = normalizeText(rightRaw);
+    const rightWords = rightNorm.split(' ').filter(Boolean);
+    if (
+      (hasMasteryOrConsolidationClaim(leftNorm) || hasDirectTraitPraiseWithoutProcess(leftNorm)) &&
+      rightWords.length >= 4 &&
+      !hasMasteryOrConsolidationClaim(rightNorm)
+    ) {
+      return capitalizeSpanishSentence(rightRaw);
+    }
+  }
+
+  const clauseMatch = clean.match(
+    /^.*?\b(?:al|cuando|mediante|para)\s+(.+)$/i
+  );
+  if (clauseMatch && clauseMatch[1]) {
+    const fullLower = clean.toLowerCase();
+    const tail = clauseMatch[1].trim();
+    const tailNorm = normalizeText(tail);
+    const tailWords = tailNorm.split(' ').filter(Boolean);
+    if (tailWords.length >= 4 && !hasMasteryOrConsolidationClaim(tailNorm)) {
+      const idx = fullLower.lastIndexOf(tail.toLowerCase());
+      const prefixSegment = idx > 0 ? fullLower.slice(0, idx).trim() : '';
+      if (/\bal$/.test(prefixSegment)) {
+        return `Disposición observada al ${tail}`;
+      }
+      if (/\bpara$/.test(prefixSegment)) {
+        return `Disposición para ${tail}`;
+      }
+      if (/\bmediante$/.test(prefixSegment)) {
+        return `Conducta observada mediante ${tail}`;
+      }
+      if (/\bcuando$/.test(prefixSegment)) {
+        return capitalizeSpanishSentence(tail);
+      }
+    }
+  }
+
+  return null;
+}
+
+function hasSubstantiveSessionEvidenceForStrengths(context: Stage7StrengthCalibrationContext): boolean {
+  if (Array.isArray(context.skillEntries)) {
+    for (const entry of context.skillEntries) {
+      if (
+        Array.isArray(entry?.evidenceHistory) &&
+        entry.evidenceHistory.some((ev) => typeof ev?.evidenceText === 'string' && ev.evidenceText.trim().length >= 8)
+      ) {
+        return true;
+      }
+      if (
+        Array.isArray(entry?.reconsiderationHistory) &&
+        entry.reconsiderationHistory.some(
+          (rec) => typeof rec?.reconsiderationReason === 'string' && rec.reconsiderationReason.trim().length >= 8
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+
+  if (Array.isArray(context.conversationHistory)) {
+    for (const m of context.conversationHistory) {
+      if (!m || typeof m !== 'object') continue;
+      if (m.sender !== 'leader' && m.role !== 'user') continue;
+      const text = String(m.text || m.content || '').trim();
+      if (!text || isMetaOrOperationalStage2Text(text)) continue;
+      const norm = normalizeText(text);
+      const words = norm.split(' ').filter(Boolean);
+      if (words.length >= 4 || norm.length >= 20) {
+        return true;
+      }
+    }
+  }
+
+  if (
+    typeof context.actionPlan?.what === 'string' &&
+    context.actionPlan.what.trim().length >= 8 &&
+    !isInsufficientEvidenceMessage(context.actionPlan.what)
+  ) {
+    return true;
+  }
+
+  if (
+    typeof context.chosenAlternative === 'string' &&
+    context.chosenAlternative.trim().length >= 8 &&
+    !isInsufficientEvidenceMessage(context.chosenAlternative)
+  ) {
+    return true;
+  }
+
+  if (context.learnings && typeof context.learnings === 'object') {
+    const learningVals = [
+      context.learnings.whatHappened,
+      context.learnings.whatWorked,
+      context.learnings.whatDidnt,
+      context.learnings.insights,
+      context.learnings.futureAdjustments,
+    ];
+    for (const raw of learningVals) {
+      if (typeof raw !== 'string') continue;
+      const norm = normalizeText(raw);
+      if (norm.length >= 8 && !STRENGTH_PROCESS_TRIVIAL_LEARNINGS.has(norm)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Calibra de manera determinística `detectedStrengths` en el cierre de Etapa 7:
+ * 1. Evita que una habilidad activa por desarrollar (`stageTwoSkills`) aparezca como dominio consolidado o maestría.
+ * 2. Conserva conductas observables positivas (reformulando la atribución de dominio si existe evidencia conductual).
+ * 3. Impide atribuir desempeño habitual en el trabajo cuando la evidencia es únicamente de simulación de Etapa 4,
+ *    permitiendo describir lo observado dentro de la simulación.
+ * 4. Impide atribuir resultados de ejecución cuando la acción sigue pendiente o no ejecutada.
+ * 5. Conserva `[]` cuando no existe evidencia suficiente sin inventar fortalezas.
+ */
+export function calibrateStage7DetectedStrengths(
+  rawStrengths: unknown,
+  context?: Stage7StrengthCalibrationContext
+): string[] {
+  if (!Array.isArray(rawStrengths) || rawStrengths.length === 0) {
+    return [];
+  }
+
+  if (context && !hasSubstantiveSessionEvidenceForStrengths(context)) {
+    return [];
+  }
+
+  const activeSkillMatchers = buildActiveSkillMatchers(context);
+
+  const hasSimulationEvidence = Boolean(
+    context &&
+      (context.isPracticeMode ||
+        (Array.isArray(context.skillEntries) &&
+          context.skillEntries.some(
+            (e) =>
+              Array.isArray(e?.evidenceHistory) &&
+              e.evidenceHistory.some(
+                (ev) => ev?.sourceType === 'simulacion_practica' || Number(ev?.stage) === 4
+              )
+          )) ||
+        (Array.isArray(context.conversationHistory) &&
+          context.conversationHistory.some(
+            (m) =>
+              m &&
+              (m.sender === 'leader' || m.role === 'user') &&
+              Number(m.stage) === 4 &&
+              !isMetaOrOperationalStage2Text(String(m.text || m.content || ''))
+          )))
+  );
+
+  const executionStatus =
+    context?.actionPlanExecutionStatus ||
+    (context?.actionPlan?.isCompleted ? 'executed' : null);
+
+  const isExplicitlyExecuted =
+    executionStatus === 'executed' ||
+    Boolean(
+      context?.actionPlan?.isCompleted &&
+        executionStatus !== 'not_executed' &&
+        executionStatus !== 'pending_verification'
+    );
+
+  const isConfirmedUnexecuted =
+    executionStatus === 'not_executed' || executionStatus === 'pending_verification';
+
+  const hasPendingPlanWithoutExecution =
+    Boolean(context?.actionPlan?.what && context.actionPlan.what.trim()) &&
+    !isExplicitlyExecuted;
+
+  const hasRealExperienceHistory = Boolean(
+    context &&
+      ((Array.isArray(context.skillEntries) &&
+        context.skillEntries.some(
+          (e) =>
+            Array.isArray(e?.evidenceHistory) &&
+            e.evidenceHistory.some(
+              (ev) => ev?.sourceType === 'experiencia_relatada' || Number(ev?.stage) < 4
+            )
+        )) ||
+        (Array.isArray(context.conversationHistory) &&
+          context.conversationHistory.some(
+            (m) =>
+              m &&
+              (m.sender === 'leader' || m.role === 'user') &&
+              Number(m.stage) !== 4 &&
+              !isMetaOrOperationalStage2Text(String(m.text || m.content || ''))
+          )))
+  );
+
+  const calibrated: string[] = [];
+  const seen = new Set<string>();
+
+  const validateAndPush = (candidate: string) => {
+    const trimmed = candidate.trim();
+    if (!trimmed) return;
+    if (trimmed === INSUFFICIENT_STRENGTHS_MESSAGE || isInsufficientEvidenceMessage(trimmed)) {
+      return;
+    }
+
+    const norm = normalizeText(trimmed);
+    const words = norm.split(' ').filter(Boolean);
+    if (norm.length < 8 || words.length < 2) return;
+    if (hasSpeculativeOrMissingEvidenceMarkers(norm)) return;
+
+    const simulationScoped = isExplicitlyScopedToSimulation(norm);
+    if (simulationScoped && context && !hasSimulationEvidence) {
+      return;
+    }
+
+    if ((isConfirmedUnexecuted || hasPendingPlanWithoutExecution) && claimsStrengthExecutionOrResults(norm)) {
+      return;
+    }
+
+    if (claimsGeneralizedPermanence(norm)) {
+      return;
+    }
+
+    if (
+      claimsWorkplacePerformance(norm) &&
+      !isExplicitlyExecuted &&
+      (hasSimulationEvidence || !hasRealExperienceHistory || isConfirmedUnexecuted)
+    ) {
+      return;
+    }
+
+    const matchesActive = matchesAnyActiveSkill(norm, activeSkillMatchers);
+    const isMastery = hasMasteryOrConsolidationClaim(norm);
+    const isBareTraitAttribution =
+      matchesActive &&
+      hasDirectTraitPraiseWithoutProcess(norm) &&
+      !hasObservableProcessBehavior(norm);
+
+    let finalCandidate = trimmed;
+
+    if (isMastery || isBareTraitAttribution) {
+      const reformulated = extractObservableBehaviorWithoutMastery(trimmed);
+      if (!reformulated) {
+        return;
+      }
+      const normRef = normalizeText(reformulated);
+      if (
+        normRef.length < 10 ||
+        hasMasteryOrConsolidationClaim(normRef) ||
+        claimsGeneralizedPermanence(normRef) ||
+        ((isConfirmedUnexecuted || hasPendingPlanWithoutExecution) &&
+          claimsStrengthExecutionOrResults(normRef)) ||
+        (claimsWorkplacePerformance(normRef) &&
+          !isExplicitlyExecuted &&
+          (hasSimulationEvidence || !hasRealExperienceHistory || isConfirmedUnexecuted)) ||
+        (matchesAnyActiveSkill(normRef, activeSkillMatchers) &&
+          hasDirectTraitPraiseWithoutProcess(normRef) &&
+          !hasObservableProcessBehavior(normRef))
+      ) {
+        return;
+      }
+      finalCandidate = reformulated;
+    }
+
+    const dedupKey = normalizeText(finalCandidate);
+    if (!dedupKey || seen.has(dedupKey)) return;
+    seen.add(dedupKey);
+    calibrated.push(finalCandidate);
+  };
+
+  for (const item of rawStrengths) {
+    if (typeof item !== 'string') continue;
+    validateAndPush(item);
+    if (calibrated.length >= 4) break;
+  }
+
+  return calibrated;
+}
+
 /**
  * Candidato de habilidad entrante con soporte para texto y tipo de evidencia observable.
  */

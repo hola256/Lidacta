@@ -36,6 +36,7 @@ import {
   getActiveSkillEntries,
   getActiveSkillNames,
   sanitizeDetectedStrengths,
+  calibrateStage7DetectedStrengths,
   isValidStage2ObservableEvidence,
   buildStage2EvidenceContext,
   INSUFFICIENT_EVIDENCE_MESSAGE,
@@ -464,6 +465,14 @@ export function buildStage7FinalFeedbackReport(
     learnings?: MentorshipLearnings;
     actionPlanExecutionStatus?: ActionPlanExecutionStatus;
     chosenAlternative?: string;
+    conversationHistory?: Array<{
+      sender?: string;
+      role?: string;
+      stage?: number | string;
+      text?: string;
+      content?: string;
+    }>;
+    isPracticeMode?: boolean;
   }
 ): FinalFeedbackReport | undefined {
   if (!coachFinalFeedback || typeof coachFinalFeedback !== 'object' || Array.isArray(coachFinalFeedback)) {
@@ -527,7 +536,8 @@ export function buildStage7FinalFeedbackReport(
       !normChosenAlt.includes(normWhat);
 
     if (isUnexecuted) {
-      const primary = `${trimmedWhat}${when ? ` (Programada: ${when})` : ''}${withWhom ? ` — Con: ${withWhom}` : ''} — Estado: pendiente de ejecución`;
+      const scheduleLabel = when ? ` (Programada: ${when})` : '';
+      const primary = `${trimmedWhat}${scheduleLabel}${withWhom ? ` — Con: ${withWhom}` : ''} — Estado: ${when ? 'pendiente de ejecución' : 'diseñada (sin fecha programada), pendiente de ejecución'}`;
       return hasDistinctChosenAlt
         ? [primary, `Alternativa elegida en Etapa 3 (previa al plan): ${chosenAlt}`]
         : [primary];
@@ -594,10 +604,33 @@ export function buildStage7FinalFeedbackReport(
     isUnexecuted
   );
 
+  const resolvedStageTwoSkills = resolveConsolidatedStageTwoSkills(
+    skillEntries,
+    legacyIdentifiedSkills
+  );
+
+  const calibratedStrengths = sessionContext
+    ? calibrateStage7DetectedStrengths(coachFinalFeedback.detectedStrengths, {
+        skillEntries,
+        identifiedSkills: legacyIdentifiedSkills,
+        stageTwoSkills: resolvedStageTwoSkills,
+        conversationHistory: sessionContext.conversationHistory,
+        actionPlan: sessionContext.actionPlan,
+        chosenAlternative: sessionContext.chosenAlternative,
+        actionPlanExecutionStatus: executionStatus,
+        learnings: sessionContext.learnings,
+        isPracticeMode: sessionContext.isPracticeMode,
+      })
+    : calibrateStage7DetectedStrengths(coachFinalFeedback.detectedStrengths, {
+        skillEntries,
+        identifiedSkills: legacyIdentifiedSkills,
+        stageTwoSkills: resolvedStageTwoSkills,
+      });
+
   const builtReport: FinalFeedbackReport = {
     ...coachFinalFeedback,
-    detectedStrengths: sanitizeDetectedStrengths(coachFinalFeedback.detectedStrengths),
-    stageTwoSkills: resolveConsolidatedStageTwoSkills(skillEntries, legacyIdentifiedSkills),
+    detectedStrengths: calibratedStrengths,
+    stageTwoSkills: resolvedStageTwoSkills,
     chosenActions: resolvedChosenActions,
     stageSixLearnings:
       cleanedStageSixLearnings.length > 0 ? cleanedStageSixLearnings : registeredLearnings,
@@ -978,6 +1011,7 @@ export async function executeTransactionalStageTransition({
             learnings: latestSession.learnings,
             actionPlanExecutionStatus: resolveStage6ExecutionStatus(latestSession),
             chosenAlternative: latestSession.chosenAlternative,
+            conversationHistory: latestSession.messages,
           }
         )
       : undefined;
@@ -2343,7 +2377,15 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
             ? buildStage7FinalFeedbackReport(
                 coachReply.finalFeedback,
                 newSession.skillEntries,
-                newSession.identifiedSkills
+                newSession.identifiedSkills,
+                new Date().toISOString(),
+                {
+                  actionPlan: newSession.actionPlan,
+                  learnings: newSession.learnings,
+                  actionPlanExecutionStatus: resolveStage6ExecutionStatus(newSession),
+                  chosenAlternative: newSession.chosenAlternative,
+                  conversationHistory: newSession.messages,
+                }
               )
             : undefined;
 
@@ -3136,6 +3178,7 @@ El Equipo de Lidacta`;
                       learnings: baseSession.learnings,
                       actionPlanExecutionStatus: resolveStage6ExecutionStatus(baseSession),
                       chosenAlternative: baseSession.chosenAlternative,
+                      conversationHistory: baseSession.messages,
                     }
                   )
                 : undefined;
@@ -3176,6 +3219,7 @@ El Equipo de Lidacta`;
                   learnings: resolvedTargetSession.learnings,
                   actionPlanExecutionStatus: resolveStage6ExecutionStatus(resolvedTargetSession),
                   chosenAlternative: resolvedTargetSession.chosenAlternative,
+                  conversationHistory: resolvedTargetSession.messages,
                 }
               )
             : undefined;

@@ -17,6 +17,7 @@ import {
   formatStageTwoSkillsWithEvidence,
   normalizeExistingSessionSkills,
   sanitizeDetectedStrengths,
+  calibrateStage7DetectedStrengths,
   buildStage2EvidenceContext,
   buildStage2LocalContextRule,
   buildStage34EvidenceContext,
@@ -552,21 +553,8 @@ function extractRegisteredStage5Actions(
     !normChosenAlt.includes(normWhat);
 
   if (isUnexecuted) {
-    const primary = `${trimmedWhat}${when ? ` (Programada: ${when})` : ''}${withWhom ? ` — Con: ${withWhom}` : ''} — Estado: pendiente de ejecución`;
-    return hasDistinctChosenAlt
-      ? [primary, `Alternativa elegida en Etapa 3 (previa al plan): ${chosenAlt}`]
-      : [primary];
-  }
-
-  if (status === 'executed') {
-    const contextParts = [
-      when ? `Programada: ${when}` : '',
-      withWhom ? `Con: ${withWhom}` : '',
-    ].filter(Boolean);
-    const primary =
-      contextParts.length > 0
-        ? `${trimmedWhat} (${contextParts.join(' | ')}) — Estado: ejecutada`
-        : trimmedWhat;
+    const scheduleLabel = when ? ` (Programada: ${when})` : '';
+    const primary = `${trimmedWhat}${scheduleLabel}${withWhom ? ` — Con: ${withWhom}` : ''} — Estado: ${when ? 'pendiente de ejecución' : 'diseñada (sin fecha programada), pendiente de ejecución'}`;
     return hasDistinctChosenAlt
       ? [primary, `Alternativa elegida en Etapa 3 (previa al plan): ${chosenAlt}`]
       : [primary];
@@ -1412,9 +1400,14 @@ ESTADO REAL DEL COMPROMISO PARA EL CIERRE (ETAPA 7):
 - Obstáculos o qué no funcionó (Etapa 6): ${structuredStage6Learnings.obstacles.join(' | ') || 'Ninguno registrado'}
 - Aprendizajes y reflexiones del líder (Etapa 6): ${structuredStage6Learnings.insights.join(' | ') || 'Ninguno registrado'}
 - Ajustes futuros / reprogramación / siguientes pasos (Etapa 6): ${structuredStage6Learnings.futureAdjustments.join(' | ') || 'Ninguno registrado'}
-- Instrucción obligatoria de síntesis y distinción del proceso:
+- Instrucción obligatoria de síntesis, coherencia y calibración del cierre:
   * Sintetiza el proceso con lenguaje ejecutivo claro sin copiar literalmente los campos del formulario cuando puedas integrarlos con fidelidad.
   * Distingue con precisión entre lo identificado (habilidades/causas), la alternativa elegida en Etapa 3, la acción diseñada y programada en Etapa 5, lo ejecutado, los resultados obtenidos, los obstáculos, los aprendizajes y lo que permanece pendiente o reprogramado (no confundas la alternativa elegida con el plan final si cambió).
+  * Calibración obligatoria de "detectedStrengths":
+    - Distingue entre habilidades por fortalecer (${existingSessionSkills.join(', ') || 'ninguna registrada'}), conductas positivas observables en el proceso y fortalezas sostenibles con evidencia suficiente.
+    - PROHIBIDO atribuir dominio consolidado, maestría profesional o hábitos permanentes sobre habilidades activas por desarrollar o a partir de una sola intervención; si el líder mostró una conducta positiva vinculada a esa habilidad, descríbela como conducta observable específica sin atribuir dominio.
+    - Si la única evidencia proviene de simulación en Etapa 4, describe lo observado en la simulación (ej. "En la simulación...") sin afirmar desempeño habitual en su trabajo real; si la acción sigue pendiente, no atribuyas resultados de ejecución.
+    - Si no existe evidencia observable suficiente, devuelve "detectedStrengths": [].
   * ${
     stage7IsUnexecutedPrompt
       ? 'Como la acción NO ha sido ejecutada: en "chosenActions" sintetiza la acción comprometida, su programación o reprogramación y su estado pendiente o aún no concretado; en "stageSixLearnings" PROHIBIDO inventar resultados de ejecución inexistentes o incluir respuestas evasivas ("Aún no lo sé") o disculpas por haber presionado el botón por error, pero SÍ sintetiza obstáculos reales, decisiones o aprendizajes sustantivos (o déjalo en [] si no hay); y en "recommendationsForAutonomy" incluye el siguiente paso o reprogramación concreta.'
@@ -1895,7 +1888,36 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
             effectiveStage7ExecutionStatus
           );
 
-          const feedbackValidation = isValidStage7FinalFeedbackPayload(parsed.finalFeedback, {
+          const formattedStageTwoSkills = formatStageTwoSkillsWithEvidence(skillsToReport);
+
+          const calibratedDetectedStrengths =
+            parsed?.finalFeedback &&
+            typeof parsed.finalFeedback === 'object' &&
+            !Array.isArray(parsed.finalFeedback) &&
+            Array.isArray(parsed.finalFeedback.detectedStrengths) &&
+            parsed.finalFeedback.detectedStrengths.every(isCleanStage7String)
+              ? calibrateStage7DetectedStrengths(parsed.finalFeedback.detectedStrengths, {
+                  skillEntries: finalSkillEntries,
+                  identifiedSkills: existingSessionSkills,
+                  stageTwoSkills: formattedStageTwoSkills,
+                  conversationHistory: resolvedHistory,
+                  actionPlan: effectiveSessionActionPlan,
+                  chosenAlternative: existingChosenAlternative,
+                  actionPlanExecutionStatus: effectiveStage7ExecutionStatus,
+                  learnings: sessionData?.learnings,
+                  isPracticeMode,
+                })
+              : undefined;
+
+          const payloadForValidation =
+            calibratedDetectedStrengths !== undefined
+              ? {
+                  ...parsed.finalFeedback,
+                  detectedStrengths: calibratedDetectedStrengths,
+                }
+              : parsed.finalFeedback;
+
+          const feedbackValidation = isValidStage7FinalFeedbackPayload(payloadForValidation, {
             hasSessionSkills: skillsToReport.length > 0,
             hasRegisteredActions: registeredChosenActions.length > 0,
             hasRegisteredLearnings: registeredStage6Learnings.length > 0,
@@ -1944,9 +1966,6 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
             });
           }
 
-          // Formatear stageTwoSkills con la evidencia real observada o el mensaje de insuficiencia
-          const formattedStageTwoSkills = formatStageTwoSkillsWithEvidence(skillsToReport);
-
           const isUnexecutedStage7 =
             effectiveStage7ExecutionStatus === 'not_executed' ||
             effectiveStage7ExecutionStatus === 'pending_verification';
@@ -1975,7 +1994,7 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
 
           // Garantizar la estructura de las 5 secciones conservando acciones/reflexiones reales sin inventar datos faltantes
           parsed.finalFeedback = {
-            detectedStrengths: sanitizeDetectedStrengths(parsed.finalFeedback.detectedStrengths),
+            detectedStrengths: calibratedDetectedStrengths ?? [],
             stageTwoSkills: formattedStageTwoSkills,
             chosenActions: resolvedChosenActions,
             stageSixLearnings:
