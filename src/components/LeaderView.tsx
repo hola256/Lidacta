@@ -479,10 +479,12 @@ export const LeaderView: React.FC = () => {
 
   const [reopenedStages, setReopenedStages] = useState<Record<number, boolean>>({});
   const [isPracticingStage4, setIsPracticingStage4] = useState(false);
+  const [isStage6PlanExpanded, setIsStage6PlanExpanded] = useState(false);
 
   useEffect(() => {
     setReopenedStages({});
     setIsPracticingStage4(false);
+    setIsStage6PlanExpanded(false);
   }, [activeMentorship?.id, activeMentorship?.currentStage]);
 
   const handleReopenConversation = (st: StageNumber) => {
@@ -2732,348 +2734,497 @@ export const LeaderView: React.FC = () => {
                             );
 
                             return (
-                              <div className="p-4 sm:p-5 bg-white border border-[#493447]/15 rounded-2xl shadow-sm space-y-4">
-                                <div className="flex items-center justify-between gap-2 flex-wrap">
-                                  <div className="flex items-center gap-2">
-                                    <BookOpen className="w-4 h-4 text-[#BF3A1B] shrink-0" />
-                                    <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
-                                      Etapa 6: Aprender y reflexionar
-                                    </h4>
-                                  </div>
-                                  {stage6ExecutionStatus === 'executed' && hasSavedLearnings ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E2F7E1] text-[#246B2A] text-[11px] font-semibold border border-[#246B2A]/20">
-                                      <CheckCircle2 className="w-3 h-3 text-[#246B2A]" />
-                                      Reflexión guardada
-                                    </span>
-                                  ) : stage6ExecutionStatus === 'not_executed' ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#FFF7EF] text-[#BF3A1B] text-[11px] font-semibold border border-[#BF3A1B]/25">
-                                      <Clock className="w-3 h-3 text-[#BF3A1B]" />
-                                      Plan pendiente de ejecución
-                                    </span>
-                                  ) : null}
-                                </div>
-
-                                {hasStage5PlanSummary && (
-                                  <div className="p-3.5 bg-[#FFF7EF]/75 border border-[#FFD3BF] rounded-xl space-y-1.5 text-xs text-[#2D1B4E]">
-                                    <div className="font-heading font-bold text-[11px] uppercase tracking-wider text-[#BF3A1B]">
-                                      Plan de Acción acordado en Etapa 5
-                                    </div>
-                                    {stage5Plan?.what?.trim() && (
-                                      <p>
-                                        <span className="font-semibold">Acción:</span> {stage5Plan.what.trim()}
-                                      </p>
-                                    )}
-                                    {(stage5Plan?.when?.trim() || stage5Plan?.withWhom?.trim()) && (
-                                      <p className="text-[#4A3F55]">
-                                        {stage5Plan?.when?.trim() && (
-                                          <span>
-                                            <span className="font-semibold text-[#2D1B4E]">Cuándo:</span> {stage5Plan.when.trim()}
-                                          </span>
-                                        )}
-                                        {stage5Plan?.when?.trim() && stage5Plan?.withWhom?.trim() && ' · '}
-                                        {stage5Plan?.withWhom?.trim() && (
-                                          <span>
-                                            <span className="font-semibold text-[#2D1B4E]">Con quién:</span> {stage5Plan.withWhom.trim()}
-                                          </span>
-                                        )}
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* Estado A: Verificación inicial obligatoria (Sí / No) */}
-                                {stage6ExecutionStatus === 'pending_verification' && (
-                                  <div className="p-4 bg-[#FFF7EF] border-2 border-[#BF3A1B]/35 rounded-2xl space-y-3.5 animate-in fade-in duration-200">
-                                    <div className="space-y-1">
-                                      <h5 className="font-heading font-extrabold text-sm sm:text-base text-[#2D1B4E]">
-                                        ¿Ya ejecutaste tu Plan de Acción?
-                                      </h5>
-                                      <p className="text-xs text-[#4A3F55] leading-relaxed">
-                                        Tu respuesta orientará nuestra conversación de esta etapa. Si aún no pudiste llevarlo a cabo, te acompañaré a revisar qué ocurrió y definir tu siguiente paso sin bloquear tu proceso.
-                                      </p>
-                                    </div>
-
-                                    <div className="flex flex-col sm:flex-row gap-2.5">
-                                      <button
-                                        type="button"
-                                        disabled={isSendingMessage || isAdvancingStage}
-                                        onClick={() => respondStage6ExecutionCheck(true)}
-                                        className="min-h-[44px] flex-1 px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2666] text-[#F7B538] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-                                      >
-                                        <CheckCircle2 className="w-4 h-4 text-[#F7B538]" />
-                                        <span>Sí</span>
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        disabled={isSendingMessage || isAdvancingStage}
-                                        onClick={() => respondStage6ExecutionCheck(false)}
-                                        className="min-h-[44px] flex-1 px-5 py-2.5 bg-white hover:bg-[#FFD3BF]/35 text-[#2D1B4E] border-2 border-[#BF3A1B]/40 font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-xs transition-all cursor-pointer active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-                                      >
-                                        <Clock className="w-4 h-4 text-[#BF3A1B]" />
-                                        <span>No</span>
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Estado B: Plan ejecutado -> Reflexión guiada y formulario de aprendizaje */}
-                                {stage6ExecutionStatus === 'executed' && (
-                                  <>
+                              <>
+                                {stage6ExecutionStatus === 'not_executed' && (
+                                  <div className="space-y-3">
+                                    {/* 1. Diálogo directo inmediatamente debajo de los mensajes de Lidacta */}
                                     {isCurrent && (
-                                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-[#FFF7EF]/60 border border-[#493447]/10 rounded-xl text-xs">
-                                        <span className="font-semibold text-[#2D1B4E]">
-                                          Confirmaste que ya ejecutaste tu Plan de Acción.
-                                        </span>
+                                      <div className="bg-white border-2 border-[#F7B538] rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <label className="text-xs font-heading font-extrabold text-[#2D1B4E] flex items-center gap-2">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-[#BF3A1B] animate-pulse shrink-0" />
+                                            <span>Conversa sobre lo que ocurrió y tu siguiente paso:</span>
+                                          </label>
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#FFF7EF] text-[#BF3A1B] text-[11px] font-semibold border border-[#BF3A1B]/25">
+                                              <Clock className="w-3 h-3 text-[#BF3A1B]" />
+                                              <span>Plan pendiente de ejecución</span>
+                                            </span>
+                                            <span className="text-[11px] text-[#4A3F55]/70 hidden sm:inline-flex items-center gap-1">
+                                              <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
+                                              <span>Escribe o habla por nota de voz</span>
+                                            </span>
+                                          </div>
+                                        </div>
+
+                                        <textarea
+                                          value={stageInputText}
+                                          onChange={(e) => {
+                                            setStageInputText(e.target.value);
+                                            setInputText(e.target.value);
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                              e.preventDefault();
+                                              handleSubmitStageMessage(6);
+                                            }
+                                          }}
+                                          placeholder="Cuéntame qué obstáculos o circunstancias se presentaron, si avanzaste en algo y qué te gustaría ajustar..."
+                                          rows={3}
+                                          disabled={isSendingMessage || isAdvancingStage}
+                                          className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
+                                        />
+
+                                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
+                                          <WhatsAppVoiceRecorder
+                                            stageNumber={6}
+                                            stageName={meta.name}
+                                            mode="stage-card"
+                                            disabled={isSendingMessage || isAdvancingStage}
+                                            isSending={isSendingMessage}
+                                            onTranscript={(text) => {
+                                              setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
+                                              setInputText((prev) => (prev ? `${prev} ${text}` : text));
+                                            }}
+                                            onSendDirect={(text) => handleSubmitVoiceDirect(6, text)}
+                                          />
+
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSubmitStageMessage(6)}
+                                            disabled={!stageInputText.trim() || isSendingMessage || isAdvancingStage}
+                                            className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+                                          >
+                                            {isSendingMessage ? (
+                                              <span>Enviando respuesta...</span>
+                                            ) : (
+                                              <>
+                                                <span>Enviar respuesta</span>
+                                                <Send className="w-4 h-4 text-[#2D1B4E]" />
+                                              </>
+                                            )}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* 2. Referencia secundaria y compacta: estado pendiente + cambio a Sí + detalle desplegable del plan */}
+                                    <div className="p-3 sm:p-3.5 bg-[#FFF7EF]/60 border border-[#493447]/15 rounded-xl space-y-2.5 text-xs">
+                                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white text-[#BF3A1B] text-[11px] font-semibold border border-[#BF3A1B]/25">
+                                            <Clock className="w-3 h-3 text-[#BF3A1B]" />
+                                            <span>Plan pendiente de ejecución</span>
+                                          </span>
+                                          <span className="text-[11px] text-[#4A3F55]">
+                                            Acompañamiento sin juicios sobre obstáculos y siguiente paso.
+                                          </span>
+                                        </div>
+                                        {isCurrent && (
+                                          <button
+                                            type="button"
+                                            disabled={isSendingMessage || isAdvancingStage}
+                                            onClick={() => respondStage6ExecutionCheck(true)}
+                                            className="text-[11px] font-bold text-[#BF3A1B] hover:text-[#2D1B4E] underline cursor-pointer text-left sm:text-right shrink-0 disabled:opacity-50"
+                                          >
+                                            Ya ejecuté mi Plan de Acción (cambiar a Sí)
+                                          </button>
+                                        )}
+                                      </div>
+
+                                      {hasStage5PlanSummary && (
+                                        <div className="border-t border-[#493447]/10 pt-2">
+                                          <button
+                                            type="button"
+                                            aria-expanded={isStage6PlanExpanded}
+                                            onClick={() => setIsStage6PlanExpanded((prev) => !prev)}
+                                            className="w-full min-h-[36px] flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white/85 hover:bg-white border border-[#FFD3BF] text-left transition-colors cursor-pointer"
+                                          >
+                                            <div className="flex items-center gap-2 min-w-0">
+                                              <Calendar className="w-3.5 h-3.5 text-[#BF3A1B] shrink-0" />
+                                              <span className="font-heading font-bold text-[11px] uppercase tracking-wider text-[#BF3A1B] shrink-0">
+                                                Plan de Acción acordado en Etapa 5
+                                              </span>
+                                              {!isStage6PlanExpanded && stage5Plan?.what?.trim() && (
+                                                <span className="text-[11px] text-[#4A3F55] truncate hidden sm:inline">
+                                                  · {stage5Plan.what.trim()}
+                                                </span>
+                                              )}
+                                            </div>
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#2D1B4E] shrink-0">
+                                              <span>{isStage6PlanExpanded ? 'Ocultar detalle' : 'Ver detalle'}</span>
+                                              {isStage6PlanExpanded ? (
+                                                <ChevronUp className="w-3.5 h-3.5 text-[#BF3A1B]" />
+                                              ) : (
+                                                <ChevronDown className="w-3.5 h-3.5 text-[#4A3F55]" />
+                                              )}
+                                            </span>
+                                          </button>
+
+                                          {isStage6PlanExpanded && (
+                                            <div className="mt-2 p-3 bg-white border border-[#FFD3BF] rounded-lg space-y-1 text-xs text-[#2D1B4E]">
+                                              {stage5Plan?.what?.trim() && (
+                                                <p>
+                                                  <span className="font-semibold">Acción:</span> {stage5Plan.what.trim()}
+                                                </p>
+                                              )}
+                                              {(stage5Plan?.when?.trim() || stage5Plan?.withWhom?.trim()) && (
+                                                <p className="text-[#4A3F55]">
+                                                  {stage5Plan?.when?.trim() && (
+                                                    <span>
+                                                      <span className="font-semibold text-[#2D1B4E]">Cuándo:</span> {stage5Plan.when.trim()}
+                                                    </span>
+                                                  )}
+                                                  {stage5Plan?.when?.trim() && stage5Plan?.withWhom?.trim() && ' · '}
+                                                  {stage5Plan?.withWhom?.trim() && (
+                                                    <span>
+                                                      <span className="font-semibold text-[#2D1B4E]">Con quién:</span> {stage5Plan.withWhom.trim()}
+                                                    </span>
+                                                  )}
+                                                </p>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* 3. Botón «Concluir e ir a Cierre y retroalimentación» */}
+                                    {activeMentorship.currentStage === 6 && (
+                                      <div className="pt-1 flex flex-col sm:flex-row sm:items-center justify-end gap-2.5">
                                         <button
                                           type="button"
-                                          disabled={isSendingMessage || isAdvancingStage}
-                                          onClick={() => respondStage6ExecutionCheck(false)}
-                                          className="text-[11px] font-bold text-[#BF3A1B] hover:text-[#2D1B4E] underline cursor-pointer text-left sm:text-right disabled:opacity-50"
+                                          disabled={isAdvancingStage || isSendingMessage}
+                                          onClick={async () => {
+                                            const ok = await advanceStage(7);
+                                            setOpenStages((prev) =>
+                                              applyConfirmedTransitionOpenStages(prev, 6, 7, ok)
+                                            );
+                                          }}
+                                          className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2568] text-[#F7B538] font-bold text-xs rounded-xl transition-all shadow-xs active:scale-98 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
-                                          Aún no he ejecutado mi Plan de Acción (cambiar a No)
+                                          {isAdvancingStage ? (
+                                            <span>Generando cierre (Etapa 7)...</span>
+                                          ) : (
+                                            <>
+                                              <span>Concluir e ir a Cierre y retroalimentación (Etapa 7)</span>
+                                              <ArrowRight className="w-3.5 h-3.5 text-[#F7B538]" />
+                                            </>
+                                          )}
                                         </button>
                                       </div>
                                     )}
-                                    <div className="space-y-3 text-xs">
-                                      <div>
-                                        <div className="flex items-center justify-between mb-1">
-                                          <label className="font-bold text-[#2D1B4E]">¿Qué ocurrió después de tu acción?</label>
-                                          <span className="text-[10px] text-[#493447]/60 font-medium">Requerido</span>
-                                        </div>
-                                        <textarea
-                                          value={learningWhatHappened}
-                                          onChange={(e) => setLearningWhatHappened(e.target.value)}
-                                          placeholder="Describe cómo reaccionó la otra persona o el equipo..."
-                                          rows={2}
-                                          className="w-full p-2.5 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
-                                        />
-                                      </div>
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <div>
-                                          <div className="flex items-center justify-between mb-1">
-                                            <label className="font-bold text-[#2D1B4E]">¿Qué funcionó?</label>
-                                            <span className="text-[10px] text-[#493447]/60 font-medium">Requerido</span>
-                                          </div>
-                                          <input
-                                            type="text"
-                                            value={learningWhatWorked}
-                                            onChange={(e) => setLearningWhatWorked(e.target.value)}
-                                            placeholder="Lo que dio buen resultado..."
-                                            className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
-                                          />
-                                        </div>
-                                        <div>
-                                          <div className="flex items-center justify-between mb-1">
-                                            <label className="font-bold text-[#2D1B4E]">¿De qué te das cuenta y qué aprendes?</label>
-                                            <span className="text-[10px] text-[#493447]/60 font-medium">Requerido</span>
-                                          </div>
-                                          <input
-                                            type="text"
-                                            value={learningInsights}
-                                            onChange={(e) => setLearningInsights(e.target.value)}
-                                            placeholder="Tu insight de liderazgo..."
-                                            className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
-                                          />
-                                        </div>
-                                      </div>
+                                  </div>
+                                )}
 
-                                      {/* Campo Opcional para Compartir Aprendizajes con Recursos Humanos */}
-                                      <div className="mt-3 p-3.5 bg-[#FFF7EF]/80 border border-[#FFD3BF] rounded-xl space-y-1.5">
-                                        <div className="flex items-center justify-between">
-                                          <label className="font-bold text-[#2D1B4E] text-xs">
-                                            ¿Te gustaría compartir con Recursos Humanos algún aprendizaje de este proceso? Puedes escribirlo con tus propias palabras.
-                                          </label>
-                                          <span className="text-[10px] text-[#BF3A1B] font-semibold bg-[#FFD3BF]/60 px-2 py-0.5 rounded-full shrink-0 ml-2">
-                                            Opcional
-                                          </span>
-                                        </div>
-                                        <textarea
-                                          value={learningShareWithHR}
-                                          onChange={(e) => setLearningShareWithHR(e.target.value)}
-                                          placeholder="Escribe aquí voluntariamente el aprendizaje que deseas que el equipo de Recursos Humanos conozca..."
-                                          rows={2}
-                                          className="w-full p-2.5 bg-white border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
-                                        />
-                                        <p className="text-[11px] text-[#4A3F55]/70 leading-normal">
-                                          Este campo es 100% opcional. Si lo dejas vacío, tus reflexiones se mantendrán estrictamente privadas y no se comparte nada con la organización.
-                                        </p>
+                                {stage6ExecutionStatus !== 'not_executed' && (
+                                  <div className="p-4 sm:p-5 bg-white border border-[#493447]/15 rounded-2xl shadow-sm space-y-4">
+                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                                      <div className="flex items-center gap-2">
+                                        <BookOpen className="w-4 h-4 text-[#BF3A1B] shrink-0" />
+                                        <h4 className="font-heading font-bold text-sm sm:text-base text-[#2D1B4E]">
+                                          Etapa 6: Aprender y reflexionar
+                                        </h4>
                                       </div>
-                                    </div>
-
-                                    {/* Botón «Guardar Reflexión» debajo del formulario */}
-                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-3 border-t border-[#493447]/10">
-                                      <button
-                                        type="button"
-                                        disabled={!isLearningsValid || isSavingLearnings}
-                                        onClick={handleSaveLearnings}
-                                        className={`w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                                          !isLearningsValid
-                                            ? 'bg-neutral-200 text-[#493447]/40 border border-neutral-300 cursor-not-allowed shadow-none'
-                                            : justSavedLearnings
-                                            ? 'bg-[#E2F7E1] text-[#246B2A] border border-[#246B2A]/30 font-bold'
-                                            : 'bg-[#BF3A1B] hover:bg-[#a63014] text-white shadow-sm hover:shadow active:scale-98 cursor-pointer'
-                                        }`}
-                                      >
-                                        {isSavingLearnings ? (
-                                          <>
-                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                            <span>Guardando...</span>
-                                          </>
-                                        ) : justSavedLearnings ? (
-                                          <>
-                                            <CheckCircle2 className="w-4 h-4 text-[#246B2A]" />
-                                            <span>Reflexión Guardada</span>
-                                          </>
-                                        ) : hasSavedLearnings ? (
-                                          <>
-                                            <CheckCircle2 className="w-3.5 h-3.5" />
-                                            <span>Actualizar Reflexión</span>
-                                          </>
-                                        ) : (
-                                          <>
-                                            <CheckCircle2 className="w-3.5 h-3.5" />
-                                            <span>Guardar Reflexión</span>
-                                          </>
-                                        )}
-                                      </button>
-                                      {!isLearningsValid ? (
-                                        <span className="text-[11px] text-[#493447]/60 italic">
-                                          Completa los 3 campos obligatorios de reflexión para habilitar el guardado.
-                                        </span>
-                                      ) : hasSavedLearnings && !justSavedLearnings ? (
-                                        <span className="text-[11px] text-[#246B2A] font-medium flex items-center gap-1">
+                                      {stage6ExecutionStatus === 'executed' && hasSavedLearnings ? (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E2F7E1] text-[#246B2A] text-[11px] font-semibold border border-[#246B2A]/20">
                                           <CheckCircle2 className="w-3 h-3 text-[#246B2A]" />
-                                          Reflexión registrada. Puedes editar los campos y actualizarla en cualquier momento.
+                                          Reflexión guardada
                                         </span>
                                       ) : null}
                                     </div>
-                                  </>
-                                )}
 
-                                {/* Estado C: Plan aún no ejecutado -> Acompañamiento respetuoso sin juicios (sin formulario post-ejecución) */}
-                                {stage6ExecutionStatus === 'not_executed' && (
-                                  <div className="p-4 bg-[#FFF7EF]/80 border border-[#BF3A1B]/25 rounded-2xl space-y-3 text-xs">
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                      <h5 className="font-heading font-bold text-[#2D1B4E]">
-                                        Acompañamiento sobre tu Plan de Acción pendiente
-                                      </h5>
-                                      {isCurrent && (
+                                    {hasStage5PlanSummary && (
+                                      <div className="p-3.5 bg-[#FFF7EF]/75 border border-[#FFD3BF] rounded-xl space-y-1.5 text-xs text-[#2D1B4E]">
+                                        <div className="font-heading font-bold text-[11px] uppercase tracking-wider text-[#BF3A1B]">
+                                          Plan de Acción acordado en Etapa 5
+                                        </div>
+                                        {stage5Plan?.what?.trim() && (
+                                          <p>
+                                            <span className="font-semibold">Acción:</span> {stage5Plan.what.trim()}
+                                          </p>
+                                        )}
+                                        {(stage5Plan?.when?.trim() || stage5Plan?.withWhom?.trim()) && (
+                                          <p className="text-[#4A3F55]">
+                                            {stage5Plan?.when?.trim() && (
+                                              <span>
+                                                <span className="font-semibold text-[#2D1B4E]">Cuándo:</span> {stage5Plan.when.trim()}
+                                              </span>
+                                            )}
+                                            {stage5Plan?.when?.trim() && stage5Plan?.withWhom?.trim() && ' · '}
+                                            {stage5Plan?.withWhom?.trim() && (
+                                              <span>
+                                                <span className="font-semibold text-[#2D1B4E]">Con quién:</span> {stage5Plan.withWhom.trim()}
+                                              </span>
+                                            )}
+                                          </p>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Estado A: Verificación inicial obligatoria (Sí / No) */}
+                                    {stage6ExecutionStatus === 'pending_verification' && (
+                                      <div className="p-4 bg-[#FFF7EF] border-2 border-[#BF3A1B]/35 rounded-2xl space-y-3.5 animate-in fade-in duration-200">
+                                        <div className="space-y-1">
+                                          <h5 className="font-heading font-extrabold text-sm sm:text-base text-[#2D1B4E]">
+                                            ¿Ya ejecutaste tu Plan de Acción?
+                                          </h5>
+                                          <p className="text-xs text-[#4A3F55] leading-relaxed">
+                                            Tu respuesta orientará nuestra conversación de esta etapa. Si aún no pudiste llevarlo a cabo, te acompañaré a revisar qué ocurrió y definir tu siguiente paso sin bloquear tu proceso.
+                                          </p>
+                                        </div>
+
+                                        <div className="flex flex-col sm:flex-row gap-2.5">
+                                          <button
+                                            type="button"
+                                            disabled={isSendingMessage || isAdvancingStage}
+                                            onClick={() => respondStage6ExecutionCheck(true)}
+                                            className="min-h-[44px] flex-1 px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2666] text-[#F7B538] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                                          >
+                                            <CheckCircle2 className="w-4 h-4 text-[#F7B538]" />
+                                            <span>Sí</span>
+                                          </button>
+
+                                          <button
+                                            type="button"
+                                            disabled={isSendingMessage || isAdvancingStage}
+                                            onClick={() => respondStage6ExecutionCheck(false)}
+                                            className="min-h-[44px] flex-1 px-5 py-2.5 bg-white hover:bg-[#FFD3BF]/35 text-[#2D1B4E] border-2 border-[#BF3A1B]/40 font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-xs transition-all cursor-pointer active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                                          >
+                                            <Clock className="w-4 h-4 text-[#BF3A1B]" />
+                                            <span>No</span>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Estado B: Plan ejecutado -> Reflexión guiada y formulario de aprendizaje */}
+                                    {stage6ExecutionStatus === 'executed' && (
+                                      <>
+                                        {isCurrent && (
+                                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-[#FFF7EF]/60 border border-[#493447]/10 rounded-xl text-xs">
+                                            <span className="font-semibold text-[#2D1B4E]">
+                                              Confirmaste que ya ejecutaste tu Plan de Acción.
+                                            </span>
+                                            <button
+                                              type="button"
+                                              disabled={isSendingMessage || isAdvancingStage}
+                                              onClick={() => respondStage6ExecutionCheck(false)}
+                                              className="text-[11px] font-bold text-[#BF3A1B] hover:text-[#2D1B4E] underline cursor-pointer text-left sm:text-right disabled:opacity-50"
+                                            >
+                                              Aún no he ejecutado mi Plan de Acción (cambiar a No)
+                                            </button>
+                                          </div>
+                                        )}
+                                        <div className="space-y-3 text-xs">
+                                          <div>
+                                            <div className="flex items-center justify-between mb-1">
+                                              <label className="font-bold text-[#2D1B4E]">¿Qué ocurrió después de tu acción?</label>
+                                              <span className="text-[10px] text-[#493447]/60 font-medium">Requerido</span>
+                                            </div>
+                                            <textarea
+                                              value={learningWhatHappened}
+                                              onChange={(e) => setLearningWhatHappened(e.target.value)}
+                                              placeholder="Describe cómo reaccionó la otra persona o el equipo..."
+                                              rows={2}
+                                              className="w-full p-2.5 bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
+                                            />
+                                          </div>
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <div>
+                                              <div className="flex items-center justify-between mb-1">
+                                                <label className="font-bold text-[#2D1B4E]">¿Qué funcionó?</label>
+                                                <span className="text-[10px] text-[#493447]/60 font-medium">Requerido</span>
+                                              </div>
+                                              <input
+                                                type="text"
+                                                value={learningWhatWorked}
+                                                onChange={(e) => setLearningWhatWorked(e.target.value)}
+                                                placeholder="Lo que dio buen resultado..."
+                                                className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
+                                              />
+                                            </div>
+                                            <div>
+                                              <div className="flex items-center justify-between mb-1">
+                                                <label className="font-bold text-[#2D1B4E]">¿De qué te das cuenta y qué aprendes?</label>
+                                                <span className="text-[10px] text-[#493447]/60 font-medium">Requerido</span>
+                                              </div>
+                                              <input
+                                                type="text"
+                                                value={learningInsights}
+                                                onChange={(e) => setLearningInsights(e.target.value)}
+                                                placeholder="Tu insight de liderazgo..."
+                                                className="w-full p-2.5 min-h-[44px] bg-[#FFF7EF]/50 border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
+                                              />
+                                            </div>
+                                          </div>
+
+                                          {/* Campo Opcional para Compartir Aprendizajes con Recursos Humanos */}
+                                          <div className="mt-3 p-3.5 bg-[#FFF7EF]/80 border border-[#FFD3BF] rounded-xl space-y-1.5">
+                                            <div className="flex items-center justify-between">
+                                              <label className="font-bold text-[#2D1B4E] text-xs">
+                                                ¿Te gustaría compartir con Recursos Humanos algún aprendizaje de este proceso? Puedes escribirlo con tus propias palabras.
+                                              </label>
+                                              <span className="text-[10px] text-[#BF3A1B] font-semibold bg-[#FFD3BF]/60 px-2 py-0.5 rounded-full shrink-0 ml-2">
+                                                Opcional
+                                              </span>
+                                            </div>
+                                            <textarea
+                                              value={learningShareWithHR}
+                                              onChange={(e) => setLearningShareWithHR(e.target.value)}
+                                              placeholder="Escribe aquí voluntariamente el aprendizaje que deseas que el equipo de Recursos Humanos conozca..."
+                                              rows={2}
+                                              className="w-full p-2.5 bg-white border border-[#493447]/15 rounded-xl text-xs focus:outline-none focus:border-[#BF3A1B] transition-colors"
+                                            />
+                                            <p className="text-[11px] text-[#4A3F55]/70 leading-normal">
+                                              Este campo es 100% opcional. Si lo dejas vacío, tus reflexiones se mantendrán estrictamente privadas y no se comparte nada con la organización.
+                                            </p>
+                                          </div>
+                                        </div>
+
+                                        {/* Botón «Guardar Reflexión» debajo del formulario */}
+                                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-3 border-t border-[#493447]/10">
+                                          <button
+                                            type="button"
+                                            disabled={!isLearningsValid || isSavingLearnings}
+                                            onClick={handleSaveLearnings}
+                                            className={`w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                                              !isLearningsValid
+                                                ? 'bg-neutral-200 text-[#493447]/40 border border-neutral-300 cursor-not-allowed shadow-none'
+                                                : justSavedLearnings
+                                                ? 'bg-[#E2F7E1] text-[#246B2A] border border-[#246B2A]/30 font-bold'
+                                                : 'bg-[#BF3A1B] hover:bg-[#a63014] text-white shadow-sm hover:shadow active:scale-98 cursor-pointer'
+                                            }`}
+                                          >
+                                            {isSavingLearnings ? (
+                                              <>
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                <span>Guardando...</span>
+                                              </>
+                                            ) : justSavedLearnings ? (
+                                              <>
+                                                <CheckCircle2 className="w-4 h-4 text-[#246B2A]" />
+                                                <span>Reflexión Guardada</span>
+                                              </>
+                                            ) : hasSavedLearnings ? (
+                                              <>
+                                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                                <span>Actualizar Reflexión</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                                <span>Guardar Reflexión</span>
+                                              </>
+                                            )}
+                                          </button>
+                                          {!isLearningsValid ? (
+                                            <span className="text-[11px] text-[#493447]/60 italic">
+                                              Completa los 3 campos obligatorios de reflexión para habilitar el guardado.
+                                            </span>
+                                          ) : hasSavedLearnings && !justSavedLearnings ? (
+                                            <span className="text-[11px] text-[#246B2A] font-medium flex items-center gap-1">
+                                              <CheckCircle2 className="w-3 h-3 text-[#246B2A]" />
+                                              Reflexión registrada. Puedes editar los campos y actualizarla en cualquier momento.
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      </>
+                                    )}
+
+                                    {/* Diálogo directo en Etapa 6 tras responder Sí */}
+                                    {isCurrent && stage6ExecutionStatus !== 'pending_verification' && (
+                                      <div className="bg-white border-2 border-[#F7B538] rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
+                                        <div className="flex items-center justify-between">
+                                          <label className="text-xs font-heading font-extrabold text-[#2D1B4E] flex items-center gap-2">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-[#BF3A1B] animate-pulse" />
+                                            <span>Tu reflexión en conversación con Lidacta:</span>
+                                          </label>
+                                          <span className="text-[11px] text-[#4A3F55]/70 flex items-center gap-1">
+                                            <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
+                                            <span>Escribe o habla por nota de voz</span>
+                                          </span>
+                                        </div>
+
+                                        <textarea
+                                          value={stageInputText}
+                                          onChange={(e) => {
+                                            setStageInputText(e.target.value);
+                                            setInputText(e.target.value);
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                              e.preventDefault();
+                                              handleSubmitStageMessage(6);
+                                            }
+                                          }}
+                                          placeholder="Comparte qué ocurrió tras tu acción, qué funcionó o si solo lograste ejecutar una parte..."
+                                          rows={3}
+                                          disabled={isSendingMessage || isAdvancingStage}
+                                          className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
+                                        />
+
+                                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
+                                          <WhatsAppVoiceRecorder
+                                            stageNumber={6}
+                                            stageName={meta.name}
+                                            mode="stage-card"
+                                            disabled={isSendingMessage || isAdvancingStage}
+                                            isSending={isSendingMessage}
+                                            onTranscript={(text) => {
+                                              setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
+                                              setInputText((prev) => (prev ? `${prev} ${text}` : text));
+                                            }}
+                                            onSendDirect={(text) => handleSubmitVoiceDirect(6, text)}
+                                          />
+
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSubmitStageMessage(6)}
+                                            disabled={!stageInputText.trim() || isSendingMessage || isAdvancingStage}
+                                            className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+                                          >
+                                            {isSendingMessage ? (
+                                              <span>Enviando respuesta...</span>
+                                            ) : (
+                                              <>
+                                                <span>Enviar respuesta</span>
+                                                <Send className="w-4 h-4 text-[#2D1B4E]" />
+                                              </>
+                                            )}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Botón «Concluir e ir a Cierre y retroalimentación» siempre habilitado para no bloquear el acompañamiento */}
+                                    {activeMentorship.currentStage === 6 && (
+                                      <div className="pt-2 border-t border-[#493447]/10 flex flex-col sm:flex-row sm:items-center justify-end gap-2.5">
                                         <button
                                           type="button"
-                                          disabled={isSendingMessage || isAdvancingStage}
-                                          onClick={() => respondStage6ExecutionCheck(true)}
-                                          className="text-[11px] font-bold text-[#BF3A1B] hover:text-[#2D1B4E] underline cursor-pointer text-left sm:text-right disabled:opacity-50"
+                                          disabled={isAdvancingStage || isSendingMessage}
+                                          onClick={async () => {
+                                            const ok = await advanceStage(7);
+                                            setOpenStages((prev) =>
+                                              applyConfirmedTransitionOpenStages(prev, 6, 7, ok)
+                                            );
+                                          }}
+                                          className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2568] text-[#F7B538] font-bold text-xs rounded-xl transition-all shadow-xs active:scale-98 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
-                                          Ya ejecuté mi Plan de Acción (cambiar a Sí)
+                                          {isAdvancingStage ? (
+                                            <span>Generando cierre (Etapa 7)...</span>
+                                          ) : (
+                                            <>
+                                              <span>Concluir e ir a Cierre y retroalimentación (Etapa 7)</span>
+                                              <ArrowRight className="w-3.5 h-3.5 text-[#F7B538]" />
+                                            </>
+                                          )}
                                         </button>
-                                      )}
-                                    </div>
-                                    <p className="text-[#4A3F55] leading-relaxed">
-                                      No pasa nada si todavía no lo llevaste a cabo. Conversa con Lidacta abajo sobre qué obstáculos o circunstancias se presentaron, si lograste avanzar en alguna parte y qué ajuste o siguiente paso realista te gustaría dar.
-                                    </p>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
-
-                                {/* Diálogo directo en Etapa 6 tras responder Sí o No */}
-                                {isCurrent && stage6ExecutionStatus !== 'pending_verification' && (
-                                  <div className="bg-white border-2 border-[#F7B538] rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
-                                    <div className="flex items-center justify-between">
-                                      <label className="text-xs font-heading font-extrabold text-[#2D1B4E] flex items-center gap-2">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-[#BF3A1B] animate-pulse" />
-                                        <span>
-                                          {stage6ExecutionStatus === 'not_executed'
-                                            ? 'Conversa sobre lo que ocurrió y tu siguiente paso:'
-                                            : 'Tu reflexión en conversación con Lidacta:'}
-                                        </span>
-                                      </label>
-                                      <span className="text-[11px] text-[#4A3F55]/70 flex items-center gap-1">
-                                        <Sparkles className="w-3.5 h-3.5 text-[#F7B538]" />
-                                        <span>Escribe o habla por nota de voz</span>
-                                      </span>
-                                    </div>
-
-                                    <textarea
-                                      value={stageInputText}
-                                      onChange={(e) => {
-                                        setStageInputText(e.target.value);
-                                        setInputText(e.target.value);
-                                      }}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && !e.shiftKey) {
-                                          e.preventDefault();
-                                          handleSubmitStageMessage(6);
-                                        }
-                                      }}
-                                      placeholder={
-                                        stage6ExecutionStatus === 'not_executed'
-                                          ? 'Cuéntame qué obstáculos o circunstancias se presentaron, si avanzaste en algo y qué te gustaría ajustar...'
-                                          : 'Comparte qué ocurrió tras tu acción, qué funcionó o si solo lograste ejecutar una parte...'
-                                      }
-                                      rows={3}
-                                      disabled={isSendingMessage || isAdvancingStage}
-                                      className="w-full p-3 sm:p-4 text-xs sm:text-sm text-[#2D1B4E] bg-[#FFF7EF]/50 border border-[#493447]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#BF3A1B] focus:border-transparent transition-all placeholder:text-[#4A3F55]/50 leading-relaxed disabled:bg-neutral-100"
-                                    />
-
-                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
-                                      <WhatsAppVoiceRecorder
-                                        stageNumber={6}
-                                        stageName={meta.name}
-                                        mode="stage-card"
-                                        disabled={isSendingMessage || isAdvancingStage}
-                                        isSending={isSendingMessage}
-                                        onTranscript={(text) => {
-                                          setStageInputText((prev) => (prev ? `${prev} ${text}` : text));
-                                          setInputText((prev) => (prev ? `${prev} ${text}` : text));
-                                        }}
-                                        onSendDirect={(text) => handleSubmitVoiceDirect(6, text)}
-                                      />
-
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSubmitStageMessage(6)}
-                                        disabled={!stageInputText.trim() || isSendingMessage || isAdvancingStage}
-                                        className="min-h-[44px] flex items-center justify-center gap-2 px-6 py-2.5 bg-[#F7B538] hover:bg-[#f5a623] text-[#2D1B4E] font-heading font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer active:scale-95"
-                                      >
-                                        {isSendingMessage ? (
-                                          <span>Enviando respuesta...</span>
-                                        ) : (
-                                          <>
-                                            <span>Enviar respuesta</span>
-                                            <Send className="w-4 h-4 text-[#2D1B4E]" />
-                                          </>
-                                        )}
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Botón «Concluir e ir a Cierre y retroalimentación» siempre habilitado para no bloquear el acompañamiento */}
-                                {activeMentorship.currentStage === 6 && (
-                                  <div className="pt-2 border-t border-[#493447]/10 flex flex-col sm:flex-row sm:items-center justify-end gap-2.5">
-                                    <button
-                                      type="button"
-                                      disabled={isAdvancingStage || isSendingMessage}
-                                      onClick={async () => {
-                                        const ok = await advanceStage(7);
-                                        setOpenStages((prev) =>
-                                          applyConfirmedTransitionOpenStages(prev, 6, 7, ok)
-                                        );
-                                      }}
-                                      className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-[#2D1B4E] hover:bg-[#3D2568] text-[#F7B538] font-bold text-xs rounded-xl transition-all shadow-xs active:scale-98 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                      {isAdvancingStage ? (
-                                        <span>Generando cierre (Etapa 7)...</span>
-                                      ) : (
-                                        <>
-                                          <span>Concluir e ir a Cierre y retroalimentación (Etapa 7)</span>
-                                          <ArrowRight className="w-3.5 h-3.5 text-[#F7B538]" />
-                                        </>
-                                      )}
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
+                              </>
                             );
                           })()}
 

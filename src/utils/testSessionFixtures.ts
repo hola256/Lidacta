@@ -464,7 +464,7 @@ export function buildTestSessionForStage(
     actionPlanExecutionStatus = stage6Scenario;
     stage6ExecutionVerified = stage6Scenario !== 'pending_verification';
 
-    const verificationPromptText = `Llegamos a la Etapa 6: Aprender y reflexionar.\n\nTu compromiso registrado en la Etapa 5 fue:\n• **Acción:** ${DEFAULT_STAGE5_PLAN.what}\n• **Momento:** ${DEFAULT_STAGE5_PLAN.when}\n• **Con quién:** ${DEFAULT_STAGE5_PLAN.withWhom}\n\nAntes de comenzar con las preguntas de reflexión, quiero verificar cómo te fue con tu compromiso:\n\n**¿Ya ejecutaste tu Plan de Acción?**`;
+    const verificationPromptText = `Llegamos a la Etapa 6: Aprender y reflexionar.\n\nTu compromiso registrado en la Etapa 5 fue:\n• **Acción:** ${DEFAULT_STAGE5_PLAN.what}\n• **Cuando:** ${DEFAULT_STAGE5_PLAN.when}\n• **Con quién:** ${DEFAULT_STAGE5_PLAN.withWhom}\n\nAntes de comenzar con las preguntas de reflexión, quiero verificar cómo te fue con tu compromiso:\n\n**¿Ya ejecutaste tu Plan de Acción?**`;
 
     messages.push({
       id: `msg_qa_s6_verify_${uniqueSuffix}`,

@@ -1254,7 +1254,7 @@ export async function executeTransactionalStageTransition({
       const stage6PlanContext =
         stage6Plan?.what?.trim()
           ? `\n\nTu compromiso registrado en la Etapa 5 fue:\n• **Acción:** ${stage6Plan.what.trim()}${
-              stage6Plan.when?.trim() ? `\n• **Momento:** ${stage6Plan.when.trim()}` : ''
+              stage6Plan.when?.trim() ? `\n• **Cuando:** ${stage6Plan.when.trim()}` : ''
             }${
               stage6Plan.withWhom?.trim() ? `\n• **Con quién:** ${stage6Plan.withWhom.trim()}` : ''
             }`
