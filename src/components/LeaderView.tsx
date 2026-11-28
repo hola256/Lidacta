@@ -12,7 +12,10 @@ import {
   isSpeechRecognitionSupported,
 } from '../utils/speechUtils';
 import { getStageTriggerQuestion as getSharedStageTriggerQuestion } from '../utils/stageQuestions';
-import { INSUFFICIENT_STRENGTHS_MESSAGE } from '../utils/skillsConsolidator';
+import {
+  INSUFFICIENT_EVIDENCE_MESSAGE,
+  INSUFFICIENT_STRENGTHS_MESSAGE,
+} from '../utils/skillsConsolidator';
 import { QA_TEST_LEADER_ID } from '../utils/testSessionFixtures';
 import {
   Compass,
@@ -3105,7 +3108,16 @@ export const LeaderView: React.FC = () => {
                                       const strengthsSpeech = strengthsList.length > 0
                                         ? `Entre tus fortalezas detectadas destacan: ${strengthsList.join(', ')}.`
                                         : `En cuanto a fortalezas observables, ${INSUFFICIENT_STRENGTHS_MESSAGE.toLowerCase()}`;
-                                      const summarySpeech = `Hola ${currentUser.name.split(' ')[0]}. Este es tu reporte de cierre de mentoría Lidacta. ${strengthsSpeech} Las habilidades clave que pusiste en juego fueron: ${report.stageTwoSkills.join(', ')}. Y tus principales recomendaciones para continuar fortaleciendo tu autonomía son: ${report.recommendationsForAutonomy.join(', ')}. ¡Felicidades por completar tu proceso!`;
+                                      const hasSpecificStageTwoSkills =
+                                        Array.isArray(report.stageTwoSkills) &&
+                                        report.stageTwoSkills.length > 0 &&
+                                        !report.stageTwoSkills.every(
+                                          (s) => s === INSUFFICIENT_EVIDENCE_MESSAGE
+                                        );
+                                      const stageTwoSkillsSpeech = hasSpecificStageTwoSkills
+                                        ? `Las habilidades identificadas para fortalecer durante tu acompañamiento fueron: ${report.stageTwoSkills.join(', ')}.`
+                                        : `Sobre las habilidades a fortalecer, ${INSUFFICIENT_EVIDENCE_MESSAGE.toLowerCase()}`;
+                                      const summarySpeech = `Hola ${currentUser.name.split(' ')[0]}. Este es tu reporte de cierre de mentoría Lidacta. ${strengthsSpeech} ${stageTwoSkillsSpeech} Y tus principales recomendaciones para continuar fortaleciendo tu autonomía son: ${report.recommendationsForAutonomy.join(', ')}. ¡Felicidades por completar tu proceso!`;
                                       toggleVoicePlayback(summarySpeech, 'report-summary');
                                     }}
                                     title="Escuchar resumen del reporte con la voz clonada de Lidacta Mentora"

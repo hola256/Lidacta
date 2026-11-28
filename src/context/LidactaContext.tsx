@@ -39,9 +39,51 @@ import {
   calibrateStage7DetectedStrengths,
   isValidStage2ObservableEvidence,
   buildStage2EvidenceContext,
+  buildStage34EvidenceContext,
+  consolidateSkillEntries,
+  createSkillEntriesFromLegacy,
+  mapToCanonicalSkill,
+  isPertinentStage2SkillLabel,
+  normalizeText,
+  SkillReconsiderationDirective,
+  IncomingSkillCandidate,
   INSUFFICIENT_EVIDENCE_MESSAGE,
   INSUFFICIENT_STRENGTHS_MESSAGE,
 } from '../utils/skillsConsolidator';
+
+function findMatchingEntryInMap(
+  entriesMap: Map<string, LeadershipSkillEntry>,
+  rawSkill: string,
+  rawCluster?: string
+): { key: string; entry: LeadershipSkillEntry } | null {
+  const mapped = rawSkill ? mapToCanonicalSkill(rawSkill) : null;
+  const normRaw = normalizeText(rawSkill || '');
+  const normCluster = normalizeText(rawCluster || '');
+  const normCanonical = mapped ? normalizeText(mapped.canonicalName) : '';
+  const normMappedCluster = mapped ? normalizeText(mapped.cluster) : '';
+
+  if (rawCluster && entriesMap.has(rawCluster)) {
+    return { key: rawCluster, entry: entriesMap.get(rawCluster)! };
+  }
+  if (mapped && entriesMap.has(mapped.cluster)) {
+    return { key: mapped.cluster, entry: entriesMap.get(mapped.cluster)! };
+  }
+
+  for (const [key, entry] of entriesMap.entries()) {
+    const normEntrySkill = normalizeText(entry.skill);
+    const normEntryCluster = normalizeText(entry.cluster);
+    if (
+      (normCanonical && normEntrySkill === normCanonical) ||
+      (normRaw && normEntrySkill === normRaw) ||
+      (normMappedCluster && normEntryCluster === normMappedCluster) ||
+      (normCluster && normEntryCluster === normCluster)
+    ) {
+      return { key, entry };
+    }
+  }
+
+  return null;
+}
 
 export function reconcileStage2SkillEntries(
   existingEntries: LeadershipSkillEntry[] = [],
@@ -51,51 +93,379 @@ export function reconcileStage2SkillEntries(
     initialChallenge?: string;
     history?: any[];
     latestUserMessage?: string;
+    legacyIdentifiedSkills?: string[];
   }
 ): LeadershipSkillEntry[] {
   const existing = Array.isArray(existingEntries) ? existingEntries : [];
-  const incoming = Array.isArray(incomingEntries) ? incomingEntries : [];
-  if (incoming.length === 0) return existing;
+  const seededBase: LeadershipSkillEntry[] =
+    existing.length > 0
+      ? existing
+      : Array.isArray(sessionContext?.legacyIdentifiedSkills) &&
+        sessionContext.legacyIdentifiedSkills.length > 0
+      ? createSkillEntriesFromLegacy(sessionContext.legacyIdentifiedSkills, 2)
+      : [];
 
-  const existingClusters = new Set(existing.map((e) => e?.cluster).filter(Boolean));
-  const existingNames = new Set(
-    existing.map((e) => (e?.skill || '').trim().toLowerCase()).filter(Boolean)
+  const incoming = Array.isArray(incomingEntries) ? incomingEntries : [];
+  const hasNarrativeContext = Boolean(
+    sessionContext &&
+      (sessionContext.caseTitle?.trim() ||
+        sessionContext.initialChallenge?.trim() ||
+        (Array.isArray(sessionContext.history) && sessionContext.history.length > 0) ||
+        sessionContext.latestUserMessage?.trim())
   );
-  const stage2Context = sessionContext ? buildStage2EvidenceContext(sessionContext) : undefined;
+  const stage2Context = hasNarrativeContext ? buildStage2EvidenceContext(sessionContext!) : undefined;
 
   const mergedMap = new Map<string, LeadershipSkillEntry>();
-  for (const entry of existing) {
-    if (entry && entry.cluster) {
-      mergedMap.set(entry.cluster, entry);
-    }
+  for (const entry of seededBase) {
+    if (!entry || (!entry.cluster && !entry.skill)) continue;
+    const mapped = entry.skill ? mapToCanonicalSkill(entry.skill) : null;
+    const mapKey = entry.cluster || mapped?.cluster || normalizeText(entry.skill);
+    if (!mapKey) continue;
+    mergedMap.set(mapKey, {
+      ...entry,
+      cluster: mapKey,
+      evidenceHistory: Array.isArray(entry.evidenceHistory) ? [...entry.evidenceHistory] : [],
+      reconsiderationHistory: Array.isArray(entry.reconsiderationHistory)
+        ? [...entry.reconsiderationHistory]
+        : [],
+    });
   }
 
-  for (const entry of incoming) {
-    if (!entry || !entry.skill || !entry.cluster) continue;
-    const isPreexisting =
-      existingClusters.has(entry.cluster) ||
-      existingNames.has(entry.skill.trim().toLowerCase());
+  if (incoming.length === 0) {
+    return Array.from(mergedMap.values());
+  }
 
-    if (isPreexisting) {
-      mergedMap.set(entry.cluster, entry);
+  const now = new Date().toISOString();
+
+  for (const entry of incoming) {
+    if (!entry || !entry.skill) continue;
+    const matched = findMatchingEntryInMap(mergedMap, entry.skill, entry.cluster);
+
+    if (matched) {
+      const prevEntry = matched.entry;
+      // Una habilidad descartada o sustituida nunca se reactiva espontáneamente en Etapa 2
+      if (prevEntry.status === 'descartada' || prevEntry.status === 'sustituida') {
+        continue;
+      }
+
+      const incomingEvidences = Array.isArray(entry.evidenceHistory) ? entry.evidenceHistory : [];
+      let addedEvidence = false;
+      for (const ev of incomingEvidences) {
+        if (!ev || typeof ev.evidenceText !== 'string') continue;
+        const trimmedEv = ev.evidenceText.trim();
+        if (!trimmedEv || !isValidStage2ObservableEvidence(trimmedEv, stage2Context)) continue;
+
+        const normEv = normalizeText(trimmedEv);
+        const isDup = prevEntry.evidenceHistory.some(
+          (existingEv) => normalizeText(existingEv.evidenceText) === normEv
+        );
+        if (!isDup) {
+          prevEntry.evidenceHistory.push({
+            id:
+              ev.id ||
+              `ev-2-${prevEntry.evidenceHistory.length + 1}-${Math.random().toString(36).substring(2, 7)}`,
+            stage: 2,
+            sourceType: 'experiencia_relatada',
+            evidenceText: trimmedEv,
+            timestamp: ev.timestamp || now,
+          });
+          addedEvidence = true;
+        }
+      }
+      if (addedEvidence) {
+        prevEntry.lastUpdatedStage = 2;
+        prevEntry.updatedAt = now;
+      }
       continue;
     }
 
-    const hasValidEvidence =
-      Array.isArray(entry.evidenceHistory) &&
-      entry.evidenceHistory.some(
+    if (entry.status === 'descartada' || entry.status === 'sustituida') {
+      continue;
+    }
+    if (!isPertinentStage2SkillLabel(entry.skill)) {
+      continue;
+    }
+    const mapped = mapToCanonicalSkill(entry.skill);
+    if (!mapped) continue;
+
+    const validNewEvidences = (Array.isArray(entry.evidenceHistory) ? entry.evidenceHistory : [])
+      .filter(
         (ev) =>
           ev &&
           typeof ev.evidenceText === 'string' &&
           isValidStage2ObservableEvidence(ev.evidenceText, stage2Context)
-      );
+      )
+      .map((ev, idx) => ({
+        id: ev.id || `ev-2-${idx + 1}-${Math.random().toString(36).substring(2, 7)}`,
+        stage: 2 as const,
+        sourceType: 'experiencia_relatada' as const,
+        evidenceText: ev.evidenceText.trim(),
+        timestamp: ev.timestamp || now,
+      }));
 
-    if (hasValidEvidence) {
-      mergedMap.set(entry.cluster, entry);
+    if (validNewEvidences.length > 0) {
+      const resolvedCluster = entry.cluster || mapped.cluster;
+      mergedMap.set(resolvedCluster, {
+        ...entry,
+        skill: mapped.canonicalName,
+        cluster: resolvedCluster,
+        status: 'vigente',
+        initialStage: 2,
+        evidenceHistory: validNewEvidences,
+        reconsiderationHistory: [],
+        lastUpdatedStage: 2,
+        createdAt: entry.createdAt || now,
+        updatedAt: entry.updatedAt || now,
+      });
     }
   }
 
   return Array.from(mergedMap.values());
+}
+
+export function reconcileStage34SkillEntries(
+  existingEntries: LeadershipSkillEntry[] = [],
+  coachReply: {
+    skillEntries?: LeadershipSkillEntry[];
+    identifiedSkills?: Array<string | IncomingSkillCandidate>;
+    skillsReconsideration?: SkillReconsiderationDirective & {
+      recover?: Array<{ skill: string; evidence: string; newEvidenceText?: string; evidenceText?: string }>;
+      restore?: Array<{ skill: string; evidence: string; newEvidenceText?: string; evidenceText?: string }>;
+    };
+  } = {},
+  stage: number = 3,
+  sessionContext?: {
+    caseTitle?: string;
+    initialChallenge?: string;
+    history?: any[];
+    latestUserMessage?: string;
+    leaderAlternatives?: string[];
+    chosenAlternative?: string | null;
+    legacyIdentifiedSkills?: string[];
+  }
+): LeadershipSkillEntry[] {
+  const existing = Array.isArray(existingEntries) ? existingEntries : [];
+  const baseEntries: LeadershipSkillEntry[] =
+    existing.length > 0
+      ? existing
+      : Array.isArray(sessionContext?.legacyIdentifiedSkills) &&
+        sessionContext.legacyIdentifiedSkills.length > 0
+      ? createSkillEntriesFromLegacy(sessionContext.legacyIdentifiedSkills, 2)
+      : [];
+
+  if (stage !== 3 && stage !== 4) {
+    return consolidateSkillEntries(baseEntries, [], stage);
+  }
+
+  const hasNarrativeContext = Boolean(
+    sessionContext &&
+      (sessionContext.caseTitle?.trim() ||
+        sessionContext.initialChallenge?.trim() ||
+        (Array.isArray(sessionContext.history) && sessionContext.history.length > 0) ||
+        sessionContext.latestUserMessage?.trim() ||
+        (Array.isArray(sessionContext.leaderAlternatives) &&
+          sessionContext.leaderAlternatives.length > 0) ||
+        sessionContext.chosenAlternative?.trim())
+  );
+
+  const stage34EvidenceContext = hasNarrativeContext
+    ? buildStage34EvidenceContext({
+        caseTitle: sessionContext!.caseTitle,
+        initialChallenge: sessionContext!.initialChallenge,
+        history: sessionContext!.history,
+        latestUserMessage: sessionContext!.latestUserMessage,
+        leaderAlternatives: sessionContext!.leaderAlternatives,
+        chosenAlternative: sessionContext!.chosenAlternative,
+        currentStage: stage,
+      })
+    : undefined;
+
+  const baseMap = new Map<string, LeadershipSkillEntry>();
+  for (const entry of baseEntries) {
+    if (!entry || (!entry.cluster && !entry.skill)) continue;
+    const mapped = entry.skill ? mapToCanonicalSkill(entry.skill) : null;
+    const key = entry.cluster || mapped?.cluster || normalizeText(entry.skill);
+    if (key) baseMap.set(key, entry);
+  }
+
+  const rawRec = coachReply?.skillsReconsideration;
+  const discardList = Array.isArray(rawRec?.discard) ? [...rawRec.discard] : [];
+  const replaceList = Array.isArray(rawRec?.replace) ? [...rawRec.replace] : [];
+  const reactivateList = Array.isArray(rawRec?.reactivate)
+    ? [...rawRec.reactivate]
+    : Array.isArray(rawRec?.recover)
+    ? [...rawRec.recover]
+    : Array.isArray(rawRec?.restore)
+    ? [...rawRec.restore]
+    : [];
+
+  const incomingEntries = Array.isArray(coachReply?.skillEntries) ? coachReply.skillEntries : [];
+
+  for (const inc of incomingEntries) {
+    if (!inc || !inc.skill) continue;
+    const matched = findMatchingEntryInMap(baseMap, inc.skill, inc.cluster);
+    if (!matched) continue;
+    const prev = matched.entry;
+    const prevRecCount = Array.isArray(prev.reconsiderationHistory)
+      ? prev.reconsiderationHistory.length
+      : 0;
+    const incRecs = Array.isArray(inc.reconsiderationHistory) ? inc.reconsiderationHistory : [];
+    const newRecs = incRecs.slice(prevRecCount);
+    const latestRec = newRecs[newRecs.length - 1];
+
+    if (
+      (prev.status === 'vigente' || prev.status === 'precisada') &&
+      inc.status === 'descartada' &&
+      latestRec?.reconsiderationReason?.trim()
+    ) {
+      const alreadyInDiscard = discardList.some(
+        (d) => normalizeText(d.skill) === normalizeText(prev.skill)
+      );
+      if (!alreadyInDiscard) {
+        discardList.push({
+          skill: prev.skill,
+          evidence: latestRec.reconsiderationReason.trim(),
+        });
+      }
+    } else if (
+      (prev.status === 'vigente' || prev.status === 'precisada') &&
+      inc.status === 'sustituida' &&
+      latestRec?.reconsiderationReason?.trim() &&
+      latestRec?.replacedBySkill?.trim()
+    ) {
+      const targetSkillName = latestRec.replacedBySkill.trim();
+      const alreadyInReplace = replaceList.some(
+        (r) =>
+          normalizeText(r.from) === normalizeText(prev.skill) &&
+          normalizeText(r.to) === normalizeText(targetSkillName)
+      );
+      if (!alreadyInReplace) {
+        const targetInc = incomingEntries.find((candidate) => {
+          if (!candidate?.skill) return false;
+          const normTarget = normalizeText(targetSkillName);
+          const normCand = normalizeText(candidate.skill);
+          const mappedTarget = mapToCanonicalSkill(targetSkillName);
+          const mappedCand = mapToCanonicalSkill(candidate.skill);
+          return (
+            normCand === normTarget ||
+            (mappedTarget && mappedCand && mappedTarget.cluster === mappedCand.cluster)
+          );
+        });
+        const targetMatchedBase = findMatchingEntryInMap(baseMap, targetSkillName, targetInc?.cluster);
+        const targetPrevEvSet = new Set(
+          (targetMatchedBase?.entry.evidenceHistory || []).map((ev) => normalizeText(ev.evidenceText))
+        );
+        const targetNewEv = (targetInc?.evidenceHistory || []).find(
+          (ev) => ev?.evidenceText && !targetPrevEvSet.has(normalizeText(ev.evidenceText))
+        );
+        replaceList.push({
+          from: prev.skill,
+          to: targetSkillName,
+          evidence: latestRec.reconsiderationReason.trim(),
+          ...(targetNewEv?.evidenceText ? { newEvidenceText: targetNewEv.evidenceText.trim() } : {}),
+        });
+      }
+    } else if (
+      prev.status === 'descartada' &&
+      inc.status === 'precisada' &&
+      latestRec?.reconsiderationReason?.trim()
+    ) {
+      const prevEvSet = new Set(
+        (prev.evidenceHistory || []).map((ev) => normalizeText(ev.evidenceText))
+      );
+      const newEv = (Array.isArray(inc.evidenceHistory) ? inc.evidenceHistory : []).find(
+        (ev) => ev?.evidenceText && !prevEvSet.has(normalizeText(ev.evidenceText))
+      );
+      const alreadyInReactivate = reactivateList.some(
+        (r) => normalizeText(r.skill) === normalizeText(prev.skill)
+      );
+      if (newEv?.evidenceText && !alreadyInReactivate) {
+        reactivateList.push({
+          skill: prev.skill,
+          evidence: latestRec.reconsiderationReason.trim(),
+          newEvidenceText: newEv.evidenceText.trim(),
+        });
+      }
+    }
+  }
+
+  const reconsiderationDirective: SkillReconsiderationDirective | undefined =
+    discardList.length > 0 || replaceList.length > 0 || reactivateList.length > 0
+      ? {
+          discard: discardList.length > 0 ? discardList : undefined,
+          replace: replaceList.length > 0 ? replaceList : undefined,
+          reactivate: reactivateList.length > 0 ? reactivateList : undefined,
+        }
+      : undefined;
+
+  const incomingCandidates: Array<string | IncomingSkillCandidate> = [];
+
+  if (incomingEntries.length > 0) {
+    for (const inc of incomingEntries) {
+      if (!inc || !inc.skill) continue;
+      if (inc.status === 'descartada' || inc.status === 'sustituida') {
+        continue;
+      }
+      const matched = findMatchingEntryInMap(baseMap, inc.skill, inc.cluster);
+      if (matched) {
+        const prev = matched.entry;
+        if (prev.status === 'descartada' || prev.status === 'sustituida') {
+          continue;
+        }
+        const prevEvSet = new Set(
+          (prev.evidenceHistory || []).map((ev) => normalizeText(ev.evidenceText))
+        );
+        for (const ev of Array.isArray(inc.evidenceHistory) ? inc.evidenceHistory : []) {
+          if (ev?.evidenceText && !prevEvSet.has(normalizeText(ev.evidenceText))) {
+            incomingCandidates.push({
+              skill: inc.skill,
+              evidenceText: ev.evidenceText.trim(),
+            });
+          }
+        }
+      } else {
+        const evList = Array.isArray(inc.evidenceHistory) ? inc.evidenceHistory : [];
+        if (evList.length === 0) {
+          incomingCandidates.push({ skill: inc.skill, evidenceText: '' });
+        } else {
+          for (const ev of evList) {
+            incomingCandidates.push({
+              skill: inc.skill,
+              evidenceText: typeof ev?.evidenceText === 'string' ? ev.evidenceText.trim() : '',
+            });
+          }
+        }
+      }
+    }
+  } else if (Array.isArray(coachReply?.identifiedSkills)) {
+    for (const item of coachReply.identifiedSkills) {
+      if (typeof item === 'string' && item.trim()) {
+        incomingCandidates.push(item.trim());
+      } else if (
+        item &&
+        typeof item === 'object' &&
+        typeof item.skill === 'string' &&
+        item.skill.trim()
+      ) {
+        incomingCandidates.push({
+          skill: item.skill.trim(),
+          evidenceText: typeof item.evidenceText === 'string' ? item.evidenceText.trim() : undefined,
+        });
+      }
+    }
+  }
+
+  return consolidateSkillEntries(
+    baseEntries,
+    incomingCandidates,
+    stage,
+    reconsiderationDirective,
+    undefined,
+    {
+      requireEvidenceInStages34: true,
+      stage34EvidenceContext,
+    }
+  );
 }
 import {
   QA_TEST_LEADER_ID,
@@ -1041,18 +1411,31 @@ export async function executeTransactionalStageTransition({
 
         let updatedSkillEntries: LeadershipSkillEntry[] = m.skillEntries || [];
         if (!isReopen) {
-          if (nextStage === 2 && Array.isArray(coachReply.skillEntries)) {
+          if (nextStage === 2) {
             updatedSkillEntries = reconcileStage2SkillEntries(
               m.skillEntries || [],
-              coachReply.skillEntries,
+              Array.isArray(coachReply.skillEntries) ? coachReply.skillEntries : [],
               {
                 caseTitle: m.title,
                 initialChallenge: m.initialChallenge,
                 history: m.messages,
+                legacyIdentifiedSkills: m.identifiedSkills,
               }
             );
-          } else if ([3, 4].includes(nextStage) && Array.isArray(coachReply.skillEntries)) {
-            updatedSkillEntries = coachReply.skillEntries;
+          } else if (nextStage === 3 || nextStage === 4) {
+            updatedSkillEntries = reconcileStage34SkillEntries(
+              m.skillEntries || [],
+              coachReply,
+              nextStage,
+              {
+                caseTitle: m.title,
+                initialChallenge: m.initialChallenge,
+                history: m.messages,
+                leaderAlternatives: m.leaderAlternatives,
+                chosenAlternative: m.chosenAlternative,
+                legacyIdentifiedSkills: m.identifiedSkills,
+              }
+            );
           } else if (
             (!m.skillEntries || m.skillEntries.length === 0) &&
             Array.isArray(m.identifiedSkills) &&
@@ -2417,12 +2800,31 @@ export const LidactaProvider: React.FC<{ children: React.ReactNode }> = ({ child
           prev.map((m) => {
             if (m.id !== newSession.id) return m;
             let updatedSkillEntries: LeadershipSkillEntry[] = m.skillEntries || [];
-            if (
-              [2, 3, 4].includes(stage) &&
-              Array.isArray(coachReply.skillEntries) &&
-              coachReply.skillEntries.length > 0
-            ) {
-              updatedSkillEntries = coachReply.skillEntries;
+            if (stage === 2) {
+              updatedSkillEntries = reconcileStage2SkillEntries(
+                m.skillEntries || [],
+                Array.isArray(coachReply.skillEntries) ? coachReply.skillEntries : [],
+                {
+                  caseTitle: m.title,
+                  initialChallenge: m.initialChallenge,
+                  history: m.messages,
+                  legacyIdentifiedSkills: m.identifiedSkills,
+                }
+              );
+            } else if (stage === 3 || stage === 4) {
+              updatedSkillEntries = reconcileStage34SkillEntries(
+                m.skillEntries || [],
+                coachReply,
+                stage,
+                {
+                  caseTitle: m.title,
+                  initialChallenge: m.initialChallenge,
+                  history: m.messages,
+                  leaderAlternatives: m.leaderAlternatives,
+                  chosenAlternative: m.chosenAlternative,
+                  legacyIdentifiedSkills: m.identifiedSkills,
+                }
+              );
             }
             const activeNames =
               updatedSkillEntries.length > 0 ? getActiveSkillNames(updatedSkillEntries) : [];
@@ -3116,23 +3518,37 @@ El Equipo de Lidacta`;
                 : m;
 
             // Manejo estructurado de skillEntries:
-            // En etapas 2, 3 y 4: cuando el backend devuelve un arreglo en coachReply.skillEntries,
-            // se adopta directamente como la verdad canónica estructurada (respetando estados y evidencias reales).
+            // En etapa 2: preserva habilidades legadas, evita duplicados y valida evidencia observable en nuevas habilidades.
+            // En etapas 3 y 4: protege entradas previas, historiales y estatus frente a respuestas parciales vía consolidateSkillEntries.
             // En etapas 1, 5, 6 y 7: se conservan intactas las entradas existentes de la sesión (m.skillEntries).
             let newSkillEntries: LeadershipSkillEntry[] = baseSession.skillEntries || [];
-            if (currentStage === 2 && Array.isArray(coachReply.skillEntries)) {
+            if (currentStage === 2) {
               newSkillEntries = reconcileStage2SkillEntries(
                 baseSession.skillEntries || [],
-                coachReply.skillEntries,
+                Array.isArray(coachReply.skillEntries) ? coachReply.skillEntries : [],
                 {
                   caseTitle: baseSession.title,
                   initialChallenge: baseSession.initialChallenge,
                   history: baseSession.messages,
                   latestUserMessage: text,
+                  legacyIdentifiedSkills: baseSession.identifiedSkills,
                 }
               );
-            } else if ([3, 4].includes(currentStage) && Array.isArray(coachReply.skillEntries)) {
-              newSkillEntries = coachReply.skillEntries;
+            } else if (currentStage === 3 || currentStage === 4) {
+              newSkillEntries = reconcileStage34SkillEntries(
+                baseSession.skillEntries || [],
+                coachReply,
+                currentStage,
+                {
+                  caseTitle: baseSession.title,
+                  initialChallenge: baseSession.initialChallenge,
+                  history: baseSession.messages,
+                  latestUserMessage: text,
+                  leaderAlternatives: baseSession.leaderAlternatives,
+                  chosenAlternative: baseSession.chosenAlternative,
+                  legacyIdentifiedSkills: baseSession.identifiedSkills,
+                }
+              );
             } else if (
               (!baseSession.skillEntries || baseSession.skillEntries.length === 0) &&
               Array.isArray(baseSession.identifiedSkills) &&

@@ -4993,18 +4993,37 @@ Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSO
       parsed.skillEntries = finalSkillEntries;
       parsed.identifiedSkills = getActiveSkillNames(finalSkillEntries);
 
-      // Si en Etapa 2 Gemini propuso candidatos pero ninguno tuvo evidencia verificable y no hay habilidades vigentes,
-      // impedir el avance y solicitar información concreta adicional antes de identificar habilidades.
-      if (
-        currentStageNum === 2 &&
-        candidateSkills.length > 0 &&
-        parsed.identifiedSkills.length === 0
-      ) {
+      // Si en Etapa 2 no existe ninguna habilidad activa tras la consolidación (ya sea por rechazo de candidatos sin evidencia
+      // o porque Gemini devolvió identifiedSkills: [] antes de contar con sustento), impedir el avance y pedir ejemplo concreto.
+      if (currentStageNum === 2 && parsed.identifiedSkills.length === 0) {
+        const wasReadyToAdvance = Boolean(parsed.readyToAdvance);
         parsed.readyToAdvance = false;
         parsed.advancePrompt = null;
         const existingReply = String(parsed.replyText || parsed.reply || '').trim();
-        if (existingReply && !existingReply.includes('?')) {
-          parsed.replyText = `${existingReply}\n\nPara identificar con precisión qué habilidad fortalecer en este caso, cuéntame un ejemplo concreto: ¿qué hiciste o dejaste de hacer en esa situación y qué te llevó a actuar así?`;
+        const asksConcreteExample =
+          /(?:ejemplo|concret|qu[eé]\s+hiciste|qu[eé]\s+dejaste\s+de\s+hacer|qu[eé]\s+dijiste|c[oó]mo\s+actuaste|c[oó]mo\s+reaccionaste|de\s+qu[eé]\s+manera|qu[eé]\s+pas[oó]|situaci[oó]n\s+espec[ií]fica|rel[aá]tame|cu[eé]ntame)/i.test(
+            existingReply
+          );
+        const asksToAdvanceStage3 =
+          /(?:avanzamos|pasamos|listo para avanzar|ir a la etapa 3|etapa 3)[^.!?\n]*\?/i.test(
+            existingReply
+          );
+        const concreteFollowUp =
+          'Para identificar con precisión qué habilidad fortalecer en este caso, cuéntame un ejemplo concreto: ¿qué hiciste o dejaste de hacer en esa situación y qué te llevó a actuar así?';
+
+        if (!existingReply) {
+          parsed.replyText = concreteFollowUp;
+        } else if (
+          !existingReply.includes('?') ||
+          (wasReadyToAdvance && !asksConcreteExample) ||
+          asksToAdvanceStage3
+        ) {
+          const baseReply = asksToAdvanceStage3
+            ? existingReply
+                .replace(/[^.!?\n]*(?:avanzamos|pasamos|listo para avanzar|ir a la etapa 3|etapa 3)[^.!?\n]*\??/gi, '')
+                .trim()
+            : existingReply;
+          parsed.replyText = baseReply ? `${baseReply}\n\n${concreteFollowUp}` : concreteFollowUp;
         }
       }
     } else {
