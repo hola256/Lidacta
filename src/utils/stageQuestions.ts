@@ -31,7 +31,7 @@ export const getStageTriggerQuestion = (
     case 6:
       return `Tras poner en práctica tu decisión, entramos a la Etapa 6 (Aprender y reflexionar): revisa lo que sucedió al poner en práctica tu decisión y descubre qué puedes aprender de la experiencia. ¿Qué funcionó, qué puedes ajustar y qué te llevas para futuros retos?`;
     case 7:
-      return `Has completado el ciclo del acompañamiento. En esta Etapa 7 (Cierre y retroalimentación): integra tus avances y reconoce las habilidades que has puesto en práctica. A continuación tienes tu reporte consolidado para seguir desarrollándote como líder.`;
+      return `Has llegado al cierre del acompañamiento. En esta Etapa 7 (Cierre y retroalimentación): integra lo que analizaste sobre tu caso, las habilidades identificadas para fortalecer, los acuerdos o pasos definidos y el estado real de tu plan. A continuación tienes tu reporte consolidado para seguir desarrollándote como líder.`;
     default:
       return `Apertura de la Etapa ${st}: Comparte tus reflexiones o dudas para avanzar en tu acompañamiento directivo.`;
   }

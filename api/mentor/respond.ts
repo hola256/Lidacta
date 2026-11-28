@@ -859,6 +859,18 @@ REGLA LOCAL DE ETAPA 4 (PRÁCTICA OPCIONAL Y EVIDENCIA EN SIMULACIÓN):
 - Si el líder omite la práctica o no realiza simulación, conserva intactas las habilidades previas sin inventar evidencia ni descartes.`;
 }
 
+export function buildFeedbackLanguageLocalRule(): string {
+  return `
+REGLA LOCAL DE LENGUAJE DE RETROALIMENTACIÓN Y RECONOCIMIENTO (OBLIGATORIA EN CONVERSACIÓN Y REPORTE FINAL):
+- Reconoce avances, decisiones, reflexiones y conductas concretas únicamente cuando exista evidencia real en la conversación; explica brevemente qué hizo o identificó el líder y por qué resulta relevante para el desafío que está trabajando.
+- Evita elogios vacíos, superlativos y aprobaciones automáticas ("excelente", "brillante", "perfecto", "muy bien") cuando no aporten información concreta.
+- Evita atribuciones generales de personalidad o carácter ("gran madurez", "mucha valentía", "gran temple", "liderazgo maduro") que no estén sustentadas en conductas observables de la sesión.
+- Diferencia con claridad la validación emocional legítima (acompañar carga, duda, frustración o preocupación sin juzgar) de la evaluación positiva del líder o de sus decisiones.
+- No fuerces reconocimientos en cada intervención: si aún no hay evidencia suficiente, continúa de forma natural mediante escucha activa, reflexión o preguntas pertinentes.
+- Mantén siempre un tono humano, cálido, cercano, respetuoso y natural; nunca vuelvas la mentoría fría, mecánica ni excesivamente formal.
+- Distingue con precisión entre una intención, una decisión elegida, una acción diseñada, una acción programada (con fecha) y una acción efectivamente ejecutada.`;
+}
+
 interface SkillReconsiderationDirective {
   discard?: Array<{
     skill: string;
@@ -1067,7 +1079,7 @@ function hasMasteryOrConsolidationClaim(norm: string): boolean {
 
 function hasDirectTraitPraiseWithoutProcess(norm: string): boolean {
   if (
-    /\b(?:excelente|sobresaliente|solida|alta|gran|notable|impecable|ejemplar|extraordinaria|fuerte|buena)\s+(?:capacidad|habilidad|competencia|manejo|gestion|destreza|comunicacion|delegacion|escucha|retroalimentacion|inteligencia|regulacion|motivacion|resolucion)\b/.test(
+    /\b(?:excelente|sobresaliente|solida|alta|gran|notable|impecable|ejemplar|extraordinaria|fuerte|buena|brillante|admirable)\s+(?:capacidad|habilidad|competencia|manejo|gestion|destreza|comunicacion|delegacion|escucha|retroalimentacion|inteligencia|regulacion|motivacion|resolucion)\b/.test(
       norm
     )
   ) {
@@ -1079,10 +1091,68 @@ function hasDirectTraitPraiseWithoutProcess(norm: string): boolean {
   );
 }
 
-function hasObservableProcessBehavior(norm: string): boolean {
-  return /\b(?:apertura|disposicion|honestidad|autoconciencia|autocritica|iniciativa|preparacion|claridad\s+(?:al|para|en|diagnostica)|criterio\s+(?:al|para)|reconocimiento|reconocio|identifico|distinguio|pauso|preparo|estructuro|formulo|propuso|pidio|escucho|expuso|planteo|cuestiono|aclaro|acepto|corrigio|ajusto|reprogramo|definio|continuidad\s+en|en\s+la\s+simulacion|durante\s+(?:la\s+simulacion|el\s+ensayo|el\s+roleplay|el\s+ejercicio|la\s+practica|la\s+mentoria|la\s+sesion|el\s+acompanamiento|el\s+cierre))\b/.test(
+function hasPersonalTraitAttributionOrValuePraise(norm: string): boolean {
+  if (
+    /\b(?:excelente|brillante|perfect[ao]|extraordinari[ao]|admirable|ejemplar|notable|sobresaliente|impecable|magnific[ao]|fantastic[ao]|grandios[ao]|buen[ao]?)\s+(?:decision|eleccion|respuesta|intervencion|postura|actitud|lider|liderazgo|criterio|propuesta|accion|manejo|gestion|capacidad|habilidad|nivel)\b/.test(
+      norm
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /\b(?:decision|eleccion|respuesta|postura|actitud|criterio)\s+(?:excelente|brillante|perfect[ao]|acertad[ao]|ejemplar|sobresaliente|valiente|madur[ao]|inteligente|extraordinari[ao])\b/.test(
+      norm
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /\b(?:gran|mucha|enorme|alta|notable|ejemplar|admirable|extraordinaria|buena|solida)\s+(?:madurez|valentia|temple|caracter|criterio|determinacion|entereza|firmeza|serenidad|sabiduria|claridad|apertura|honestidad|autoconciencia)\b/.test(
+      norm
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /\b(?:demuestra|demostro|muestra|mostro|evidencia|refleja|tiene|posee)\s+(?:una?\s+)?(?:gran\s+|mucha\s+|enorme\s+|alta\s+|notable\s+|admirable\s+|extraordinaria\s+)?(?:madurez|valentia|temple|caracter|liderazgo\s+maduro|capacidad\s+innata|criterio\s+excepcional|decision\s+brillante)\b/.test(
+      norm
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /\bliderazgo\s+(?:maduro|ejemplar|extraordinario|brillante|sobresaliente|impecable)\b/.test(norm) ||
+    /\b(?:un|una)\s+(?:gran|excelente|extraordinari[ao]|brillante|ejemplar)\s+lider\b/.test(norm) ||
+    /\bmadurez\s+(?:reflexiva|emocional|personal|profesional|directiva|de\s+liderazgo)\b/.test(norm)
+  ) {
+    return true;
+  }
+
+  return /^(?:excelente|brillante|perfecto|muy\s+bien|bien\s+hecho|felicidades|es\s+una\s+excelente|fue\s+una\s+excelente)\b/.test(
     norm
   );
+}
+
+function hasConcreteBehavioralAction(norm: string): boolean {
+  return /\b(?:reconocio|reconocer|identifico|identificar|distinguio|distinguir|separo|separar|diferencio|diferenciar|pauso|pausar|preparo|preparar|estructuro|estructurar|formulo|formular|propuso|proponer|pidio|pedir|escucho|escuchar|expuso|exponer|expreso|expresar|planteo|plantear|cuestiono|cuestionar|aclaro|aclarar|acepto|aceptar|corrigio|corregir|ajusto|ajustar|reprogramo|reprogramar|definio|definir|delimito|delimitar|diseno|disenar|acordo|acordar|asumio|asumir|solicito|solicitar|recibio|recibir|comunico|comunicar|ensayo|ensayar|practico|practicar|senalo|senalizar|explico|explicar|documento|documentar|trato|tratar|abordo|abordar|priorizo|priorizar|reviso|revisar|verifico|verificar|confirmo|confirmar|dialogo|dialogar|converso|conversar|pregunto|preguntar|indago|indagar|postergo|postergar|evito|evitar|intervino|intervenir|respondio|responder|organizo|organizar|establecio|establecer|concreto|concretar|cumplio|cumplir|aplic[oa]r?|sostuvo|sostener|mantuvo|mantener|escuchando|pidiendo|exponiendo|reconociendo|preguntando|validando|proponiendo|autoanalisis|habitos\s+propios)\b/.test(
+    norm
+  );
+}
+
+function isIsolatedAbstractNounStrength(norm: string): boolean {
+  const hasAbstractQualityNoun = /\b(?:apertura|honestidad|autoconciencia|autocritica|disposicion|iniciativa|preparacion|transparencia|humildad|empatia|sensibilidad|respeto|serenidad|temple|madurez|valentia|caracter|criterio|claridad|compromiso)\b/.test(
+    norm
+  );
+  if (!hasAbstractQualityNoun) return false;
+  return !hasConcreteBehavioralAction(norm);
+}
+
+function hasObservableProcessBehavior(norm: string): boolean {
+  return hasConcreteBehavioralAction(norm);
 }
 
 function isExplicitlyScopedToSimulation(norm: string): boolean {
@@ -1147,11 +1217,47 @@ function extractObservableBehaviorWithoutMastery(rawText: string): string | null
     const rightNorm = normalizeText(rightRaw);
     const rightWords = rightNorm.split(' ').filter(Boolean);
     if (
-      (hasMasteryOrConsolidationClaim(leftNorm) || hasDirectTraitPraiseWithoutProcess(leftNorm)) &&
+      (hasMasteryOrConsolidationClaim(leftNorm) ||
+        hasDirectTraitPraiseWithoutProcess(leftNorm) ||
+        hasPersonalTraitAttributionOrValuePraise(leftNorm)) &&
       rightWords.length >= 4 &&
-      !hasMasteryOrConsolidationClaim(rightNorm)
+      !hasMasteryOrConsolidationClaim(rightNorm) &&
+      !hasPersonalTraitAttributionOrValuePraise(rightNorm)
     ) {
       return capitalizeSpanishSentence(rightRaw);
+    }
+  }
+
+  const directDecisionInfinitive = clean.match(
+    /^(?:es|fue|tom[oó]|hizo)?\s*(?:una?\s+)?(?:excelente|brillante|perfecta|muy\s+buena|buena|notable|acertada|valiente|madura)\s+(?:decisi[oó]n|elecci[oó]n|postura|respuesta)\s+(?:el\s+|de\s+)?(.+)$/i
+  );
+  if (directDecisionInfinitive && directDecisionInfinitive[1]) {
+    const tail = directDecisionInfinitive[1].trim();
+    const tailNorm = normalizeText(tail);
+    const tailWords = tailNorm.split(' ').filter(Boolean);
+    if (
+      !/^(?:al|cuando|mediante|para|porque)\b/i.test(tail) &&
+      tailWords.length >= 4 &&
+      hasConcreteBehavioralAction(tailNorm) &&
+      !hasMasteryOrConsolidationClaim(tailNorm) &&
+      !hasPersonalTraitAttributionOrValuePraise(tailNorm)
+    ) {
+      return capitalizeSpanishSentence(tail);
+    }
+  }
+
+  const becauseOrWhenMatch = clean.match(/^.*?\b(?:porque|cuando)\s+(.+)$/i);
+  if (becauseOrWhenMatch && becauseOrWhenMatch[1]) {
+    const tail = becauseOrWhenMatch[1].trim();
+    const tailNorm = normalizeText(tail);
+    const tailWords = tailNorm.split(' ').filter(Boolean);
+    if (
+      tailWords.length >= 4 &&
+      hasConcreteBehavioralAction(tailNorm) &&
+      !hasMasteryOrConsolidationClaim(tailNorm) &&
+      !hasPersonalTraitAttributionOrValuePraise(tailNorm)
+    ) {
+      return capitalizeSpanishSentence(tail);
     }
   }
 
@@ -1163,7 +1269,11 @@ function extractObservableBehaviorWithoutMastery(rawText: string): string | null
     const tail = clauseMatch[1].trim();
     const tailNorm = normalizeText(tail);
     const tailWords = tailNorm.split(' ').filter(Boolean);
-    if (tailWords.length >= 4 && !hasMasteryOrConsolidationClaim(tailNorm)) {
+    if (
+      tailWords.length >= 4 &&
+      !hasMasteryOrConsolidationClaim(tailNorm) &&
+      !hasPersonalTraitAttributionOrValuePraise(tailNorm)
+    ) {
       const idx = fullLower.lastIndexOf(tail.toLowerCase());
       const prefixSegment = idx > 0 ? fullLower.slice(0, idx).trim() : '';
       if (/\bal$/.test(prefixSegment)) {
@@ -1367,34 +1477,46 @@ export function calibrateStage7DetectedStrengths(
     const matchesActive = matchesAnyActiveSkill(norm, activeSkillMatchers);
     const isMastery = hasMasteryOrConsolidationClaim(norm);
     const isBareTraitAttribution =
-      matchesActive &&
+      (matchesActive || !hasObservableProcessBehavior(norm)) &&
       hasDirectTraitPraiseWithoutProcess(norm) &&
       !hasObservableProcessBehavior(norm);
+    const isPersonalAttributionOrPraise = hasPersonalTraitAttributionOrValuePraise(norm);
+
+    if (!isMastery && !isBareTraitAttribution && !isPersonalAttributionOrPraise) {
+      if (isIsolatedAbstractNounStrength(norm)) {
+        return;
+      }
+    }
 
     let finalCandidate = trimmed;
 
-    if (isMastery || isBareTraitAttribution) {
+    if (isMastery || isBareTraitAttribution || isPersonalAttributionOrPraise) {
       const reformulated = extractObservableBehaviorWithoutMastery(trimmed);
       if (!reformulated) {
         return;
       }
-      const normRef = normalizeText(reformulated);
+      let candidateToCheck = reformulated;
+      if (simulationScoped && !isExplicitlyScopedToSimulation(normalizeText(candidateToCheck))) {
+        candidateToCheck = `En la simulación, ${candidateToCheck.charAt(0).toLowerCase()}${candidateToCheck.slice(1)}`;
+      }
+      const normRef = normalizeText(candidateToCheck);
       if (
         normRef.length < 10 ||
         hasMasteryOrConsolidationClaim(normRef) ||
+        hasPersonalTraitAttributionOrValuePraise(normRef) ||
+        isIsolatedAbstractNounStrength(normRef) ||
         claimsGeneralizedPermanence(normRef) ||
         ((isConfirmedUnexecuted || hasPendingPlanWithoutExecution) &&
           claimsStrengthExecutionOrResults(normRef)) ||
         (claimsWorkplacePerformance(normRef) &&
           !isExplicitlyExecuted &&
           (hasSimulationEvidence || !hasRealExperienceHistory || isConfirmedUnexecuted)) ||
-        (matchesAnyActiveSkill(normRef, activeSkillMatchers) &&
-          hasDirectTraitPraiseWithoutProcess(normRef) &&
+        (hasDirectTraitPraiseWithoutProcess(normRef) &&
           !hasObservableProcessBehavior(normRef))
       ) {
         return;
       }
-      finalCandidate = reformulated;
+      finalCandidate = candidateToCheck;
     }
 
     const dedupKey = normalizeText(finalCandidate);
@@ -3144,7 +3266,7 @@ export function generateContextualCoachReply(
         selectedSnippet;
 
       return {
-        replyText: `Perfecto, ${leaderName}. Confirmo tu decisión elegida: "${matchedChosen}".\n\nRecuerda: **tú eres quien decide y conduce la acción**, y tener definida esta ruta ya te da una base concreta para avanzar.\n\nSi lo deseas, podemos pasar a la **Etapa 4 (simulación opcional)** para ensayar cómo plantearlo antes de llevarlo a la realidad, o avanzar directamente a estructurar tu Plan de Acción en la Etapa 5.`,
+        replyText: `Gracias por confirmarlo, ${leaderName}. Confirmo tu decisión elegida: "${matchedChosen}".\n\nRecuerda: **tú eres quien decide y conduce la acción**, y contar con esta ruta definida nos permite prepararla o convertirla en un plan concreto.\n\nSi lo deseas, podemos pasar a la **Etapa 4 (simulación opcional)** para ensayar cómo plantearlo antes de llevarlo a la realidad, o avanzar directamente a estructurar tu Plan de Acción en la Etapa 5.`,
         readyToAdvance: true,
         advancePrompt: 'Ir a Etapa 4: Practicar antes de actuar (opcional)',
         detectedTheme: 'Diseño de Alternativas',
@@ -3188,7 +3310,7 @@ export function generateContextualCoachReply(
     if (currentAlternatives.length > 0) {
       if (currentAlternatives.length === 1) {
         return {
-          replyText: `Muy bien, ${leaderName}. Ya pusiste una primera alternativa concreta sobre la mesa:\n${alternativesSummaryBlock}\n\n¿Qué posible obstáculo ves en esta opción o qué otra alternativa distinta podrías considerar antes de elegir con cuál quedarte?`,
+          replyText: `Gracias por compartir esta primera alternativa concreta, ${leaderName}:\n${alternativesSummaryBlock}\n\n¿Qué posible obstáculo ves en esta opción o qué otra alternativa distinta podrías considerar antes de elegir con cuál quedarte?`,
           readyToAdvance: false,
           advancePrompt: null,
           detectedTheme: 'Diseño de Alternativas',
@@ -3198,7 +3320,7 @@ export function generateContextualCoachReply(
       }
 
       return {
-        replyText: `Muy bien planteado, ${leaderName}. Reconozco las alternativas concretas que acabas de proponer:\n${alternativesSummaryBlock}\n\n¿Cuál de estas alternativas te resulta más viable para avanzar, o qué duda te gustaría explorar sobre ellas?`,
+        replyText: `Tomo nota de las alternativas concretas que acabas de proponer, ${leaderName}:\n${alternativesSummaryBlock}\n\n¿Cuál de estas alternativas te resulta más viable para avanzar, o qué duda te gustaría explorar sobre ellas?`,
         readyToAdvance: false,
         advancePrompt: null,
         detectedTheme: 'Diseño de Alternativas',
@@ -3356,7 +3478,7 @@ export function generateContextualCoachReply(
     'La claridad temprana en los acuerdos previene fricciones y fortalece la confianza mutua.';
 
   return {
-    replyText: `Muchas gracias por tu compromiso y apertura en este proceso de mentoría, ${leaderName}. Has demostrado una gran capacidad para pasar de la duda a la acción decidida.\n\nTe recuerdo que **esta conversación ha sido 100% confidencial**. Recursos Humanos únicamente recibe constancia de que has concluido exitosamente tu proceso y los indicadores generales de desarrollo, salvaguardando en todo momento tu privacidad.\n\nHe generado tu **Reporte de Retroalimentación y Autonomía de Liderazgo**, el cual puedes consultar aquí en la aplicación y también te llegará a tu correo electrónico registrado. ¡Sigue utilizando Lidacta ante cada nuevo reto!`,
+    replyText: `Gracias por el tiempo que dedicaste a este acompañamiento, ${leaderName}. A lo largo de estas etapas fuiste ordenando los hechos de tu caso, reflexionando sobre las habilidades en juego y diseñando pasos concretos para abordarlo.\n\nTe recuerdo que **esta conversación ha sido 100% confidencial**. Recursos Humanos únicamente recibe constancia de que has concluido exitosamente tu proceso y los indicadores generales de desarrollo, salvaguardando en todo momento tu privacidad.\n\nHe generado tu **Reporte de Retroalimentación y Autonomía de Liderazgo**, el cual puedes consultar aquí en la aplicación y también te llegará a tu correo electrónico registrado. ¡Sigue utilizando Lidacta ante cada nuevo reto!`,
     readyToAdvance: false,
     advancePrompt: null,
     detectedTheme: 'Cierre y Consolidación',
@@ -4443,6 +4565,8 @@ ESTADO REAL DEL COMPROMISO PARA EL CIERRE (ETAPA 7):
   }`
         : '';
 
+    const feedbackLanguageLocalRule = buildFeedbackLanguageLocalRule();
+
     const finalTurnPrompt = `${
       trailingUnrepliedUserHistory
         ? `Mensajes previos del líder en el historial (anteriores al mensaje actual):\n${trailingUnrepliedUserHistory}\n\n========================================\n`
@@ -4460,7 +4584,7 @@ INSTRUCCIONES LOCALES DE CONTINUIDAD Y CALIDAD CONVERSACIONAL:
 - Está terminantemente PROHIBIDO repetir preguntas que el líder ya respondió o pedir información ya compartida.
 - Está terminantemente PROHIBIDO repetir síntesis, explicaciones previas o coletillas de cierre en turnos consecutivos.
 - REGLA CRÍTICA ANTI-CICLADO: si el líder expresa confusión ("no entendí", "a qué te refieres") o indica que ya contestó, reformula con palabras cotidianas y sencillas (o un ejemplo breve laboral) sin repetir la pregunta o plantilla previa; si ya aportó información o muestra desgaste, avanza con una pregunta diferente o habilita el avance cuando corresponda.
-- Mantén tu respuesta breve, directa y proporcional (1 a 3 párrafos cortos), sin explicaciones innecesariamente extensas.${stage2LocalRule}${stage3LocalRule}${stage4LocalRule}${stage6LocalRule}${stage7LocalRule}
+- Mantén tu respuesta breve, directa y proporcional (1 a 3 párrafos cortos), sin explicaciones innecesariamente extensas.${feedbackLanguageLocalRule}${stage2LocalRule}${stage3LocalRule}${stage4LocalRule}${stage6LocalRule}${stage7LocalRule}
 
 Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSON estricto.`;
 

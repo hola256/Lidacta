@@ -23,6 +23,7 @@ import {
   buildStage34EvidenceContext,
   buildStage3LocalContextRule,
   buildStage4LocalContextRule,
+  buildFeedbackLanguageLocalRule,
   INSUFFICIENT_EVIDENCE_MESSAGE,
   INSUFFICIENT_STRENGTHS_MESSAGE,
   SkillReconsiderationDirective,
@@ -1415,6 +1416,8 @@ ESTADO REAL DEL COMPROMISO PARA EL CIERRE (ETAPA 7):
   }`
             : '';
 
+        const feedbackLanguageLocalRule = buildFeedbackLanguageLocalRule();
+
         const prompt = `
 Historial reciente de la mentoría:
 ${historyText || '(Inicio de la mentoría)'}
@@ -1429,7 +1432,7 @@ IMPORTANTE: Responde de forma empática, humana y reflexiva, validando la emoci�
 REGLA CRÍTICA ANTI-CICLADO:
 - Está terminantemente PROHIBIDO repetir la misma pregunta o coletilla de cierre en turnos consecutivos (por ejemplo: "¿qué impacto directo tiene no intervenir en este momento...?").
 - Si el líder expresa confusión ("No entiendo tu pregunta", "A qué te refieres", "No te sigo"), reformula la pregunta con palabras cotidianas y más sencillas, o brinda un ejemplo práctico laboral en lugar de repetir la plantilla.
-- Si el líder ya aportó información o muestra desgaste, valida su sentir de forma natural y haz una pregunta diferente o habilita el avance ("readyToAdvance": true).${stage2LocalRule}${stage3LocalRule}${stage4LocalRule}${stage6LocalRule}${stage7LocalRule}
+- Si el líder ya aportó información o muestra desgaste, valida su sentir de forma natural y haz una pregunta diferente o habilita el avance ("readyToAdvance": true).${feedbackLanguageLocalRule}${stage2LocalRule}${stage3LocalRule}${stage4LocalRule}${stage6LocalRule}${stage7LocalRule}
 
 Genera tu respuesta como Lidacta para la Etapa ${currentStageNum} en formato JSON estricto.`;
 
@@ -3506,8 +3509,12 @@ export function generateDeterministicCoaching({
         ],
       };
     } else {
+      const reflectionDetail =
+        cleanMsg && !/^\[(?:avanzando|etapa)/i.test(cleanMsg) && cleanMsg.length >= 12
+          ? `Al poner sobre la mesa lo que observas ("${cleanMsg.slice(0, 140)}${cleanMsg.length > 140 ? '…' : ''}"), aportas elementos concretos sobre cómo estás respondiendo y cómo lo perciben los demás.`
+          : `Ya pusiste sobre la mesa conductas y perspectivas concretas sobre cómo estás abordando esta situación y cómo la viven los demás.`;
       return {
-        replyText: `Excelente nivel de autoconciencia, ${leaderName}. Reconocer nuestros propios patrones de respuesta y visibilizar cómo lo viven los demás es precisamente lo que distingue a un liderazgo maduro.\n\nCon las habilidades de **${skills.join(', ')}** bien identificadas, es momento de diseñar alternativas concretas. ¿Avanzamos a la Etapa 3?`,
+        replyText: `Gracias por compartir esa reflexión, ${leaderName}. ${reflectionDetail}\n\nCon foco en fortalecer **${skills.join(', ')}**, podemos pasar a explorar alternativas de acción. ¿Avanzamos a la Etapa 3?`,
         readyToAdvance: true,
         advancePrompt: 'Avanzar a Etapa 3: Diseñar alternativas de solución',
         identifiedSkills: skills,
@@ -3625,7 +3632,7 @@ export function generateDeterministicCoaching({
           : '';
 
       return {
-        replyText: `Perfecto, ${leaderName}. Tomo nota clara de tu decisión: "${selectedSnippet}".\n\n${contextLine}Recuerda: **tú eres quien decide y conduce la acción**, y elegir con claridad ya te da una base concreta para avanzar.\n\nSi lo deseas, podemos pasar a la **Etapa 4 (simulación opcional)** para ensayar cómo plantearlo antes de llevarlo a la realidad, o avanzar directamente a estructurar tu Plan de Acción en la Etapa 5.`,
+        replyText: `Gracias por confirmarlo, ${leaderName}. Tomo nota de la alternativa que elegiste: "${selectedSnippet}".\n\n${contextLine}Recuerda: **tú eres quien decide y conduce la acción**, y contar con esta ruta definida nos permite prepararla o convertirla en un plan concreto.\n\nSi lo deseas, podemos pasar a la **Etapa 4 (simulación opcional)** para ensayar cómo plantearlo antes de llevarlo a la realidad, o avanzar directamente a estructurar tu Plan de Acción en la Etapa 5.`,
         readyToAdvance: true,
         advancePrompt: 'Ir a Etapa 4: Practicar antes de actuar (opcional)',
         ...(allKnownAlternatives.length > 0 ? { suggestedAlternatives: allKnownAlternatives } : {}),
@@ -3676,7 +3683,7 @@ export function generateDeterministicCoaching({
     if (currentAlternatives.length > 0) {
       if (currentAlternatives.length === 1) {
         return {
-          replyText: `Muy bien, ${leaderName}. Ya pusiste una primera alternativa concreta sobre la mesa:\n${alternativesSummaryBlock}\n\nPara tomar una mejor decisión, vale la pena contrastarla: ¿qué posible obstáculo o consecuencia ves en esta opción, y qué otra alternativa distinta podrías considerar (aunque sea más gradual o con otro enfoque) antes de elegir con cuál quedarte?`,
+          replyText: `Gracias por compartir esta primera alternativa concreta, ${leaderName}:\n${alternativesSummaryBlock}\n\nPara decidir con mayor claridad, vale la pena contrastarla: ¿qué posible obstáculo o consecuencia ves en esta opción, y qué otra alternativa distinta podrías considerar (aunque sea más gradual o con otro enfoque) antes de elegir con cuál quedarte?`,
           readyToAdvance: false,
           suggestedAlternatives: allKnownAlternatives,
           recommendedResources: [],
@@ -3684,7 +3691,7 @@ export function generateDeterministicCoaching({
       }
 
       return {
-        replyText: `Muy bien planteado, ${leaderName}. Reconozco las alternativas concretas que acabas de proponer:\n${alternativesSummaryBlock}\n\nAntes de que elijas un camino, contrastémoslas brevemente:\n• **Viabilidad e impacto inmediato:** ¿Cuál atiende mejor el punto crítico del reto con menor desgaste?\n• **Posibles obstáculos o reacciones:** ¿Qué resistencia podría aparecer en cada opción y cómo la manejarías?\n• **Complementariedad:** ¿Te hace sentido elegir una como principal o combinarlas en secuencia?\n\n¿Cuál de estas alternativas te resulta más viable para avanzar, o qué duda te gustaría explorar sobre ellas?`,
+        replyText: `Tomo nota de las alternativas concretas que acabas de proponer, ${leaderName}:\n${alternativesSummaryBlock}\n\nAntes de que elijas un camino, contrastémoslas brevemente:\n• **Viabilidad e impacto inmediato:** ¿Cuál atiende mejor el punto crítico del reto con menor desgaste?\n• **Posibles obstáculos o reacciones:** ¿Qué resistencia podría aparecer en cada opción y cómo la manejarías?\n• **Complementariedad:** ¿Te hace sentido elegir una como principal o combinarlas en secuencia?\n\n¿Cuál de estas alternativas te resulta más viable para avanzar, o qué duda te gustaría explorar sobre ellas?`,
         readyToAdvance: false,
         suggestedAlternatives: allKnownAlternatives,
         recommendedResources: [],
@@ -3864,7 +3871,7 @@ export function generateDeterministicCoaching({
   }
   const skillsDetected = formatStageTwoSkillsWithEvidence(rawSkillsToReport);
   return {
-    replyText: `Muchas gracias por tu compromiso y apertura en este proceso de mentoría, ${leaderName}. Has demostrado una gran capacidad para pasar de la duda a la acción decidida.\n\nTe recuerdo que **esta conversación ha sido 100% confidencial**. Recursos Humanos únicamente recibe constancia de que has concluido exitosamente tu proceso y los indicadores generales de desarrollo, salvaguardando en todo momento tu privacidad.\n\nHe generado tu **Reporte de Retroalimentación y Autonomía de Liderazgo**, el cual puedes consultar aquí en la aplicación y también te llegará a tu correo electrónico. ¡Sigue utilizando Lidacta ante cada nuevo reto!`,
+    replyText: `Gracias por el tiempo que dedicaste a este acompañamiento, ${leaderName}. A lo largo de estas etapas fuiste ordenando los hechos de tu caso, reflexionando sobre las habilidades en juego y diseñando pasos concretos para abordarlo.\n\nTe recuerdo que **esta conversación ha sido 100% confidencial**. Recursos Humanos únicamente recibe constancia de que has concluido exitosamente tu proceso y los indicadores generales de desarrollo, salvaguardando en todo momento tu privacidad.\n\nHe generado tu **Reporte de Retroalimentación y Autonomía de Liderazgo**, el cual puedes consultar aquí en la aplicación y también te llegará a tu correo electrónico. ¡Sigue utilizando Lidacta ante cada nuevo reto!`,
     readyToAdvance: false,
     finalFeedback: {
       detectedStrengths: [],
